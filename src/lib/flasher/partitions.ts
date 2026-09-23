@@ -55,7 +55,7 @@ export function parsePartitionTableWithMetadata(bytes: Uint8Array): ParsedPartit
     if (magic === 0xebeb) {
       const type = view.getUint8(i + 2);
       const subtype = view.getUint8(i + 3);
-      if (type === 0x00 && subtype === 0xff) {
+      if (type === 0xff && subtype === 0xff) {
         // MD5 of all preceding partition entries
         const precedingEntries = bytes.subarray(0, i);
         const calculatedMd5 = md5Hex(precedingEntries);

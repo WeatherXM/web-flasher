@@ -31,6 +31,9 @@ describe('appDescriptor', () => {
     expect(desc).not.toBeNull();
     expect(desc?.firmwareType).toBe('meshtastic');
     expect(desc?.projectName).toBe('Meshtastic-firmware');
+    // Mutually verify advertised version, source git commit, and embedded build descriptor
+    expect(manifest.firmwares.meshtastic.version).toBe('2.8.1-wxm');
+    expect(manifest.firmwares.meshtastic.git_commit).toBe('6201f02');
     expect(desc?.version).toContain(manifest.firmwares.meshtastic.git_commit);
     expect(desc?.displayTitle).toContain('Meshtastic');
   });

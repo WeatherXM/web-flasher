@@ -85,4 +85,14 @@ describe('transport & serialLog', () => {
     expect(clean).not.toContain('SecretKeyMaterial==');
     expect(clean).toContain('[REDACTED_SENSITIVE_BLOCK_START]');
   });
+
+  it('LogSanitizer statefully strips sequential lines via sanitizeLine() across separate calls', () => {
+    const sanitizer = new LogSanitizer();
+    expect(sanitizer.sanitizeLine('I (123) main: system init')).toBe('I (123) main: system init');
+    expect(sanitizer.sanitizeLine('-----BEGIN CERTIFICATE-----')).toBe('[REDACTED_SENSITIVE_BLOCK_START]');
+    expect(sanitizer.sanitizeLine('MIIBkTCB+wIJAKH...')).toBeNull();
+    expect(sanitizer.sanitizeLine('AnotherCertLine==')).toBeNull();
+    expect(sanitizer.sanitizeLine('-----END CERTIFICATE-----')).toBe('[REDACTED_SENSITIVE_BLOCK_END]');
+    expect(sanitizer.sanitizeLine('I (456) wifi: connected')).toBe('I (456) wifi: connected');
+  });
 });

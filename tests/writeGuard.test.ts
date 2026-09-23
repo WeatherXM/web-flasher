@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { assertAllowedWrite, validateAllowedWrite } from '../src/lib/flasher/writeGuard';
+import {
+  assertAllowedFactoryRollbackWrite,
+  assertAllowedWrite,
+  validateAllowedWrite,
+} from '../src/lib/flasher/writeGuard';
 import { WG1200_CONSTANTS } from '../src/lib/flasher/constants';
 
 describe('writeGuard', () => {
@@ -74,5 +78,12 @@ describe('writeGuard', () => {
 
   it('assertAllowedWrite throws on invalid write', () => {
     expect(() => assertAllowedWrite(0x00d000, 0x1000)).toThrow();
+  });
+
+  it('assertAllowedFactoryRollbackWrite allows strictly 0x13000 with 8192 bytes and rejects others', () => {
+    expect(() => assertAllowedFactoryRollbackWrite(0x13000, 8192)).not.toThrow();
+    expect(() => assertAllowedFactoryRollbackWrite(0x13000, 4096)).toThrow(/Factory rollback write rejected/);
+    expect(() => assertAllowedFactoryRollbackWrite(0x14000, 8192)).toThrow(/Factory rollback write rejected/);
+    expect(() => assertAllowedFactoryRollbackWrite(0x20000, 8192)).toThrow(/Factory rollback write rejected/);
   });
 });

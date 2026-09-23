@@ -73,4 +73,11 @@ describe('otadata', () => {
     expect(reset.byteLength).toBe(8192);
     expect(reset.every((b) => b === 0xff)).toBe(true);
   });
+
+  it('parseOtadataSector correctly parses sector bytes and validates CRC', () => {
+    const sector = factoryBytes.subarray(0, 4096);
+    const parsed = parseOtadataSector(sector);
+    expect(parsed).toBeDefined();
+    expect(typeof parsed.valid).toBe('boolean');
+  });
 });

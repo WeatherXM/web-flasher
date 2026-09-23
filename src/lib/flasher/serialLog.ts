@@ -79,6 +79,7 @@ export async function captureBootLogs(
 
     let buffer = '';
     const startTime = Date.now();
+    const sanitizer = new LogSanitizer();
 
     while (Date.now() - startTime < durationMs) {
       const readPromise = reader.read();
@@ -95,13 +96,13 @@ export async function captureBootLogs(
         buffer = splitLines.pop() ?? '';
 
         for (const rawLine of splitLines) {
-          const cleanLine = sanitizeLog(rawLine.trim());
-          if (cleanLine.length > 0) {
+          const cleanLine = sanitizer.sanitizeLine(rawLine.trim());
+          if (cleanLine !== null && cleanLine.length > 0) {
             lines.push(cleanLine);
             if (onLine) onLine(cleanLine);
 
             const lower = cleanLine.toLowerCase();
-            if (lower.includes('weatherxm') || lower.includes('thingsboard') || lower.includes('main: app')) {
+            if (lower.includes('weatherxm') || lower.includes('thingsboard') || lower.includes('wg1200')) {
               detectedSign = 'weatherxm';
             } else if (lower.includes('meshtastic') || lower.includes('lora') || lower.includes('sx1262')) {
               detectedSign = 'meshtastic';

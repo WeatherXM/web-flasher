@@ -18,7 +18,7 @@ describe('manifest', () => {
 
   it('verifies that firmware binary files exist on disk with exact declared sizes and hashes', () => {
     const crypto = require('crypto');
-    for (const [key, fw] of Object.entries(manifestJson.firmwares as any)) {
+    for (const [, fw] of Object.entries(manifestJson.firmwares as any)) {
       const diskPath = path.resolve(__dirname, '../public', (fw as any).file.replace(/^\//, ''));
       expect(fs.existsSync(diskPath)).toBe(true);
 

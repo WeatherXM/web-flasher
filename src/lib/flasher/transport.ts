@@ -4,8 +4,8 @@ import { WG1200_CONSTANTS } from './constants';
 import { compareHexHashes, sha256Hex } from './hashing';
 import { verifySecureCertIdentity, type SecureCertVerificationResult } from './identity';
 import { determineActiveBootSlot, parseOtadataSector, type OtadataStatus } from './otadata';
-import { parsePartitionTable, parsePartitionTableWithMetadata, verifyWg1200PartitionTable, type PartitionRecord } from './partitions';
-import { assertAllowedApplicationWrite, assertAllowedOtaSelectWrite, assertAllowedWrite } from './writeGuard';
+import { parsePartitionTableWithMetadata, verifyWg1200PartitionTable, type PartitionRecord } from './partitions';
+import { assertAllowedApplicationWrite, assertAllowedFactoryRollbackWrite, assertAllowedOtaSelectWrite } from './writeGuard';
 
 export interface ProtectedRegionSnapshot {
   name: string;
@@ -50,6 +50,10 @@ export class Wg1200Transport {
 
   public get isConnected(): boolean {
     return this.loader !== null && this.transport !== null;
+  }
+
+  public get currentPort(): any {
+    return this.port;
   }
 
   /**
@@ -337,8 +341,73 @@ export class Wg1200Transport {
    * Resets both otadata sectors (0x13000 - 0x14FFF) to 0xFF.
    * Directs ESP32-S3 ROM bootloader to rollback and boot the immutable factory partition (0x020000).
    */
+  /**
+   * Verifies that the preserved factory recovery image (0x020000) exists,
+   * is genuine WeatherXM firmware, and has a valid Secure Boot V2 signature block.
+   */
+  public async verifyPreservedFactoryImage(): Promise<{ valid: boolean; descriptor: AppDescriptor }> {
+    if (!this.loader) throw new Error('Not connected');
+    this.logger.log('Verifying preserved factory recovery image @ 0x020000…');
+
+    // 1. Read first 4 KB
+    const headerBytes = await this.readRegion(WG1200_CONSTANTS.APP_FACTORY.offset, 4096);
+    if (headerBytes[0] !== 0xe9) {
+      throw new Error(
+        `Factory recovery image corrupted: expected ESP image magic 0xE9, got 0x${headerBytes[0].toString(16)}`
+      );
+    }
+
+    // 2. Parse app descriptor
+    const desc = parseAppDescriptor(headerBytes);
+    if (!desc) {
+      throw new Error('Factory recovery image corrupted: missing or invalid esp_app_desc_t descriptor.');
+    }
+
+    // 3. Verify it is genuine WeatherXM firmware
+    if (desc.firmwareType !== 'weatherxm') {
+      throw new Error(
+        `Factory partition does not contain WeatherXM recovery firmware (detected: '${desc.displayTitle}'). Rollback aborted.`
+      );
+    }
+
+    // 4. Trace segments to verify Secure Boot V2 signature block presence
+    const segmentCount = headerBytes[1];
+    let cur = 24;
+    for (let s = 0; s < segmentCount; s++) {
+      const segHdr = await this.readRegion(WG1200_CONSTANTS.APP_FACTORY.offset + cur, 8);
+      const view = new DataView(segHdr.buffer, segHdr.byteOffset, segHdr.byteLength);
+      const dataLen = view.getUint32(4, true);
+      cur += 8 + dataLen;
+    }
+    cur += 1; // Checksum byte
+    cur += (16 - (cur % 16)) % 16;
+    cur += (4096 - (cur % 4096)) % 4096;
+
+    const sigBlock = await this.readRegion(WG1200_CONSTANTS.APP_FACTORY.offset + cur, 4096);
+    if (sigBlock[0] !== 0xe7) {
+      throw new Error(
+        `Factory recovery image missing Secure Boot V2 signature block at offset 0x${(WG1200_CONSTANTS.APP_FACTORY.offset + cur).toString(16)}`
+      );
+    }
+
+    this.logger.log(`Preserved factory recovery image verified: ${desc.displayTitle} (Secure Boot V2 signature block present)`);
+    return { valid: true, descriptor: desc };
+  }
+
+  /**
+   * Resets both otadata sectors (0x13000 - 0x14FFF) to 0xFF.
+   * Directs ESP32-S3 ROM bootloader to rollback and boot the preserved factory recovery partition (0x020000).
+   * Verifies factory partition integrity before writing and enforces assertAllowedFactoryRollbackWrite.
+   */
   public async rollbackToFactory(): Promise<void> {
     if (!this.loader) throw new Error('Not connected');
+
+    // 1. Verify preserved factory image integrity
+    await this.verifyPreservedFactoryImage();
+
+    // 2. Enforce factory rollback write guard
+    assertAllowedFactoryRollbackWrite(WG1200_CONSTANTS.OTADATA.offset, WG1200_CONSTANTS.OTADATA.size);
+
     this.logger.log('Writing 0xFF to otadata partition (0x13000, 8KB) to trigger factory rollback…');
     const blank = new Uint8Array(WG1200_CONSTANTS.OTADATA.size);
     blank.fill(0xff);
@@ -363,7 +432,7 @@ export class Wg1200Transport {
     if (!allErased) {
       throw new Error('Factory rollback failed: otadata was not completely cleared to 0xFF.');
     }
-    this.logger.log('Factory rollback verified: otadata is 0xFF. Device will boot factory partition.');
+    this.logger.log('Factory rollback verified: otadata is 0xFF. Device will boot preserved factory partition.');
   }
 
   /**
@@ -396,33 +465,6 @@ export class Wg1200Transport {
     }
 
     return fullData;
-  }
-
-  /**
-   * Legacy 8KB otadata write (fallback).
-   */
-  public async writeOtadata(otadataBytes: Uint8Array): Promise<void> {
-    if (!this.loader) throw new Error('Not connected');
-    if (otadataBytes.byteLength !== WG1200_CONSTANTS.OTADATA.size) {
-      throw new Error(`Invalid otadata size: expected 8192 bytes, got ${otadataBytes.byteLength}`);
-    }
-
-    const bstr = this.ui8ToBstr(otadataBytes);
-    this.logger.log('Updating otadata boot pointer @ 0x13000…');
-
-    await this.loader.writeFlash({
-      fileArray: [
-        {
-          data: bstr,
-          address: WG1200_CONSTANTS.OTADATA.offset,
-        },
-      ],
-      flashSize: '16MB',
-      flashMode: 'dio',
-      flashFreq: '80m',
-      eraseAll: false,
-      compress: false,
-    });
   }
 
   /**

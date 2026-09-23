@@ -13,8 +13,7 @@
       "sha256": "cd2a7df91dc71992d0ba0f311de5b69a65c3db902ae2c4044c1d15dfd4bd26f6",
       "source_repo": "WeatherXM/WG1400",
       "git_commit": "0c2c072",
-      "secure_boot_v2": true,
-      "size": 3543040
+      "secure_boot_v2": true
     },
     "meshtastic": {
       "name": "Meshtastic",

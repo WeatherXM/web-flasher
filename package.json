@@ -2,7 +2,7 @@
   "name": "wg1200-web-flasher",
   "version": "1.0.0",
   "type": "module",
-  "private": true,
+  "license": "Apache-2.0",
   "description": "WeatherXM WG1200 / D1 Firmware Switcher between WeatherXM and Meshtastic",
   "scripts": {
     "dev": "astro dev",

@@ -6,7 +6,7 @@ import {
   type FirmwareEntry,
   type FirmwareManifest,
 } from './manifest';
-import { buildTransactionalOtadataSector, buildUpdatedOtadata } from './otadata';
+import { buildTransactionalOtadataSector } from './otadata';
 import { captureBootLogs, downloadLogFile } from './serialLog';
 import { FlasherStateMachine, type FlasherState, type StateContext } from './state';
 import { Wg1200Transport, type ProtectedRegionSnapshot, type Wg1200Inspection } from './transport';
@@ -49,6 +49,10 @@ export class FlasherController {
   }
 
   public get inspectionData(): Wg1200Inspection | null {
+    return this.inspection;
+  }
+
+  public getInspectionData(): Wg1200Inspection | null {
     return this.inspection;
   }
 

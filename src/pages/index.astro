@@ -24,12 +24,6 @@ import Footer from '../components/Footer.astro';
       name="description"
       content="Switch your WeatherXM D1 / WG1200 gateway safely between WeatherXM and Meshtastic firmware over USB in your browser. Device credentials remain intact."
     />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap"
-      rel="stylesheet"
-    />
   </head>
 
   <body class="min-h-screen bg-wxm-dark text-wxm-text font-sans antialiased flex flex-col justify-between selection:bg-wxm-primary selection:text-white">
@@ -125,6 +119,11 @@ import Footer from '../components/Footer.astro';
       const btnCancelRollback = document.getElementById('btn-cancel-rollback');
       const btnConfirmRollback = document.getElementById('btn-confirm-rollback');
 
+      const modalBackupWarning = document.getElementById('modal-backup-warning');
+      const chkBackupAcknowledge = document.getElementById('chk-backup-acknowledge') as HTMLInputElement | null;
+      const btnCancelBackup = document.getElementById('btn-cancel-backup');
+      const btnConfirmBackup = document.getElementById('btn-confirm-backup');
+
       const logTerminal = document.getElementById('log-terminal');
       const logCount = document.getElementById('log-count');
       const btnToggleLog = document.getElementById('btn-toggle-log');
@@ -192,16 +191,35 @@ import Footer from '../components/Footer.astro';
         modalPartitionInfo?.classList.add('hidden');
       });
 
-      btnToolBackup?.addEventListener('click', async () => {
+      btnToolBackup?.addEventListener('click', () => {
+        if (chkBackupAcknowledge) chkBackupAcknowledge.checked = false;
+        btnConfirmBackup?.setAttribute('disabled', 'true');
+        modalBackupWarning?.classList.remove('hidden');
+      });
+
+      chkBackupAcknowledge?.addEventListener('change', () => {
+        if (chkBackupAcknowledge.checked) {
+          btnConfirmBackup?.removeAttribute('disabled');
+        } else {
+          btnConfirmBackup?.setAttribute('disabled', 'true');
+        }
+      });
+
+      btnCancelBackup?.addEventListener('click', () => {
+        modalBackupWarning?.classList.add('hidden');
+      });
+
+      btnConfirmBackup?.addEventListener('click', async () => {
+        modalBackupWarning?.classList.add('hidden');
         try {
-          btnToolBackup.setAttribute('disabled', 'true');
-          btnToolBackup.textContent = 'Dumping 16MB…';
+          btnToolBackup?.setAttribute('disabled', 'true');
+          if (btnToolBackup) btnToolBackup.textContent = 'Dumping 16MB…';
           await controller.executeFullFlashBackup();
         } catch (e: any) {
           alert(`Backup failed: ${e.message}`);
         } finally {
-          btnToolBackup.removeAttribute('disabled');
-          btnToolBackup.textContent = 'Download 16MB Backup';
+          btnToolBackup?.removeAttribute('disabled');
+          if (btnToolBackup) btnToolBackup.textContent = 'Download 16MB Backup';
         }
       });
 
@@ -345,7 +363,7 @@ import Footer from '../components/Footer.astro';
         if (devSlot) devSlot.textContent = data.otadata.activeSlot.toUpperCase();
         if (devCert) devCert.textContent = data.secureCert.fingerprint;
         if (devRunningFw) {
-          devRunningFw.textContent = data.currentFirmware?.displayTitle ?? 'WeatherXM Gateway';
+          devRunningFw.textContent = data.currentFirmware?.displayTitle ?? 'Unknown compatible firmware';
         }
         if (devTargetSlot) {
           devTargetSlot.textContent = data.otadata.targetSlot.toUpperCase();
@@ -433,10 +451,19 @@ import Footer from '../components/Footer.astro';
         });
       }
 
+      function escapeHtml(str: string): string {
+        return str
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#039;');
+      }
+
       function renderPartitionModal() {
         if (!partitionModalBody) return;
-        const data = controller.inspectionData;
-        if (!data) {
+        const data = controller.getInspectionData();
+        if (!data || !data.partitions) {
           partitionModalBody.innerHTML = `
             <div class="p-4 bg-amber-500/10 border border-amber-500/30 rounded-lg text-amber-300">
               No device is currently connected. Please connect your WG1200 gateway first.
@@ -445,15 +472,24 @@ import Footer from '../components/Footer.astro';
           return;
         }
 
-        const partitionRows = data.partitions
+        const partitionsList = Object.values(data.partitions) as Array<{
+          label: string;
+          type: number;
+          subtype: number;
+          offset: number;
+          size: number;
+        }>;
+
+        const partitionRows = partitionsList
           .map((p) => {
-            const isProtected = ['nvs', 'otadata', 'factory', 'esp_secure_cert'].includes(p.name);
+            const isProtected = ['nvs', 'otadata', 'factory', 'esp_secure_cert', 'nvs_key'].includes(p.label);
             const badge = isProtected
               ? '<span class="text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded text-[10px]">PROTECTED</span>'
               : '<span class="text-sky-400 bg-sky-500/10 px-1.5 py-0.5 rounded text-[10px]">APP SLOT</span>';
+            const safeLabel = escapeHtml(p.label);
             return `
               <tr class="border-b border-slate-800 hover:bg-slate-800/40">
-                <td class="py-1.5 px-2 text-slate-200 font-bold">${p.name}</td>
+                <td class="py-1.5 px-2 text-slate-200 font-bold font-mono">${safeLabel}</td>
                 <td class="py-1.5 px-2 text-slate-400">0x${p.type.toString(16)}/0x${p.subtype.toString(16)}</td>
                 <td class="py-1.5 px-2 text-slate-300 font-mono">0x${p.offset.toString(16).padStart(6, '0')}</td>
                 <td class="py-1.5 px-2 text-slate-300">${Math.round(p.size / 1024)} KB</td>
@@ -463,14 +499,17 @@ import Footer from '../components/Footer.astro';
           })
           .join('');
 
+        const safeChip = escapeHtml(data.chipName);
+        const safeFingerprint = escapeHtml(data.secureCert.fingerprint);
+
         partitionModalBody.innerHTML = `
           <div class="space-y-4">
             <div class="bg-slate-950 p-3 rounded-lg border border-slate-800">
               <div class="text-slate-400 text-[11px] uppercase tracking-wider mb-1">Hardware & Identity</div>
               <div class="grid grid-cols-2 gap-2 text-xs">
-                <div>Chip: <span class="text-white font-semibold">${data.chipName}</span></div>
+                <div>Chip: <span class="text-white font-semibold">${safeChip}</span></div>
                 <div>Flash: <span class="text-white font-semibold">${data.flashSizeMb} MB (16 MB verified)</span></div>
-                <div class="col-span-2 truncate">Identity SHA-256: <span class="text-sky-300 font-semibold">${data.secureCert.fingerprint}</span></div>
+                <div class="col-span-2 truncate">Identity SHA-256: <span class="text-sky-300 font-semibold">${safeFingerprint}</span></div>
                 <div class="col-span-2">Device Credential Status: <span class="${data.secureCert.valid ? 'text-emerald-400 font-bold' : 'text-rose-400 font-bold'}">${data.secureCert.valid ? 'VALID (Untouched)' : 'INVALID'}</span></div>
               </div>
             </div>

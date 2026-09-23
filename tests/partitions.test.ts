@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import {
   parsePartitionTable,
+  parsePartitionTableWithMetadata,
   verifyWg1200PartitionTable,
 } from '../src/lib/flasher/partitions';
 import { WG1200_CONSTANTS } from '../src/lib/flasher/constants';
@@ -83,5 +84,39 @@ describe('partitions', () => {
     );
     expect(result.valid).toBe(false);
     expect(result.errors.some((e) => e.includes("'nvs' offset mismatch"))).toBe(true);
+  });
+
+  it('verifies valid ESP-IDF MD5 checksum on real WG1200 fixture', () => {
+    const { partitions, md5Valid, duplicateLabels } = parsePartitionTableWithMetadata(fixtureBytes);
+    expect(Object.keys(partitions).length).toBe(9);
+    expect(duplicateLabels).toHaveLength(0);
+    expect(md5Valid).toBe(true);
+
+    const result = verifyWg1200PartitionTable(
+      partitions,
+      'ESP32-S3',
+      WG1200_CONSTANTS.FLASH_SIZE_BYTES,
+      { md5Valid, duplicateLabels }
+    );
+    expect(result.valid).toBe(true);
+    expect(result.md5Verified).toBe(true);
+  });
+
+  it('detects corrupted partition table via MD5 checksum failure', () => {
+    const corrupted = new Uint8Array(fixtureBytes);
+    // Tamper with one byte in the first entry
+    corrupted[10] ^= 0x55;
+
+    const { partitions, md5Valid } = parsePartitionTableWithMetadata(corrupted);
+    expect(md5Valid).toBe(false);
+
+    const result = verifyWg1200PartitionTable(
+      partitions,
+      'ESP32-S3',
+      WG1200_CONSTANTS.FLASH_SIZE_BYTES,
+      { md5Valid }
+    );
+    expect(result.valid).toBe(false);
+    expect(result.errors.some((e) => e.includes('MD5 checksum verification failed'))).toBe(true);
   });
 });

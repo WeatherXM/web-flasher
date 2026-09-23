@@ -143,6 +143,26 @@ export function assertAllowedOtaSelectWrite(
 }
 
 /**
+ * Strictly verifies that a factory rollback write targets exactly the full 8 KB otadata partition
+ * (0x13000, 8192 bytes) to clear both sectors to 0xFF.
+ * No other address or length is permitted.
+ */
+export function assertAllowedFactoryRollbackWrite(
+  address: number,
+  length: number
+): void {
+  if (
+    address !== WG1200_CONSTANTS.OTADATA.offset ||
+    length !== WG1200_CONSTANTS.OTADATA.size
+  ) {
+    throw new Error(
+      `Factory rollback write rejected: address must be strictly 0x${WG1200_CONSTANTS.OTADATA.offset.toString(16)} ` +
+      `and length must be ${WG1200_CONSTANTS.OTADATA.size} bytes. Received address 0x${address.toString(16)}, length ${length}.`
+    );
+  }
+}
+
+/**
  * Throws an Error if the requested write is not strictly permitted.
  * Delegates to validateAllowedWrite.
  */

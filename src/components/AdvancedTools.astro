@@ -85,7 +85,7 @@
               <span>Full 16MB Backup</span>
             </div>
             <p class="text-xs text-slate-300 mt-2">
-              Dumps the complete 16 MB flash chip to a binary file and validates header signatures.
+              Dumps the complete 16 MB flash chip to a binary file and validates header signatures. Contains sensitive credentials.
             </p>
           </div>
           <button id="btn-tool-backup" class="mt-4 w-full py-2 bg-emerald-700 hover:bg-emerald-600 text-white rounded-lg text-xs font-semibold transition-colors">
@@ -103,7 +103,7 @@
               <span>Factory Rollback</span>
             </div>
             <p class="text-xs text-slate-300 mt-2">
-              Erases otadata sectors to 0xFF, rolling back immediately to the stock factory WeatherXM partition (0x020000).
+              Erases otadata sectors to 0xFF, rolling back immediately to the preserved factory recovery WeatherXM partition (0x020000).
             </p>
           </div>
           <button id="btn-tool-rollback" class="mt-4 w-full py-2 bg-rose-800 hover:bg-rose-700 text-white rounded-lg text-xs font-semibold transition-colors">
@@ -138,6 +138,43 @@
     </div>
   </div>
 
+  <!-- 16MB Backup Warning Modal -->
+  <div id="modal-backup-warning" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm hidden">
+    <div class="bg-slate-900 border border-amber-500/40 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
+      <div class="flex items-center space-x-3 text-amber-400">
+        <svg class="w-8 h-8 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+        </svg>
+        <h3 class="text-lg font-bold text-white">Sensitive Device Credentials Warning</h3>
+      </div>
+      <div class="text-xs text-slate-300 space-y-2 leading-relaxed">
+        <p>
+          This 16 MB flash backup creates a bit-for-bit copy of your gateway's entire memory, including:
+        </p>
+        <ul class="list-disc list-inside space-y-1 text-amber-200/90 pl-1">
+          <li><strong>esp_secure_cert:</strong> Hardware-unique TLS certificates and private keys</li>
+          <li><strong>nvs / nvs_key:</strong> Wi-Fi credentials, cloud tokens, and persistent settings</li>
+          <li>Device identity fingerprint and boot state</li>
+        </ul>
+        <div class="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg text-amber-300 font-medium">
+          This backup contains sensitive device credentials and configuration. Keep it private. Do not upload or share it.
+        </div>
+      </div>
+      <label class="flex items-start space-x-2.5 text-xs text-slate-300 cursor-pointer pt-2">
+        <input type="checkbox" id="chk-backup-acknowledge" class="mt-0.5 rounded border-slate-700 bg-slate-800 text-sky-500 focus:ring-0 focus:outline-none" />
+        <span>I understand this backup contains private credentials and will keep it private.</span>
+      </label>
+      <div class="pt-2 flex justify-end space-x-3">
+        <button id="btn-cancel-backup" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-sm font-medium transition-colors">
+          Cancel
+        </button>
+        <button id="btn-confirm-backup" disabled class="px-4 py-2 bg-emerald-700 hover:bg-emerald-600 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-lg text-sm font-semibold transition-colors shadow-lg">
+          Download Private Backup
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Factory Rollback Confirmation Modal -->
   <div id="modal-rollback-confirm" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm hidden">
     <div class="bg-slate-900 border border-rose-500/40 rounded-2xl max-w-md w-full p-6 shadow-2xl">
@@ -148,7 +185,7 @@
         <h3 class="text-lg font-bold text-white">Confirm Factory Rollback</h3>
       </div>
       <p class="text-sm text-slate-300">
-        This will clear otadata sectors to <code class="text-rose-300">0xFF</code>, causing the ESP32-S3 ROM bootloader to boot the original stock WeatherXM firmware located in the immutable <code class="text-sky-300">factory</code> partition (<code class="text-sky-300">0x020000</code>).
+        This will clear otadata sectors to <code class="text-rose-300">0xFF</code>, causing the ESP32-S3 ROM bootloader to boot the preserved factory recovery WeatherXM firmware located in the <code class="text-sky-300">factory</code> partition (<code class="text-sky-300">0x020000</code>).
       </p>
       <div class="mt-6 flex justify-end space-x-3">
         <button id="btn-cancel-rollback" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-sm font-medium transition-colors">
