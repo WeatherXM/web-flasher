@@ -59,7 +59,10 @@ export class Wg1200Transport {
   /**
    * Connects to the device over Web Serial and boots the ESP stub.
    */
-  public async connect(serialPort: any, baudrate = 921600): Promise<Wg1200Inspection> {
+  public async connect(
+    serialPort: any,
+    baudrate: number = WG1200_CONSTANTS.BAUDRATE_FLASH
+  ): Promise<Wg1200Inspection> {
     this.port = serialPort;
     this.transport = new Transport(serialPort);
 
@@ -72,7 +75,7 @@ export class Wg1200Transport {
     this.loader = new ESPLoader({
       transport: this.transport,
       baudrate,
-      romBaudrate: 115200,
+      romBaudrate: WG1200_CONSTANTS.BAUDRATE_ROM,
       terminal: terminalWrapper,
     });
 
@@ -100,11 +103,21 @@ export class Wg1200Transport {
     const isEsp32S3 =
       chipName.toLowerCase().includes('esp32-s3') || chipName.toLowerCase().includes('esp32s3');
 
-    // 2. Identify flash size (normalize KB from esptool-js 0.5.4)
+    // 2. Identify flash size (esptool-js 0.7.0 detectFlashSize)
     let flashSizeBytes = 0;
     try {
-      const rawFlashSize = await this.loader.getFlashSize();
-      flashSizeBytes = rawFlashSize <= 65536 ? rawFlashSize * 1024 : rawFlashSize;
+      const rawSize = await this.loader.detectFlashSize();
+      if (typeof rawSize === 'string') {
+        const mbMatch = rawSize.match(/^(\d+)\s*MB$/i);
+        const kbMatch = rawSize.match(/^(\d+)\s*KB$/i);
+        if (mbMatch) {
+          flashSizeBytes = parseInt(mbMatch[1], 10) * 1024 * 1024;
+        } else if (kbMatch) {
+          flashSizeBytes = parseInt(kbMatch[1], 10) * 1024;
+        }
+      } else if (typeof rawSize === 'number') {
+        flashSizeBytes = rawSize <= 65536 ? rawSize * 1024 : rawSize;
+      }
     } catch (e: any) {
       this.logger.error(`Flash size detection failed: ${e.message}`);
     }
@@ -177,11 +190,25 @@ export class Wg1200Transport {
   }
 
   /**
-   * Safely reads a flash memory region.
+   * Safely reads a flash memory region with automatic retry on serial jitter.
    */
-  public async readRegion(offset: number, size: number): Promise<Uint8Array> {
+  public async readRegion(offset: number, size: number, retries = 2): Promise<Uint8Array> {
     if (!this.loader) throw new Error('Not connected');
-    return await this.loader.readFlash(offset, size);
+    let lastError: any = null;
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try {
+        if (attempt > 0) {
+          await new Promise((r) => setTimeout(r, 120));
+        }
+        return await this.loader.readFlash(offset, size);
+      } catch (err: any) {
+        lastError = err;
+        this.logger.error(
+          `readFlash at 0x${offset.toString(16)} (size: ${size}) attempt ${attempt + 1} failed: ${err.message || err}`
+        );
+      }
+    }
+    throw lastError;
   }
 
   /**
@@ -248,10 +275,7 @@ export class Wg1200Transport {
     // 1. Guard check: strictly allow only ota_0 or ota_1 (never factory)
     assertAllowedApplicationWrite(slotOffset, firmwareBytes.byteLength);
 
-    // 2. Convert bytes to binary string for esptool-js
-    const bstr = this.ui8ToBstr(firmwareBytes);
-
-    // 3. Perform guarded flash write
+    // 2. Perform guarded flash write
     this.logger.log(
       `Writing ${firmwareBytes.byteLength} bytes to slot offset 0x${slotOffset.toString(16)} (eraseAll: false)…`
     );
@@ -259,7 +283,7 @@ export class Wg1200Transport {
     await this.loader.writeFlash({
       fileArray: [
         {
-          data: bstr,
+          data: firmwareBytes,
           address: slotOffset,
         },
       ],
@@ -306,12 +330,11 @@ export class Wg1200Transport {
     const { sector, address } = assertAllowedOtaSelectWrite(targetAddress, sectorBytes.byteLength);
 
     this.logger.log(`Transactionally writing otadata sector ${sector} @ 0x${address.toString(16)}…`);
-    const bstr = this.ui8ToBstr(sectorBytes);
 
     await this.loader.writeFlash({
       fileArray: [
         {
-          data: bstr,
+          data: sectorBytes,
           address,
         },
       ],
@@ -411,12 +434,11 @@ export class Wg1200Transport {
     this.logger.log('Writing 0xFF to otadata partition (0x13000, 8KB) to trigger factory rollback…');
     const blank = new Uint8Array(WG1200_CONSTANTS.OTADATA.size);
     blank.fill(0xff);
-    const bstr = this.ui8ToBstr(blank);
 
     await this.loader.writeFlash({
       fileArray: [
         {
-          data: bstr,
+          data: blank,
           address: WG1200_CONSTANTS.OTADATA.offset,
         },
       ],
@@ -496,14 +518,5 @@ export class Wg1200Transport {
     }
     this.loader = null;
     this.port = null;
-  }
-
-  private ui8ToBstr(bytes: Uint8Array): string {
-    const CHUNK_SZ = 0x8000;
-    const chunks: string[] = [];
-    for (let i = 0; i < bytes.length; i += CHUNK_SZ) {
-      chunks.push(String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + CHUNK_SZ))));
-    }
-    return chunks.join('');
   }
 }

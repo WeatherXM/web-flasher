@@ -1,4 +1,5 @@
 ---
+import '../styles/global.css';
 import Header from '../components/Header.astro';
 import BrowserNotice from '../components/BrowserNotice.astro';
 import ConnectPanel from '../components/ConnectPanel.astro';
@@ -17,7 +18,13 @@ import Footer from '../components/Footer.astro';
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/svg+xml" href="/brand/logomark-color.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
     <meta name="generator" content={Astro.generator} />
     <title>WG1200 Firmware Switcher — WeatherXM & Meshtastic</title>
     <meta
@@ -26,9 +33,7 @@ import Footer from '../components/Footer.astro';
     />
   </head>
 
-  <body class="min-h-screen bg-wxm-dark text-wxm-text font-sans antialiased flex flex-col justify-between selection:bg-wxm-primary selection:text-white">
-    <div class="fixed inset-0 bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(2,132,199,0.15),rgba(255,255,255,0))] pointer-events-none"></div>
-
+  <body class="min-h-screen bg-dark-atmospheric bg-dot-grid text-white font-sans antialiased flex flex-col justify-between selection:bg-wxm-beacon selection:text-white">
     <div class="relative z-10 flex-1 flex flex-col">
       <Header />
       <BrowserNotice />
@@ -53,6 +58,7 @@ import Footer from '../components/Footer.astro';
       import type { StateContext } from '../lib/flasher/state';
       import type { Wg1200Inspection } from '../lib/flasher/transport';
       import type { FirmwareManifest } from '../lib/flasher/manifest';
+      import { WG1200_CONSTANTS } from '../lib/flasher/constants';
 
       // DOM Elements
       const browserWarning = document.getElementById('browser-warning');
@@ -60,6 +66,8 @@ import Footer from '../components/Footer.astro';
       const btnConnect = document.getElementById('btn-connect');
       const btnConnectManual = document.getElementById('btn-connect-manual');
       const btnDisconnect = document.getElementById('btn-disconnect');
+      const connectErrorBanner = document.getElementById('connect-error-banner');
+      const connectErrorDetail = document.getElementById('connect-error-detail');
 
       const deviceStatusCard = document.getElementById('device-status-card');
       const devChip = document.getElementById('dev-chip');
@@ -72,6 +80,8 @@ import Footer from '../components/Footer.astro';
       const firmwareSelectionSection = document.getElementById('firmware-selection-section');
       const btnFlashWxm = document.getElementById('btn-flash-weatherxm');
       const btnFlashMesh = document.getElementById('btn-flash-meshtastic');
+      const btnFlashWxmLabel = document.getElementById('btn-flash-wxm-label');
+      const btnFlashMeshLabel = document.getElementById('btn-flash-mesh-label');
       const badgeWxmStatus = document.getElementById('badge-wxm-status');
       const badgeMeshStatus = document.getElementById('badge-mesh-status');
       const wxmVersionText = document.getElementById('wxm-version');
@@ -104,6 +114,7 @@ import Footer from '../components/Footer.astro';
       const btnRecoveryRollback = document.getElementById('btn-recovery-rollback');
 
       const btnToggleTools = document.getElementById('btn-toggle-tools');
+      const toolsToggleLabel = document.getElementById('tools-toggle-label');
       const toolsContentWrapper = document.getElementById('tools-content-wrapper');
       const toolsChevron = document.getElementById('tools-chevron');
       const btnToolInspect = document.getElementById('btn-tool-inspect');
@@ -132,8 +143,9 @@ import Footer from '../components/Footer.astro';
       const btnClearLog = document.getElementById('btn-clear-log');
       const btnDownloadLog = document.getElementById('btn-download-log');
 
-      let pendingTargetFw: 'weatherxm' | 'meshtastic' | null = null;
+      let pendingTargetFw: string | null = null;
       let totalLogEvents = 0;
+      let hasStartedFlashing = false;
 
       // Initialize Controller
       const controller = new FlasherController({
@@ -146,17 +158,30 @@ import Footer from '../components/Footer.astro';
       controller.initialize();
 
       // Event Listeners
-      btnConnect?.addEventListener('click', () => controller.connectDevice(true));
-      btnConnectManual?.addEventListener('click', () => controller.connectDevice(false));
+      btnConnect?.addEventListener('click', () => {
+        connectErrorBanner?.classList.add('hidden');
+        controller.connectDevice(true);
+      });
+      btnConnectManual?.addEventListener('click', () => {
+        connectErrorBanner?.classList.add('hidden');
+        controller.connectDevice(false);
+      });
       btnDisconnect?.addEventListener('click', () => controller.disconnect());
 
-      btnFlashWxm?.addEventListener('click', () => openConfirmModal('weatherxm'));
-      btnFlashMesh?.addEventListener('click', () => openConfirmModal('meshtastic'));
+      btnFlashWxm?.addEventListener('click', () => {
+        const selectWxmBuild = document.getElementById('select-wxm-build') as HTMLSelectElement | null;
+        openConfirmModal(selectWxmBuild?.value || 'weatherxm');
+      });
+      btnFlashMesh?.addEventListener('click', () => {
+        const selectMeshBuild = document.getElementById('select-mesh-build') as HTMLSelectElement | null;
+        openConfirmModal(selectMeshBuild?.value || 'meshtastic');
+      });
 
       btnModalCancel?.addEventListener('click', closeConfirmModal);
       btnModalConfirm?.addEventListener('click', () => {
         closeConfirmModal();
         if (pendingTargetFw) {
+          hasStartedFlashing = true;
           controller.flashFirmware(pendingTargetFw);
         }
       });
@@ -176,6 +201,9 @@ import Footer from '../components/Footer.astro';
         const isHidden = toolsContentWrapper?.classList.toggle('hidden');
         if (toolsChevron) {
           toolsChevron.style.transform = isHidden ? 'rotate(0deg)' : 'rotate(180deg)';
+        }
+        if (toolsToggleLabel) {
+          toolsToggleLabel.textContent = isHidden ? 'Expand Tools' : 'Collapse Tools';
         }
       });
 
@@ -261,7 +289,7 @@ import Footer from '../components/Footer.astro';
       btnClearLog?.addEventListener('click', () => {
         if (logTerminal) logTerminal.innerHTML = '';
         totalLogEvents = 0;
-        if (logCount) logCount.textContent = '0 events';
+        if (logCount) logCount.textContent = '0';
       });
 
       btnDownloadLog?.addEventListener('click', () => {
@@ -276,6 +304,7 @@ import Footer from '../components/Footer.astro';
         }
 
         if (ctx.state === 'idle') {
+          hasStartedFlashing = false;
           panelConnect?.classList.remove('hidden');
           deviceStatusCard?.classList.add('hidden');
           firmwareSelectionSection?.classList.add('hidden');
@@ -283,6 +312,7 @@ import Footer from '../components/Footer.astro';
           postFlashSection?.classList.add('hidden');
           recoveryAlertCard?.classList.add('hidden');
         } else if (ctx.state === 'ready') {
+          connectErrorBanner?.classList.add('hidden');
           panelConnect?.classList.add('hidden');
           deviceStatusCard?.classList.remove('hidden');
           firmwareSelectionSection?.classList.remove('hidden');
@@ -290,6 +320,7 @@ import Footer from '../components/Footer.astro';
           postFlashSection?.classList.add('hidden');
           recoveryAlertCard?.classList.add('hidden');
         } else if (ctx.state === 'recovery') {
+          connectErrorBanner?.classList.add('hidden');
           panelConnect?.classList.add('hidden');
           deviceStatusCard?.classList.remove('hidden');
           firmwareSelectionSection?.classList.add('hidden');
@@ -303,6 +334,8 @@ import Footer from '../components/Footer.astro';
           ctx.state === 'verifying-protected-data' ||
           ctx.state === 'rebooting'
         ) {
+          hasStartedFlashing = true;
+          connectErrorBanner?.classList.add('hidden');
           panelConnect?.classList.add('hidden');
           deviceStatusCard?.classList.add('hidden');
           firmwareSelectionSection?.classList.add('hidden');
@@ -317,11 +350,13 @@ import Footer from '../components/Footer.astro';
 
           updatePipelineSteps(ctx.state);
         } else if (ctx.state === 'success') {
+          hasStartedFlashing = false;
           flashProgressSection?.classList.add('hidden');
           postFlashSection?.classList.remove('hidden');
           recoveryAlertCard?.classList.add('hidden');
 
-          if (pendingTargetFw === 'weatherxm') {
+          const isWxm = pendingTargetFw ? pendingTargetFw.startsWith('weatherxm') : true;
+          if (isWxm) {
             instructionsWxm?.classList.remove('hidden');
             instructionsMesh?.classList.add('hidden');
           } else {
@@ -329,10 +364,22 @@ import Footer from '../components/Footer.astro';
             instructionsMesh?.classList.remove('hidden');
           }
         } else if (ctx.state === 'error') {
-          flashProgressSection?.classList.remove('hidden');
-          flashErrorBox?.classList.remove('hidden');
-          recoveryAlertCard?.classList.add('hidden');
-          if (flashErrorMsg) flashErrorMsg.textContent = ctx.errorMessage ?? 'Operation failed';
+          if (!hasStartedFlashing) {
+            panelConnect?.classList.remove('hidden');
+            deviceStatusCard?.classList.add('hidden');
+            firmwareSelectionSection?.classList.add('hidden');
+            flashProgressSection?.classList.add('hidden');
+            recoveryAlertCard?.classList.add('hidden');
+            connectErrorBanner?.classList.remove('hidden');
+            if (connectErrorDetail) {
+              connectErrorDetail.textContent = ctx.errorMessage ?? 'Failed to connect to WG1200 device.';
+            }
+          } else {
+            flashProgressSection?.classList.remove('hidden');
+            flashErrorBox?.classList.remove('hidden');
+            recoveryAlertCard?.classList.add('hidden');
+            if (flashErrorMsg) flashErrorMsg.textContent = ctx.errorMessage ?? 'Operation failed';
+          }
         }
       }
 
@@ -340,68 +387,142 @@ import Footer from '../components/Footer.astro';
         if (!logTerminal) return;
         const entry = document.createElement('div');
         if (line.includes('[ERROR]') || line.includes('[FATAL ERROR]')) {
-          entry.className = 'text-red-400 font-semibold';
+          entry.className = 'text-wxm-error font-semibold';
         } else if (line.includes('verified') || line.includes('PASSED') || line.includes('SUCCESS')) {
-          entry.className = 'text-emerald-400';
+          entry.className = 'text-wxm-live font-medium';
         } else if (line.includes('[BOOT]')) {
-          entry.className = 'text-sky-300';
+          entry.className = 'text-wxm-zenith';
         } else {
-          entry.className = 'text-slate-300';
+          entry.className = 'text-wxm-cloud';
         }
         entry.textContent = line;
         logTerminal.appendChild(entry);
         logTerminal.scrollTop = logTerminal.scrollHeight;
 
         totalLogEvents++;
-        if (logCount) logCount.textContent = `${totalLogEvents} events`;
+        if (logCount) logCount.textContent = `${totalLogEvents}`;
       }
 
       function handleInspection(data: Wg1200Inspection | null) {
         if (!data) return;
         if (devChip) devChip.textContent = data.chipName;
-        if (devFlash) devFlash.textContent = `${data.flashSizeMb} MB`;
-        if (devSlot) devSlot.textContent = data.otadata.activeSlot.toUpperCase();
-        if (devCert) devCert.textContent = data.secureCert.fingerprint;
+        if (devFlash) devFlash.textContent = `${data.flashSizeMb} MB (Quad SPI)`;
+        const activeOffset =
+          data.otadata.activeSlot === 'ota_0'
+            ? WG1200_CONSTANTS.APP_OTA_0.offset
+            : data.otadata.activeSlot === 'ota_1'
+              ? WG1200_CONSTANTS.APP_OTA_1.offset
+              : WG1200_CONSTANTS.APP_FACTORY.offset;
+        if (devSlot) devSlot.textContent = `${data.otadata.activeSlot.toUpperCase()} (0x${activeOffset.toString(16)})`;
+        if (devCert) devCert.textContent = data.secureCert.valid ? 'esp_secure_cert OK' : 'Cert Invalid';
         if (devRunningFw) {
-          devRunningFw.textContent = data.currentFirmware?.displayTitle ?? 'Unknown compatible firmware';
+          devRunningFw.textContent = data.currentFirmware?.displayTitle ?? 'WeatherXM Gateway';
         }
         if (devTargetSlot) {
-          devTargetSlot.textContent = data.otadata.targetSlot.toUpperCase();
+          devTargetSlot.textContent = `${data.otadata.targetSlot.toUpperCase()} (0x${data.otadata.targetOffset.toString(16)})`;
         }
 
         const isWxmActive = data.currentFirmware?.firmwareType === 'weatherxm';
         const isMeshActive = data.currentFirmware?.firmwareType === 'meshtastic';
 
         if (badgeWxmStatus) {
-          badgeWxmStatus.textContent = isWxmActive ? 'Active on Device' : 'Ready to Switch';
+          badgeWxmStatus.textContent = isWxmActive ? 'Active on Gateway' : 'Ready to Switch';
           badgeWxmStatus.className = isWxmActive
-            ? 'px-2.5 py-1 text-xs font-semibold rounded-full bg-sky-500/20 text-sky-400 border border-sky-500/40'
-            : 'px-2.5 py-1 text-xs font-semibold rounded-full bg-slate-800 text-slate-300 border border-slate-700';
+            ? 'px-2.5 py-1 text-xs font-semibold rounded-full bg-wxm-live/15 text-wxm-live border border-wxm-live/30'
+            : 'px-2.5 py-1 text-xs font-semibold rounded-full bg-wxm-midnight/70 text-wxm-mist border border-wxm-cloud/20';
         }
 
         if (badgeMeshStatus) {
-          badgeMeshStatus.textContent = isMeshActive ? 'Active on Device' : 'Ready to Switch';
+          badgeMeshStatus.textContent = isMeshActive ? 'Active on Gateway' : 'Ready to Switch';
           badgeMeshStatus.className = isMeshActive
-            ? 'px-2.5 py-1 text-xs font-semibold rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
-            : 'px-2.5 py-1 text-xs font-semibold rounded-full bg-slate-800 text-slate-300 border border-slate-700';
+            ? 'px-2.5 py-1 text-xs font-semibold rounded-full bg-wxm-live/15 text-wxm-live border border-wxm-live/30'
+            : 'px-2.5 py-1 text-xs font-semibold rounded-full bg-wxm-midnight/70 text-wxm-mist border border-wxm-cloud/20';
+        }
+
+        if (btnFlashWxmLabel) {
+          btnFlashWxmLabel.textContent = isWxmActive ? 'Reinstall WeatherXM' : 'Switch to WeatherXM';
+        }
+        if (btnFlashMeshLabel) {
+          btnFlashMeshLabel.textContent = isMeshActive ? 'Reinstall Meshtastic' : 'Switch to Meshtastic';
         }
       }
 
       function handleManifest(manifest: FirmwareManifest | null) {
         if (!manifest) return;
-        if (wxmVersionText) wxmVersionText.textContent = `v${manifest.firmwares.weatherxm.version}`;
-        if (meshVersionText) meshVersionText.textContent = `v${manifest.firmwares.meshtastic.version}`;
+        const selectWxmBuild = document.getElementById('select-wxm-build') as HTMLSelectElement | null;
+        const selectMeshBuild = document.getElementById('select-mesh-build') as HTMLSelectElement | null;
+        const wxmSelectedFile = document.getElementById('wxm-selected-file');
+        const wxmSelectedSize = document.getElementById('wxm-selected-size');
+        const meshSelectedFile = document.getElementById('mesh-selected-file');
+        const meshSelectedSize = document.getElementById('mesh-selected-size');
+
+        if (selectWxmBuild) {
+          selectWxmBuild.innerHTML = '';
+          for (const [key, fw] of Object.entries(manifest.firmwares)) {
+            if (fw.category === 'weatherxm' || key.startsWith('weatherxm')) {
+              const opt = document.createElement('option');
+              opt.value = key;
+              const mb = (fw.bytes / (1024 * 1024)).toFixed(2);
+              opt.textContent = `${fw.label ?? fw.name + ' v' + fw.version} (${mb} MB)`;
+              selectWxmBuild.appendChild(opt);
+            }
+          }
+        }
+
+        if (selectMeshBuild) {
+          selectMeshBuild.innerHTML = '';
+          for (const [key, fw] of Object.entries(manifest.firmwares)) {
+            if (fw.category === 'meshtastic' || key.startsWith('meshtastic')) {
+              const opt = document.createElement('option');
+              opt.value = key;
+              const mb = (fw.bytes / (1024 * 1024)).toFixed(2);
+              opt.textContent = `${fw.label ?? fw.name + ' v' + fw.version} (${mb} MB)`;
+              selectMeshBuild.appendChild(opt);
+            }
+          }
+        }
+
+        function updateWxmDetails() {
+          if (!selectWxmBuild || !manifest) return;
+          const fw = manifest.firmwares[selectWxmBuild.value];
+          if (!fw) return;
+          if (wxmVersionText) wxmVersionText.textContent = `v${fw.version}`;
+          if (wxmSelectedFile) wxmSelectedFile.textContent = fw.file.split('/').pop() ?? fw.file;
+          if (wxmSelectedSize) wxmSelectedSize.textContent = `${(fw.bytes / (1024 * 1024)).toFixed(2)} MB`;
+        }
+
+        function updateMeshDetails() {
+          if (!selectMeshBuild || !manifest) return;
+          const fw = manifest.firmwares[selectMeshBuild.value];
+          if (!fw) return;
+          if (meshVersionText) meshVersionText.textContent = `v${fw.version}`;
+          if (meshSelectedFile) meshSelectedFile.textContent = fw.file.split('/').pop() ?? fw.file;
+          if (meshSelectedSize) meshSelectedSize.textContent = `${(fw.bytes / (1024 * 1024)).toFixed(2)} MB`;
+        }
+
+        selectWxmBuild?.addEventListener('change', updateWxmDetails);
+        selectMeshBuild?.addEventListener('change', updateMeshDetails);
+
+        updateWxmDetails();
+        updateMeshDetails();
       }
 
-      function openConfirmModal(targetFw: 'weatherxm' | 'meshtastic') {
+      function openConfirmModal(targetFw: string) {
         pendingTargetFw = targetFw;
         const manifest = controller.manifestData;
         const inspection = controller.inspectionData;
         if (!manifest || !inspection) return;
 
         const fw = manifest.firmwares[targetFw];
-        if (modalFwName) modalFwName.textContent = fw.name;
+        if (!fw) return;
+
+        if (modalFwName) modalFwName.textContent = fw.label ?? fw.name;
         if (modalFwVersion) modalFwVersion.textContent = `v${fw.version}`;
+        const modalFwFile = document.getElementById('modal-fw-file');
+        const modalFwSize = document.getElementById('modal-fw-size');
+        if (modalFwFile) modalFwFile.textContent = fw.file.split('/').pop() ?? fw.file;
+        if (modalFwSize) modalFwSize.textContent = `${(fw.bytes / (1024 * 1024)).toFixed(2)} MB (${fw.bytes.toLocaleString()} bytes)`;
+
         if (modalTargetSlot) {
           modalTargetSlot.textContent = `${inspection.otadata.targetSlot.toUpperCase()} (0x${inspection.otadata.targetOffset.toString(16)})`;
         }
@@ -442,11 +563,11 @@ import Footer from '../components/Footer.astro';
           const el = document.getElementById(`step-${name}`);
           if (!el) return;
           if (idx < activeIdx) {
-            el.className = 'flex items-center space-x-2 text-emerald-400 font-medium';
+            el.className = 'flex items-center space-x-2 text-wxm-live font-medium';
           } else if (idx === activeIdx) {
             el.className = 'flex items-center space-x-2 text-white font-bold animate-pulse';
           } else {
-            el.className = 'flex items-center space-x-2 text-wxm-muted';
+            el.className = 'flex items-center space-x-2 text-wxm-mist';
           }
         });
       }
@@ -465,7 +586,7 @@ import Footer from '../components/Footer.astro';
         const data = controller.getInspectionData();
         if (!data || !data.partitions) {
           partitionModalBody.innerHTML = `
-            <div class="p-4 bg-amber-500/10 border border-amber-500/30 rounded-lg text-amber-300">
+            <div class="p-4 bg-wxm-warning/10 border border-wxm-warning/30 rounded-control text-wxm-warning">
               No device is currently connected. Please connect your WG1200 gateway first.
             </div>
           `;
@@ -484,15 +605,15 @@ import Footer from '../components/Footer.astro';
           .map((p) => {
             const isProtected = ['nvs', 'otadata', 'factory', 'esp_secure_cert', 'nvs_key'].includes(p.label);
             const badge = isProtected
-              ? '<span class="text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded text-[10px]">PROTECTED</span>'
-              : '<span class="text-sky-400 bg-sky-500/10 px-1.5 py-0.5 rounded text-[10px]">APP SLOT</span>';
+              ? '<span class="text-wxm-warning bg-wxm-warning/10 px-1.5 py-0.5 rounded-control text-[10px] border border-wxm-warning/20">PROTECTED</span>'
+              : '<span class="text-wxm-zenith bg-wxm-beacon/10 px-1.5 py-0.5 rounded-control text-[10px] border border-wxm-beacon/20">APP SLOT</span>';
             const safeLabel = escapeHtml(p.label);
             return `
-              <tr class="border-b border-slate-800 hover:bg-slate-800/40">
-                <td class="py-1.5 px-2 text-slate-200 font-bold font-mono">${safeLabel}</td>
-                <td class="py-1.5 px-2 text-slate-400">0x${p.type.toString(16)}/0x${p.subtype.toString(16)}</td>
-                <td class="py-1.5 px-2 text-slate-300 font-mono">0x${p.offset.toString(16).padStart(6, '0')}</td>
-                <td class="py-1.5 px-2 text-slate-300">${Math.round(p.size / 1024)} KB</td>
+              <tr class="border-b border-wxm-cloud/10 hover:bg-wxm-storm/20">
+                <td class="py-1.5 px-2 text-white font-bold font-mono">${safeLabel}</td>
+                <td class="py-1.5 px-2 text-wxm-mist">0x${p.type.toString(16)}/0x${p.subtype.toString(16)}</td>
+                <td class="py-1.5 px-2 text-wxm-cloud font-mono">0x${p.offset.toString(16).padStart(6, '0')}</td>
+                <td class="py-1.5 px-2 text-wxm-cloud">${Math.round(p.size / 1024)} KB</td>
                 <td class="py-1.5 px-2">${badge}</td>
               </tr>
             `;
@@ -504,38 +625,38 @@ import Footer from '../components/Footer.astro';
 
         partitionModalBody.innerHTML = `
           <div class="space-y-4">
-            <div class="bg-slate-950 p-3 rounded-lg border border-slate-800">
-              <div class="text-slate-400 text-[11px] uppercase tracking-wider mb-1">Hardware & Identity</div>
+            <div class="bg-wxm-abyss/80 p-3.5 rounded-control border border-wxm-cloud/15">
+              <div class="text-wxm-mist text-[11px] uppercase tracking-wider mb-2 font-semibold">Hardware & Identity</div>
               <div class="grid grid-cols-2 gap-2 text-xs">
                 <div>Chip: <span class="text-white font-semibold">${safeChip}</span></div>
                 <div>Flash: <span class="text-white font-semibold">${data.flashSizeMb} MB (16 MB verified)</span></div>
-                <div class="col-span-2 truncate">Identity SHA-256: <span class="text-sky-300 font-semibold">${safeFingerprint}</span></div>
-                <div class="col-span-2">Device Credential Status: <span class="${data.secureCert.valid ? 'text-emerald-400 font-bold' : 'text-rose-400 font-bold'}">${data.secureCert.valid ? 'VALID (Untouched)' : 'INVALID'}</span></div>
+                <div class="col-span-2 truncate">Identity SHA-256: <span class="text-wxm-zenith font-semibold">${safeFingerprint}</span></div>
+                <div class="col-span-2">Device Credential Status: <span class="${data.secureCert.valid ? 'text-wxm-live font-bold' : 'text-wxm-error font-bold'}">${data.secureCert.valid ? 'VALID (Untouched)' : 'INVALID'}</span></div>
               </div>
             </div>
 
-            <div class="bg-slate-950 p-3 rounded-lg border border-slate-800">
-              <div class="text-slate-400 text-[11px] uppercase tracking-wider mb-2">Dual-Boot Otadata Geometry</div>
+            <div class="bg-wxm-abyss/80 p-3.5 rounded-control border border-wxm-cloud/15">
+              <div class="text-wxm-mist text-[11px] uppercase tracking-wider mb-2 font-semibold">Dual-Boot Otadata Geometry</div>
               <div class="grid grid-cols-2 gap-2 text-xs">
-                <div>Active Slot: <span class="text-emerald-400 font-bold">${data.otadata.activeSlot.toUpperCase()}</span></div>
-                <div>Target Inactive Slot: <span class="text-sky-400 font-bold">${data.otadata.targetSlot.toUpperCase()} (0x${data.otadata.targetOffset.toString(16)})</span></div>
+                <div>Active Slot: <span class="text-wxm-live font-bold">${data.otadata.activeSlot.toUpperCase()}</span></div>
+                <div>Target Inactive Slot: <span class="text-wxm-zenith font-bold">${data.otadata.targetSlot.toUpperCase()} (0x${data.otadata.targetOffset.toString(16)})</span></div>
                 <div>Next Sequence: <span class="text-white font-semibold">${data.otadata.nextSeq}</span></div>
-                <div>Boot State Ambiguous: <span class="${data.otadata.isAmbiguous ? 'text-rose-400 font-bold' : 'text-slate-400'}">${data.otadata.isAmbiguous ? 'YES' : 'NO'}</span></div>
-                <div>Sector 0 (0x13000): seq=${data.otadata.sector0.seq}, valid=${data.otadata.sector0.valid}</div>
-                <div>Sector 1 (0x14000): seq=${data.otadata.sector1.seq}, valid=${data.otadata.sector1.valid}</div>
+                <div>Boot State Ambiguous: <span class="${data.otadata.isAmbiguous ? 'text-wxm-error font-bold' : 'text-wxm-mist'}">${data.otadata.isAmbiguous ? 'YES' : 'NO'}</span></div>
+                <div class="text-wxm-mist">Sector 0 (0x13000): <span class="text-wxm-cloud">seq=${data.otadata.sector0.seq}, valid=${data.otadata.sector0.valid}</span></div>
+                <div class="text-wxm-mist">Sector 1 (0x14000): <span class="text-wxm-cloud">seq=${data.otadata.sector1.seq}, valid=${data.otadata.sector1.valid}</span></div>
               </div>
             </div>
 
-            <div class="bg-slate-950 p-3 rounded-lg border border-slate-800 overflow-x-auto">
-              <div class="text-slate-400 text-[11px] uppercase tracking-wider mb-2">Partition Layout (ESP-IDF 16MB)</div>
+            <div class="bg-wxm-abyss/80 p-3.5 rounded-control border border-wxm-cloud/15 overflow-x-auto">
+              <div class="text-wxm-mist text-[11px] uppercase tracking-wider mb-2 font-semibold">Partition Layout (ESP-IDF 16MB)</div>
               <table class="w-full text-left text-xs">
                 <thead>
-                  <tr class="text-slate-400 border-b border-slate-800">
-                    <th class="py-1 px-2">Label</th>
-                    <th class="py-1 px-2">Type</th>
-                    <th class="py-1 px-2">Offset</th>
-                    <th class="py-1 px-2">Size</th>
-                    <th class="py-1 px-2">Protection</th>
+                  <tr class="text-wxm-mist border-b border-wxm-cloud/15">
+                    <th class="py-1.5 px-2">Label</th>
+                    <th class="py-1.5 px-2">Type</th>
+                    <th class="py-1.5 px-2">Offset</th>
+                    <th class="py-1.5 px-2">Size</th>
+                    <th class="py-1.5 px-2">Protection</th>
                   </tr>
                 </thead>
                 <tbody>

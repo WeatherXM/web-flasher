@@ -6,11 +6,15 @@ export const WG1200_CONSTANTS = {
 
   // USB Serial identification
   USB_FILTERS: [
-    {
-      usbVendorId: 0x1a86,
-      usbProductId: 0x7523,
-    },
+    { usbVendorId: 0x1a86 }, // WCH CH340 / CH341 / CH343 USB-UART Bridge
+    { usbVendorId: 0x303a }, // Espressif ESP32-S3 Native USB-JTAG/Serial & CDC
+    { usbVendorId: 0x10c4 }, // Silicon Labs CP210x
+    { usbVendorId: 0x0403 }, // FTDI
   ],
+
+  // Baud rates
+  BAUDRATE_ROM: 115200,
+  BAUDRATE_FLASH: 460800,
 
   // Magic values
   PARTITION_TABLE_MAGIC: 0x50aa,

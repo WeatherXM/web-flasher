@@ -14,17 +14,17 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "esptool-js": "0.5.4"
+    "esptool-js": "^0.7.0"
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.4",
     "@astrojs/tailwind": "^5.1.5",
     "@types/node": "^22.13.9",
+    "@types/spark-md5": "3.0.4",
     "astro": "^5.4.1",
     "lucide": "^0.477.0",
     "lucide-static": "^0.477.0",
     "spark-md5": "3.0.2",
-    "@types/spark-md5": "3.0.4",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.8.2",
     "vitest": "^3.0.7"

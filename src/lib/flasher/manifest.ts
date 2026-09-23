@@ -4,6 +4,8 @@ import { compareHexHashes, sha256Hex } from './hashing';
 export interface FirmwareEntry {
   name: string;
   version: string;
+  label?: string;
+  category?: 'weatherxm' | 'meshtastic' | string;
   file: string;
   bytes: number;
   sha256: string;

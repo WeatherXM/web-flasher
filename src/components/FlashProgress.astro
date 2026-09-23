@@ -2,68 +2,68 @@
 ---
 
 <div id="flash-progress-section" class="hidden max-w-4xl mx-auto px-4 sm:px-6 mb-12">
-  <div class="rounded-2xl border border-wxm-border bg-wxm-card/90 backdrop-blur-md p-6 sm:p-8 shadow-2xl">
+  <div class="rounded-card border border-wxm-cloud/15 bg-wxm-storm/30 backdrop-blur-md p-6 sm:p-8 shadow-card">
     <div class="flex items-center space-x-3 mb-6">
-      <div id="progress-spinner" class="w-8 h-8 rounded-full border-2 border-wxm-accent border-t-transparent animate-spin"></div>
+      <div id="progress-spinner" class="w-8 h-8 rounded-full border-2 border-wxm-beacon border-t-transparent animate-spin"></div>
       <div>
         <h3 id="progress-title" class="text-base font-bold text-white">Installing Firmware…</h3>
-        <p id="progress-status" class="text-xs text-wxm-muted">Preparing flashing pipeline</p>
+        <p id="progress-status" class="text-xs text-wxm-mist">Preparing flashing pipeline</p>
       </div>
     </div>
 
     <!-- Main Progress Bar -->
-    <div class="relative w-full h-3 rounded-full bg-wxm-surface overflow-hidden mb-6">
+    <div class="relative w-full h-3 rounded-full bg-wxm-midnight/80 border border-wxm-cloud/10 overflow-hidden mb-6">
       <div
         id="progress-bar-fill"
-        class="h-full bg-gradient-to-r from-wxm-primary via-sky-400 to-wxm-accent transition-all duration-300 rounded-full"
+        class="h-full bg-wxm-beacon transition-all duration-300 rounded-full"
         style="width: 0%"
       ></div>
     </div>
 
     <!-- Staged Checklist -->
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs" id="progress-steps">
-      <div id="step-download" class="flex items-center space-x-2 text-wxm-muted">
-        <span class="w-4 h-4 rounded-full border border-wxm-border flex items-center justify-center text-[10px]">1</span>
+      <div id="step-download" class="flex items-center space-x-2 text-wxm-mist">
+        <span class="w-4 h-4 rounded-full border border-wxm-cloud/20 flex items-center justify-center text-[10px]">1</span>
         <span>Download & cryptographic verification</span>
       </div>
-      <div id="step-snapshot" class="flex items-center space-x-2 text-wxm-muted">
-        <span class="w-4 h-4 rounded-full border border-wxm-border flex items-center justify-center text-[10px]">2</span>
+      <div id="step-snapshot" class="flex items-center space-x-2 text-wxm-mist">
+        <span class="w-4 h-4 rounded-full border border-wxm-cloud/20 flex items-center justify-center text-[10px]">2</span>
         <span>Protected credentials snapshot</span>
       </div>
-      <div id="step-write" class="flex items-center space-x-2 text-wxm-muted">
-        <span class="w-4 h-4 rounded-full border border-wxm-border flex items-center justify-center text-[10px]">3</span>
+      <div id="step-write" class="flex items-center space-x-2 text-wxm-mist">
+        <span class="w-4 h-4 rounded-full border border-wxm-cloud/20 flex items-center justify-center text-[10px]">3</span>
         <span>Guarded flash write (safe bounds)</span>
       </div>
-      <div id="step-md5" class="flex items-center space-x-2 text-wxm-muted">
-        <span class="w-4 h-4 rounded-full border border-wxm-border flex items-center justify-center text-[10px]">4</span>
+      <div id="step-md5" class="flex items-center space-x-2 text-wxm-mist">
+        <span class="w-4 h-4 rounded-full border border-wxm-cloud/20 flex items-center justify-center text-[10px]">4</span>
         <span>Hardware flash MD5 check</span>
       </div>
-      <div id="step-otadata" class="flex items-center space-x-2 text-wxm-muted">
-        <span class="w-4 h-4 rounded-full border border-wxm-border flex items-center justify-center text-[10px]">5</span>
+      <div id="step-otadata" class="flex items-center space-x-2 text-wxm-mist">
+        <span class="w-4 h-4 rounded-full border border-wxm-cloud/20 flex items-center justify-center text-[10px]">5</span>
         <span>Boot pointer & CRC32 update</span>
       </div>
-      <div id="step-reboot" class="flex items-center space-x-2 text-wxm-muted">
-        <span class="w-4 h-4 rounded-full border border-wxm-border flex items-center justify-center text-[10px]">6</span>
+      <div id="step-reboot" class="flex items-center space-x-2 text-wxm-mist">
+        <span class="w-4 h-4 rounded-full border border-wxm-cloud/20 flex items-center justify-center text-[10px]">6</span>
         <span>RTS reset & boot sequence capture</span>
       </div>
     </div>
 
     <!-- Error Alert Box -->
-    <div id="flash-error-box" class="hidden mt-6 p-4 rounded-xl border border-wxm-danger/40 bg-wxm-danger/10 text-xs text-wxm-text">
+    <div id="flash-error-box" class="hidden mt-6 p-4 rounded-card border border-wxm-error/40 bg-wxm-error/10 text-xs text-white">
       <div class="flex items-start space-x-3">
-        <svg class="w-5 h-5 text-wxm-danger flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <svg class="w-5 h-5 text-wxm-error flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
         </svg>
         <div>
           <h4 class="font-bold text-white text-sm" id="flash-error-title">Flashing Encountered an Issue</h4>
-          <p class="text-wxm-muted mt-1 leading-relaxed" id="flash-error-msg">An unexpected error occurred.</p>
-          <div class="mt-3 p-3 rounded-lg bg-black/40 border border-wxm-border/40 text-[11px] text-slate-300">
-            <strong>Recovery Advice:</strong> Your device credentials and factory partition remain protected. Disconnect USB, reconnect the gateway, and try again. If the device does not respond, hold the BOOT button while plugging in the USB cable to force ROM bootloader mode.
+          <p class="text-wxm-cloud mt-1 leading-relaxed" id="flash-error-msg">An unexpected error occurred.</p>
+          <div class="mt-3 p-3 rounded-control bg-wxm-abyss/80 border border-wxm-cloud/10 text-[11px] text-wxm-mist">
+            <strong class="text-white">Recovery Advice:</strong> Your device credentials and factory partition remain protected. Disconnect USB, reconnect the gateway, and try again. If the device does not respond, hold the BOOT button while plugging in the USB cable to force ROM bootloader mode.
           </div>
           <button
             id="btn-retry-flash"
             type="button"
-            class="mt-4 px-4 py-2 rounded-lg bg-wxm-surface hover:bg-slate-700 text-white font-semibold transition-colors cursor-pointer"
+            class="mt-4 px-4 py-2 rounded-control bg-wxm-storm/60 hover:bg-wxm-storm border border-wxm-cloud/20 text-white font-semibold transition-colors cursor-pointer"
           >
             Return to Device Overview
           </button>

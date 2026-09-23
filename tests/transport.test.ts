@@ -3,16 +3,16 @@ import { Wg1200Transport } from '../src/lib/flasher/transport';
 import { LogSanitizer } from '../src/lib/flasher/serialLog';
 
 describe('transport & serialLog', () => {
-  it('correctly normalizes 16384 KB returned by esptool-js 0.5.4 to 16,777,216 bytes', async () => {
+  it('correctly normalizes 16MB string returned by esptool-js 0.7.0 detectFlashSize to 16,777,216 bytes', async () => {
     const transport = new Wg1200Transport({
       log: () => {},
       error: () => {},
     });
 
-    // Mock loader with getFlashSize returning 16384 (KB)
+    // Mock loader with detectFlashSize returning '16MB'
     const mockLoader = {
       chip: { CHIP_NAME: 'ESP32-S3' },
-      getFlashSize: vi.fn().mockResolvedValue(16384),
+      detectFlashSize: vi.fn().mockResolvedValue('16MB'),
       readFlash: vi.fn().mockImplementation((offset: number, size: number) => {
         const buf = new Uint8Array(size);
         if (offset === 0xc000) {
@@ -94,5 +94,30 @@ describe('transport & serialLog', () => {
     expect(sanitizer.sanitizeLine('AnotherCertLine==')).toBeNull();
     expect(sanitizer.sanitizeLine('-----END CERTIFICATE-----')).toBe('[REDACTED_SENSITIVE_BLOCK_END]');
     expect(sanitizer.sanitizeLine('I (456) wifi: connected')).toBe('I (456) wifi: connected');
+  });
+
+  it('passes Uint8Array directly to loader.writeFlash for esptool-js 0.7.0', async () => {
+    const transport = new Wg1200Transport({
+      log: () => {},
+      error: () => {},
+    });
+
+    let capturedOptions: any = null;
+    (transport as any).loader = {
+      writeFlash: vi.fn().mockImplementation((opts: any) => {
+        capturedOptions = opts;
+        return Promise.resolve();
+      }),
+    };
+
+    const firmwareData = new Uint8Array([0xaa, 0xbb, 0xcc, 0xdd]);
+    // slot ota_0 (0x420000)
+    await transport.installApplication(0x420000, firmwareData);
+
+    expect(capturedOptions).not.toBeNull();
+    expect(capturedOptions.fileArray[0].address).toBe(0x420000);
+    expect(capturedOptions.fileArray[0].data).toBeInstanceOf(Uint8Array);
+    expect(capturedOptions.fileArray[0].data).toBe(firmwareData);
+    expect(capturedOptions.eraseAll).toBe(false);
   });
 });
