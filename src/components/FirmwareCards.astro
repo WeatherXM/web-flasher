@@ -3,9 +3,13 @@
 
 <div id="firmware-selection-section" class="hidden max-w-4xl mx-auto px-4 sm:px-6 mb-12">
   <div class="mb-6 space-y-1">
-    <span class="text-[11px] font-bold text-wxm-zenith uppercase tracking-wider block">Step 2 — Choose Operating System</span>
-    <h2 class="text-xl font-bold text-white tracking-tight">Select Target Firmware</h2>
-    <p class="text-xs text-wxm-mist">Click the button below the firmware you wish to flash. Your gateway's credentials and factory recovery slot remain 100% safe.</p>
+    <span class="text-[11px] font-bold text-wxm-zenith uppercase tracking-wider block">Step 2 — Choose Firmware Mode</span>
+    <h2 class="text-xl font-bold text-white tracking-tight">Choose how this WG1200 should operate</h2>
+    <p class="text-xs text-wxm-mist leading-relaxed max-w-3xl">
+      <strong class="text-white">WeatherXM Tri-Protocol</strong> keeps the gateway doing its normal weather job and can publish the paired station as Meshtastic and MeshCore sensor telemetry.
+      <strong class="text-white">Full Meshtastic</strong> replaces the gateway application in the active OTA slot and turns the WG1200 itself into a general-purpose Meshtastic node.
+      Protected credentials and the factory recovery image remain untouched in either mode.
+    </p>
   </div>
 
   <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -24,14 +28,14 @@
           </span>
         </div>
 
-        <h3 class="text-lg font-bold text-white">WeatherXM Gateway</h3>
+        <h3 class="text-lg font-bold text-white">WeatherXM Tri-Protocol Gateway</h3>
         <div class="flex items-center space-x-2 mt-1 mb-3">
           <span class="text-xs text-wxm-mist font-mono font-medium" id="wxm-version">v0.8.25</span>
-          <span class="text-[11px] px-2 py-0.5 rounded bg-wxm-beacon/10 text-wxm-zenith border border-wxm-beacon/25 font-medium">Official Release</span>
+          <span class="text-[11px] px-2 py-0.5 rounded bg-wxm-beacon/10 text-wxm-zenith border border-wxm-beacon/25 font-medium">WXM + Meshtastic + MeshCore</span>
         </div>
 
         <p class="text-xs text-wxm-mist leading-relaxed">
-          The factory weather station gateway software. Connects your local weather sensors via Sub-GHz RF/BLE and relays environmental data securely to the WeatherXM Decentralized Network.
+          Keep the WG1200 as a full WeatherXM weather gateway while also exposing its paired station to open LoRa mesh ecosystems. The same observations can be published as WeatherXM-native data, standard Meshtastic environmental telemetry, and MeshCore sensor-node telemetry. Mesh publishing is configurable and does not replace WeatherXM operation.
         </p>
 
         <div class="mt-4 pt-3 border-t border-wxm-cloud/10">
@@ -39,15 +43,19 @@
           <ul class="space-y-2 text-xs text-wxm-cloud select-none">
             <li class="flex items-center space-x-2">
               <svg class="w-4 h-4 text-wxm-live flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-              <span>WeatherXM Mobile App integration</span>
+              <span>WeatherXM cloud, app, rewards and OTA remain active</span>
             </li>
             <li class="flex items-center space-x-2">
               <svg class="w-4 h-4 text-wxm-live flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-              <span>Cryptographic station rewards claiming</span>
+              <span>Turns the paired weather station into Meshtastic-compatible sensor telemetry</span>
             </li>
             <li class="flex items-center space-x-2">
               <svg class="w-4 h-4 text-wxm-live flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-              <span>Automatic OTA updates over WiFi</span>
+              <span>Publishes the same weather observations as MeshCore sensor-node telemetry</span>
+            </li>
+            <li class="flex items-center space-x-2">
+              <svg class="w-4 h-4 text-wxm-live flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+              <span>Local REST / Home Assistant access stays available</span>
             </li>
           </ul>
         </div>
@@ -87,7 +95,7 @@
           <svg class="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
           </svg>
-          <span id="btn-flash-wxm-label">Flash WeatherXM</span>
+          <span id="btn-flash-wxm-label">Flash WeatherXM Tri-Protocol</span>
         </button>
       </div>
     </div>
@@ -106,14 +114,14 @@
           </span>
         </div>
 
-        <h3 class="text-lg font-bold text-white">Meshtastic Mesh Node</h3>
+        <h3 class="text-lg font-bold text-white">Full Meshtastic Node</h3>
         <div class="flex items-center space-x-2 mt-1 mb-3">
           <span class="text-xs text-wxm-mist font-mono font-medium" id="mesh-version">v2.8.1-wxm</span>
-          <span class="text-[11px] px-2 py-0.5 rounded bg-wxm-live/10 text-wxm-live border border-wxm-live/25 font-medium">Full LoRa Mesh</span>
+          <span class="text-[11px] px-2 py-0.5 rounded bg-wxm-live/10 text-wxm-live border border-wxm-live/25 font-medium">Gateway becomes Meshtastic</span>
         </div>
 
         <p class="text-xs text-wxm-mist leading-relaxed">
-          Transforms your WeatherXM gateway into an off-grid, encrypted LoRa mesh communication router and repeater. Fully compatible with all Meshtastic apps.
+          Turn the WG1200 hardware itself into a native Meshtastic device. This firmware uses the onboard SX1262 radio and WG1200 display and participates directly in Meshtastic routing, messaging and repeater operation. WeatherXM station/cloud services pause while this mode is active; your WeatherXM identity stays protected so you can switch back at any time.
         </p>
 
         <div class="mt-4 pt-3 border-t border-wxm-cloud/10">
@@ -121,15 +129,19 @@
           <ul class="space-y-2 text-xs text-wxm-cloud select-none">
             <li class="flex items-center space-x-2">
               <svg class="w-4 h-4 text-wxm-live flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-              <span>Decentralized off-grid messaging & routing</span>
+              <span>Native Meshtastic routing, messaging and repeater operation</span>
             </li>
             <li class="flex items-center space-x-2">
               <svg class="w-4 h-4 text-wxm-live flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-              <span>Native SX1262 LoRa radio driver for WG1200</span>
+              <span>Uses the WG1200 SX1262 radio and TFT display directly</span>
             </li>
             <li class="flex items-center space-x-2">
               <svg class="w-4 h-4 text-wxm-live flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-              <span>Preserves WeatherXM credentials for easy return</span>
+              <span>Works with standard Meshtastic web, iOS and Android clients</span>
+            </li>
+            <li class="flex items-center space-x-2">
+              <svg class="w-4 h-4 text-wxm-live flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+              <span>WeatherXM credentials and factory recovery image remain protected</span>
             </li>
           </ul>
         </div>
@@ -170,7 +182,7 @@
           <svg class="w-4 h-4 text-wxm-abyss" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0" />
           </svg>
-          <span id="btn-flash-mesh-label">Flash Meshtastic</span>
+          <span id="btn-flash-mesh-label">Flash Full Meshtastic</span>
         </button>
       </div>
     </div>

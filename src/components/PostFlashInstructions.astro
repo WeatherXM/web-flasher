@@ -17,22 +17,22 @@
 
     <!-- WeatherXM Next Steps -->
     <div id="instructions-wxm" class="hidden space-y-4 pt-2 border-t border-wxm-cloud/15">
-      <h4 class="text-sm font-semibold text-white">Next Steps for WeatherXM Gateway</h4>
+      <h4 class="text-sm font-semibold text-white">Next Steps for WeatherXM Tri-Protocol</h4>
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
         <div class="p-4 rounded-control bg-wxm-midnight/60 border border-wxm-cloud/10">
           <span class="w-5 h-5 rounded-full bg-wxm-beacon/15 text-wxm-zenith font-bold flex items-center justify-center text-xs mb-2">1</span>
-          <strong class="text-white block mb-1">Check Status LEDs</strong>
-          <p class="text-wxm-mist leading-relaxed">The gateway is booting into WeatherXM. The LEDs will initialize as it connects to local sensors.</p>
+          <strong class="text-white block mb-1">Confirm Weather Station Link</strong>
+          <p class="text-wxm-mist leading-relaxed">The gateway boots into normal WeatherXM operation first. Confirm that the paired weather station and cloud link are healthy.</p>
         </div>
         <div class="p-4 rounded-control bg-wxm-midnight/60 border border-wxm-cloud/10">
           <span class="w-5 h-5 rounded-full bg-wxm-beacon/15 text-wxm-zenith font-bold flex items-center justify-center text-xs mb-2">2</span>
-          <strong class="text-white block mb-1">Setup WiFi if Needed</strong>
-          <p class="text-wxm-mist leading-relaxed">If credentials are reset, connect to the <code class="text-wxm-zenith font-mono">WXM_WG1200_...</code> hotspot or use the mobile app.</p>
+          <strong class="text-white block mb-1">Enable Mesh Telemetry</strong>
+          <p class="text-wxm-mist leading-relaxed">Use the gateway's local web console to enable and configure Meshtastic and/or MeshCore weather telemetry for the paired station.</p>
         </div>
         <div class="p-4 rounded-control bg-wxm-midnight/60 border border-wxm-cloud/10">
           <span class="w-5 h-5 rounded-full bg-wxm-beacon/15 text-wxm-zenith font-bold flex items-center justify-center text-xs mb-2">3</span>
-          <strong class="text-white block mb-1">Station Rewards Active</strong>
-          <p class="text-wxm-mist leading-relaxed">Your cloud identity was preserved. Telemetry will automatically attach to your station wallet.</p>
+          <strong class="text-white block mb-1">Use All Three Paths Together</strong>
+          <p class="text-wxm-mist leading-relaxed">WeatherXM cloud operation stays active while selected observations are also emitted in Meshtastic and MeshCore-compatible sensor formats.</p>
         </div>
       </div>
     </div>

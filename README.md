@@ -1,12 +1,13 @@
 # flasher.weatherxm.com — WG1200 Firmware Switcher
 
-Web-based firmware switcher for the **WeatherXM WG1200 / D1 Gateway**, enabling safe switching between:
-* **WeatherXM Gateway Firmware**
-* **Meshtastic for WG1200**
+Web-based firmware switcher for the **WeatherXM WG1200 / D1 Gateway**, with two deliberately different operating modes:
+
+* **WeatherXM Tri-Protocol Gateway** — keeps normal WeatherXM gateway/cloud operation and can republish the paired station's weather observations as **Meshtastic environmental telemetry** and **MeshCore sensor-node telemetry**. This is the mode to use when you want the weather station visible in mesh ecosystems without giving up WeatherXM.
+* **Full Meshtastic Node** — replaces the active gateway application with native Meshtastic firmware so the **WG1200 itself** becomes a Meshtastic router/repeater/client using its onboard SX1262 and TFT.
 
 The entire operation happens in the browser over USB using the **Web Serial API**.
 
-> **Switch your WeatherXM D1 between WeatherXM and Meshtastic over USB. Your WeatherXM device identity and cloud credentials stay intact. You can switch back at any time.**
+> **WeatherXM tri-protocol mode adds mesh-compatible weather telemetry; Full Meshtastic mode turns the gateway itself into a Meshtastic node. Your WeatherXM device identity, credentials and factory recovery image stay intact, so you can switch back at any time.**
 
 ---
 

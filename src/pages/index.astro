@@ -26,10 +26,10 @@ import Footer from '../components/Footer.astro';
       rel="stylesheet"
     />
     <meta name="generator" content={Astro.generator} />
-    <title>WG1200 Firmware Switcher — WeatherXM & Meshtastic</title>
+    <title>WG1200 Firmware Switcher — WeatherXM Tri-Protocol & Meshtastic</title>
     <meta
       name="description"
-      content="Switch your WeatherXM D1 / WG1200 gateway safely between WeatherXM and Meshtastic firmware over USB in your browser. Device credentials remain intact."
+      content="Use your WeatherXM D1 / WG1200 as a tri-protocol WeatherXM gateway with Meshtastic and MeshCore sensor telemetry, or switch it into a full Meshtastic node over USB. Protected device credentials remain intact."
     />
   </head>
 
@@ -440,10 +440,10 @@ import Footer from '../components/Footer.astro';
         }
 
         if (btnFlashWxmLabel) {
-          btnFlashWxmLabel.textContent = isWxmActive ? 'Reinstall WeatherXM' : 'Switch to WeatherXM';
+          btnFlashWxmLabel.textContent = isWxmActive ? 'Reinstall WeatherXM Tri-Protocol' : 'Switch to WeatherXM Tri-Protocol';
         }
         if (btnFlashMeshLabel) {
-          btnFlashMeshLabel.textContent = isMeshActive ? 'Reinstall Meshtastic' : 'Switch to Meshtastic';
+          btnFlashMeshLabel.textContent = isMeshActive ? 'Reinstall Full Meshtastic' : 'Switch to Full Meshtastic';
         }
       }
 
