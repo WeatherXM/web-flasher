@@ -1,8 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import {
   assertAllowedFactoryRollbackWrite,
+  assertAllowedFullBackupRestore,
   assertAllowedWrite,
+  checkImageSignature,
   validateAllowedWrite,
+  validateFullBackupImage,
 } from '../src/lib/flasher/writeGuard';
 import { WG1200_CONSTANTS } from '../src/lib/flasher/constants';
 
@@ -85,5 +88,70 @@ describe('writeGuard', () => {
     expect(() => assertAllowedFactoryRollbackWrite(0x13000, 4096)).toThrow(/Factory rollback write rejected/);
     expect(() => assertAllowedFactoryRollbackWrite(0x14000, 8192)).toThrow(/Factory rollback write rejected/);
     expect(() => assertAllowedFactoryRollbackWrite(0x20000, 8192)).toThrow(/Factory rollback write rejected/);
+  });
+
+  describe('full backup restore validation', () => {
+    it('assertAllowedFullBackupRestore allows strictly address 0 with 16MB and rejects others', () => {
+      expect(() => assertAllowedFullBackupRestore(0, WG1200_CONSTANTS.FLASH_SIZE_BYTES)).not.toThrow();
+      expect(() => assertAllowedFullBackupRestore(0x1000, WG1200_CONSTANTS.FLASH_SIZE_BYTES)).toThrow(
+        /Full backup restore write rejected/
+      );
+      expect(() => assertAllowedFullBackupRestore(0, 1024)).toThrow(
+        /Full backup restore write rejected/
+      );
+    });
+
+    it('validateFullBackupImage rejects incorrect size or invalid magic', () => {
+      const small = new Uint8Array(1024);
+      expect(validateFullBackupImage(small).valid).toBe(false);
+      expect(validateFullBackupImage(small).error).toMatch(/Invalid backup file size/);
+
+      const fake16mb = new Uint8Array(WG1200_CONSTANTS.FLASH_SIZE_BYTES);
+      fake16mb[0] = 0x00; // Not 0xE9
+      const resMagic = validateFullBackupImage(fake16mb);
+      expect(resMagic.valid).toBe(false);
+      expect(resMagic.error).toMatch(/missing ESP bootloader header magic/);
+    });
+
+    it('validateFullBackupImage detects unsigned backup and reports warnings', () => {
+      const unsigned16mb = new Uint8Array(WG1200_CONSTANTS.FLASH_SIZE_BYTES);
+      unsigned16mb[0] = 0xe9; // ESP magic
+      unsigned16mb[1] = 0x01; // 1 segment
+      unsigned16mb[0xc000] = 0xaa;
+      unsigned16mb[0xc001] = 0x50; // 0x50AA partition table magic
+
+      const res = validateFullBackupImage(unsigned16mb);
+      expect(res.valid).toBe(true);
+      expect(res.isSigned).toBe(false);
+      expect(res.bootloaderSigned).toBe(false);
+      expect(res.warnings.some((w) => w.includes('missing an authentic Secure Boot V2 signature'))).toBe(true);
+    });
+
+    it('validateFullBackupImage and checkImageSignature detect valid Secure Boot V2 signature', () => {
+      const signed16mb = new Uint8Array(WG1200_CONSTANTS.FLASH_SIZE_BYTES);
+      signed16mb[0] = 0xe9; // ESP magic
+      signed16mb[1] = 0x01; // 1 segment
+
+      // Segment 0 header at offset 24
+      const segLen = 16;
+      signed16mb[24 + 4] = segLen & 0xff; // 16 bytes len
+      // cur = 24 + 8 + 16 = 48
+      // cur += 1 (checksum) = 49
+      // cur += (16 - (49 % 16)) % 16 = 49 + 15 = 64
+      // cur += (4096 - (64 % 4096)) % 4096 = 4096
+      signed16mb[4096] = 0xe7; // Secure Boot V2 signature block magic!
+
+      // Partition table magic at 0xC000
+      signed16mb[0xc000] = 0xaa;
+      signed16mb[0xc001] = 0x50;
+
+      expect(checkImageSignature(signed16mb, 0)).toBe(true);
+
+      const res = validateFullBackupImage(signed16mb);
+      expect(res.valid).toBe(true);
+      expect(res.isSigned).toBe(true);
+      expect(res.bootloaderSigned).toBe(true);
+      expect(res.detectedSign).toMatch(/ESP32-S3 Secure Boot V2 signature block/);
+    });
   });
 });

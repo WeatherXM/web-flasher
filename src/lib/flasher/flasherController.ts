@@ -356,6 +356,22 @@ export class FlasherController {
     this.addLog('Full 16 MB backup downloaded successfully.');
   }
 
+  /**
+   * Restores a full 16 MB flash backup to the connected ESP32-S3.
+   */
+  public async executeFullFlashRestore(
+    backupData: Uint8Array,
+    onProgress?: (pct: number) => void
+  ): Promise<void> {
+    if (!this.transport.isConnected) throw new Error('Not connected');
+    this.addLog('\nStarting full 16 MB flash restore. This may take 1-3 minutes over Web Serial…');
+    await this.transport.restoreFullFlash(backupData, (pct) => {
+      this.addLog(`Restore progress: ${pct}%`);
+      if (onProgress) onProgress(pct);
+    });
+    this.addLog('Full 16 MB backup restored and verified successfully.');
+  }
+
   public downloadLog(): void {
     downloadLogFile(this.logLines, `wg1200_flasher_${Date.now()}.txt`);
   }

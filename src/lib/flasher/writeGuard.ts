@@ -178,3 +178,146 @@ export function assertAllowedWrite(
   return result.partitionName;
 }
 
+/**
+ * Checks whether an ESP binary starting at a specific offset in a flash buffer
+ * contains an authentic ESP32-S3 Secure Boot V2 signature block (magic 0xE7).
+ */
+export function checkImageSignature(data: Uint8Array, offset: number): boolean {
+  if (offset + 24 >= data.byteLength) return false;
+  if (data[offset] !== 0xe9) return false;
+
+  const segmentCount = data[offset + 1];
+  let cur = offset + 24;
+
+  for (let s = 0; s < segmentCount; s++) {
+    if (cur + 8 > data.byteLength) return false;
+    const dataLen =
+      data[cur + 4] |
+      (data[cur + 5] << 8) |
+      (data[cur + 6] << 16) |
+      (data[cur + 7] << 24);
+    cur += 8 + dataLen;
+  }
+
+  cur += 1; // Checksum byte
+  cur += (16 - (cur % 16)) % 16;
+  cur += (4096 - (cur % 4096)) % 4096;
+
+  if (cur + 4096 > data.byteLength) return false;
+  return data[cur] === 0xe7;
+}
+
+export interface FullBackupValidationResult {
+  valid: boolean;
+  isSigned: boolean;
+  detectedSign?: string;
+  bootloaderSigned: boolean;
+  appSigned: boolean;
+  error?: string;
+  warnings: string[];
+}
+
+/**
+ * Validates a 16 MB full flash backup binary.
+ * Checks exact size, bootloader magic, partition table magic, and Secure Boot V2 signatures.
+ */
+export function validateFullBackupImage(data: Uint8Array): FullBackupValidationResult {
+  const warnings: string[] = [];
+
+  if (!data || !(data instanceof Uint8Array)) {
+    return {
+      valid: false,
+      isSigned: false,
+      bootloaderSigned: false,
+      appSigned: false,
+      error: 'Invalid flash backup data: expected Uint8Array',
+      warnings,
+    };
+  }
+
+  if (data.byteLength !== WG1200_CONSTANTS.FLASH_SIZE_BYTES) {
+    return {
+      valid: false,
+      isSigned: false,
+      bootloaderSigned: false,
+      appSigned: false,
+      error: `Invalid backup file size: expected ${WG1200_CONSTANTS.FLASH_SIZE_BYTES.toLocaleString()} bytes (16 MB), received ${data.byteLength.toLocaleString()} bytes.`,
+      warnings,
+    };
+  }
+
+  if (data[0] !== 0xe9) {
+    return {
+      valid: false,
+      isSigned: false,
+      bootloaderSigned: false,
+      appSigned: false,
+      error: `Invalid backup image: missing ESP bootloader header magic (0xE9) at offset 0x0000 (found 0x${data[0].toString(16)}).`,
+      warnings,
+    };
+  }
+
+  const ptMagic = data[0xc000] | (data[0xc001] << 8);
+  if (ptMagic !== WG1200_CONSTANTS.PARTITION_TABLE_MAGIC) {
+    warnings.push(
+      `Partition table magic at 0xC000 is 0x${ptMagic.toString(16)}, expected 0x${WG1200_CONSTANTS.PARTITION_TABLE_MAGIC.toString(16)}.`
+    );
+  }
+
+  const bootloaderSigned = checkImageSignature(data, 0x0000);
+  const factorySigned = checkImageSignature(data, WG1200_CONSTANTS.APP_FACTORY.offset);
+  const ota0Signed = checkImageSignature(data, WG1200_CONSTANTS.APP_OTA_0.offset);
+  const ota1Signed = checkImageSignature(data, WG1200_CONSTANTS.APP_OTA_1.offset);
+  const appSigned = factorySigned || ota0Signed || ota1Signed;
+
+  const isSigned = bootloaderSigned;
+
+  if (!bootloaderSigned) {
+    warnings.push(
+      'Bootloader at 0x0000 is missing an authentic Secure Boot V2 signature block (magic 0xE7).'
+    );
+  }
+
+  if (!appSigned) {
+    warnings.push(
+      'No application partitions (factory, ota_0, ota_1) contain an authentic Secure Boot V2 signature block (magic 0xE7).'
+    );
+  }
+
+  let detectedSign: string | undefined;
+  if (isSigned) {
+    detectedSign = `ESP32-S3 Secure Boot V2 signature block (0xE7) verified on bootloader${
+      appSigned ? ' and application partition' : ''
+    }`;
+  }
+
+  return {
+    valid: true,
+    isSigned,
+    detectedSign,
+    bootloaderSigned,
+    appSigned,
+    warnings,
+  };
+}
+
+/**
+ * Strictly verifies that a full backup restore write targets exactly the full 16 MB flash
+ * starting at offset 0x000000.
+ */
+export function assertAllowedFullBackupRestore(
+  address: number,
+  length: number
+): void {
+  if (
+    address !== 0 ||
+    length !== WG1200_CONSTANTS.FLASH_SIZE_BYTES
+  ) {
+    throw new Error(
+      `Full backup restore write rejected: address must be strictly 0x000000 and length must be ` +
+      `${WG1200_CONSTANTS.FLASH_SIZE_BYTES} bytes (16 MB). Received address 0x${address.toString(16)}, length ${length}.`
+    );
+  }
+}
+
+

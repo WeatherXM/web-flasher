@@ -1,11 +1,16 @@
-import { ESPLoader, Transport, ESPError } from 'esptool-js';
+import { ESPLoader, Transport, ESPError, getStubJsonByChipName } from 'esptool-js';
 import { parseAppDescriptor, type AppDescriptor } from './appDescriptor';
 import { WG1200_CONSTANTS } from './constants';
 import { compareHexHashes, sha256Hex } from './hashing';
 import { verifySecureCertIdentity, type SecureCertVerificationResult } from './identity';
 import { determineActiveBootSlot, parseOtadataSector, type OtadataStatus } from './otadata';
 import { parsePartitionTableWithMetadata, verifyWg1200PartitionTable, type PartitionRecord } from './partitions';
-import { assertAllowedApplicationWrite, assertAllowedFactoryRollbackWrite, assertAllowedOtaSelectWrite } from './writeGuard';
+import {
+  assertAllowedApplicationWrite,
+  assertAllowedFactoryRollbackWrite,
+  assertAllowedFullBackupRestore,
+  assertAllowedOtaSelectWrite,
+} from './writeGuard';
 
 let isTransportPatched = false;
 
@@ -105,6 +110,153 @@ export function patchTransportRead(): void {
 }
 
 patchTransportRead();
+
+let isEsploaderPatched = false;
+
+/**
+ * Monkey-patches esptool-js ESPLoader.prototype.runStub to resolve a silicon bug in the ESP32-S3 ROM bootloader.
+ * When Hardware Secure Boot is enabled on ESP32-S3 (eFuse bit 20 in 0x60007038 is set), the ROM's standard
+ * download command `MEM_END` (`memFinish(entry)`) fails to branch to RAM execution, causing the stub handshake
+ * ("OHAI") to time out with "Serial data stream stopped: Possible serial noise or corruption."
+ *
+ * Following Espressif's official Python esptool workaround (loader.py:1353-1384):
+ * 1. Leave RAM download mode with entrypoint 0: `memFinish(0)`
+ * 2. Hijack the ROM SPI flash legacy read pointer table at 0x3FCEF688 (`rom_spiflash_legacy_funcs.read`)
+ * 3. Write `stubFlasher.entry` to 0x3FCEF688
+ * 4. Trigger `READ_FLASH_SLOW` command (0x0E), forcing the ROM to execute the stub in RAM
+ * 5. Read the stub's "OHAI" response packet
+ * 6. Restore the original function pointer at 0x3FCEF688
+ *
+ * In addition, if native USB-JTAG/Serial is detected on ESP32-S3, RTC WDT and SWD watchdogs are disabled
+ * to prevent watchdog timer resets during serial flasher operations.
+ */
+export function patchEsploaderRunStub(): void {
+  if (isEsploaderPatched) return;
+  isEsploaderPatched = true;
+
+  const originalRunStub = (ESPLoader.prototype as any).runStub;
+
+  (ESPLoader.prototype as any).runStub = async function (this: any) {
+    if (this.IS_STUB) {
+      this.info('Stub is already running. No upload is necessary.');
+      this.IS_STUB = true;
+      await this.applyUsbFlashWriteSize();
+      return this.chip;
+    }
+    if (this.secureDownloadMode) {
+      this.info('Stub flasher is not supported in Secure Download Mode, it has been disabled.');
+      return this.chip;
+    }
+
+    const isEsp32S3 = this.chip?.CHIP_NAME === 'ESP32-S3';
+    let isSecureBootEnabled = false;
+
+    if (isEsp32S3) {
+      try {
+        const EFUSE_BASE = 0x60007000;
+        const EFUSE_SECURE_BOOT_EN_REG = EFUSE_BASE + 0x038;
+        const EFUSE_SECURE_BOOT_EN_MASK = 1 << 20;
+        const regVal = await this.readReg(EFUSE_SECURE_BOOT_EN_REG);
+        isSecureBootEnabled = (regVal & EFUSE_SECURE_BOOT_EN_MASK) !== 0;
+      } catch (e: any) {
+        this.debug?.(`Could not read secure boot eFuse: ${e?.message ?? e}`);
+      }
+
+      // If USB-JTAG/Serial peripheral is in use, disable RTC and SWD watchdogs
+      try {
+        if (typeof this.chip.usesUsbJtagSerial === 'function' && (await this.chip.usesUsbJtagSerial(this))) {
+          const RTCCNTL_BASE_REG = 0x60008000;
+          const RTC_CNTL_WDTCONFIG0_REG = RTCCNTL_BASE_REG + 0x0098;
+          const RTC_CNTL_WDTWPROTECT_REG = RTCCNTL_BASE_REG + 0x00b0;
+          const RTC_CNTL_WDT_WKEY = 0x50d83aa1;
+          const RTC_CNTL_SWD_CONF_REG = RTCCNTL_BASE_REG + 0x00b4;
+          const RTC_CNTL_SWD_AUTO_FEED_EN = 1 << 31;
+          const RTC_CNTL_SWD_WPROTECT_REG = RTCCNTL_BASE_REG + 0x00b8;
+          const RTC_CNTL_SWD_WKEY = 0x8f1d312a;
+
+          await this.writeReg(RTC_CNTL_WDTWPROTECT_REG, RTC_CNTL_WDT_WKEY);
+          await this.writeReg(RTC_CNTL_WDTCONFIG0_REG, 0);
+          await this.writeReg(RTC_CNTL_WDTWPROTECT_REG, 0);
+
+          await this.writeReg(RTC_CNTL_SWD_WPROTECT_REG, RTC_CNTL_SWD_WKEY);
+          const swdConf = await this.readReg(RTC_CNTL_SWD_CONF_REG);
+          await this.writeReg(RTC_CNTL_SWD_CONF_REG, swdConf | RTC_CNTL_SWD_AUTO_FEED_EN);
+          await this.writeReg(RTC_CNTL_SWD_WPROTECT_REG, 0);
+        }
+      } catch (e: any) {
+        this.debug?.(`Could not disable watchdogs: ${e?.message ?? e}`);
+      }
+    }
+
+    if (!isEsp32S3 || !isSecureBootEnabled) {
+      return await originalRunStub.call(this);
+    }
+
+    this.info('ESP32-S3 Secure Boot detected: applying ROM stub execution workaround...');
+
+    const chipRevision = this.chip.getChipRevision ? await this.chip.getChipRevision(this) : undefined;
+    const stubFlasher = await getStubJsonByChipName(this.chip.CHIP_NAME, chipRevision);
+    if (stubFlasher === undefined) {
+      this.info(`Stub flasher is not yet supported on ${this.chip.CHIP_NAME}, it has been disabled.`);
+      return this.chip;
+    }
+
+    this.info('Uploading stub...');
+    const stub = [stubFlasher.decodedText, stubFlasher.decodedData];
+    for (let i = 0; i < stub.length; i++) {
+      if (stub[i]) {
+        const offs = i === 0 ? stubFlasher.text_start : stubFlasher.data_start;
+        const length = stub[i].length;
+        const blocks = Math.floor((length + this.ESP_RAM_BLOCK - 1) / this.ESP_RAM_BLOCK);
+        await this.memBegin(length, blocks, this.ESP_RAM_BLOCK, offs);
+        for (let seq = 0; seq < blocks; seq++) {
+          const fromOffs = seq * this.ESP_RAM_BLOCK;
+          const toOffs = fromOffs + this.ESP_RAM_BLOCK;
+          await this.memBlock(stub[i].slice(fromOffs, toOffs), seq);
+        }
+      }
+    }
+
+    this.info('Running stub...');
+    const ROM_SPIFLASH_LEGACY_FUNCS_READ_PTR = 0x3fcef688;
+    const ESP_READ_FLASH_SLOW = 0x0e;
+
+    // 1. Leave RAM download mode without entering entrypoint
+    await this.memFinish(0);
+
+    // 2. Read stored pointer at rom_spiflash_legacy_funcs.read
+    const storedReadPointer = await this.readReg(ROM_SPIFLASH_LEGACY_FUNCS_READ_PTR);
+
+    // 3. Hijack pointer to stub entrypoint
+    await this.writeReg(ROM_SPIFLASH_LEGACY_FUNCS_READ_PTR, stubFlasher.entry);
+
+    try {
+      // 4. Trigger READ_FLASH_SLOW to force ROM to branch into the stub
+      await this.command(ESP_READ_FLASH_SLOW, new Uint8Array(8), 0, false);
+
+      // 5. Read the stub greeting
+      const packetResult = await this.transport.read(this.DEFAULT_TIMEOUT);
+      const packetStr = String.fromCharCode(...packetResult);
+      if (packetStr !== 'OHAI') {
+        throw new ESPError(`Failed to start stub. Unexpected response ${packetStr}`);
+      }
+    } finally {
+      // 6. Restore original pointer in ROM data table
+      try {
+        await this.writeReg(ROM_SPIFLASH_LEGACY_FUNCS_READ_PTR, storedReadPointer);
+      } catch (e: any) {
+        this.debug?.(`Could not restore ROM spiflash pointer: ${e?.message ?? e}`);
+      }
+    }
+
+    this.info('Stub running...');
+    this.IS_STUB = true;
+    await this.applyUsbFlashWriteSize();
+    return this.chip;
+  };
+}
+
+patchEsploaderRunStub();
 
 
 export interface ProtectedRegionSnapshot {
@@ -622,6 +774,51 @@ export class Wg1200Transport {
     }
 
     return fullData;
+  }
+
+  /**
+   * Restores a full 16 MB flash backup to the ESP32-S3 starting at offset 0x000000.
+   * Compresses the image and writes blocks, followed by on-chip verification.
+   */
+  public async restoreFullFlash(
+    fullData: Uint8Array,
+    onProgress?: (percent: number) => void
+  ): Promise<void> {
+    if (!this.loader) throw new Error('Not connected');
+
+    // 1. Enforce strict 16 MB write guard at address 0
+    assertAllowedFullBackupRestore(0, fullData.byteLength);
+
+    this.logger.log(`Restoring full 16 MB flash backup from address 0x000000 (compressed)…`);
+
+    await this.loader.writeFlash({
+      fileArray: [
+        {
+          data: fullData,
+          address: 0,
+        },
+      ],
+      flashSize: '16MB',
+      flashMode: 'dio',
+      flashFreq: '80m',
+      eraseAll: false,
+      compress: true,
+      reportProgress: (_fileIndex: number, written: number, total: number) => {
+        if (onProgress && total > 0) {
+          const pct = Math.round((written / total) * 100);
+          onProgress(pct);
+        }
+      },
+    });
+
+    this.logger.log('16 MB flash write completed. Verifying bootloader header at 0x0000…');
+    const verifyHeader = await this.readRegion(0x0000, 4);
+    if (verifyHeader[0] !== 0xe9) {
+      throw new Error(
+        `Flash restore verification failed: bootloader magic at 0x0000 is 0x${verifyHeader[0].toString(16)}, expected 0xE9`
+      );
+    }
+    this.logger.log('Full flash restore verified successfully.');
   }
 
   /**

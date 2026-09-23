@@ -182,5 +182,127 @@ describe('transport & serialLog', () => {
     const packet = await (t as any).read(1000);
     expect(Array.from(packet)).toEqual([0x01, 0x02]);
   });
+
+  it('patchEsploaderRunStub applies ROM pointer hijacking workaround when ESP32-S3 has Secure Boot enabled', async () => {
+    const { ESPLoader } = await import('esptool-js');
+    const calls: string[] = [];
+    const regsWritten: { addr: number; val: number }[] = [];
+
+    const mockLoader: any = Object.create(ESPLoader.prototype);
+    mockLoader.chip = {
+      CHIP_NAME: 'ESP32-S3',
+      getChipRevision: vi.fn().mockResolvedValue(2),
+    };
+    mockLoader.IS_STUB = false;
+    mockLoader.secureDownloadMode = false;
+    mockLoader.ESP_RAM_BLOCK = 2048;
+    mockLoader.DEFAULT_TIMEOUT = 1000;
+    mockLoader.info = vi.fn();
+    mockLoader.debug = vi.fn();
+    mockLoader.applyUsbFlashWriteSize = vi.fn().mockResolvedValue(undefined);
+    mockLoader.memBegin = vi.fn().mockResolvedValue(undefined);
+    mockLoader.memBlock = vi.fn().mockResolvedValue(undefined);
+
+    mockLoader.memFinish = vi.fn().mockImplementation((entry: number) => {
+      calls.push(`memFinish(${entry})`);
+      return Promise.resolve();
+    });
+
+    mockLoader.readReg = vi.fn().mockImplementation((addr: number) => {
+      calls.push(`readReg(0x${addr.toString(16)})`);
+      if (addr === 0x60007038) {
+        // Secure boot bit 20 is set (0x100000)
+        return Promise.resolve(0x100000);
+      }
+      if (addr === 0x3fcef688) {
+        // Original legacy ROM read pointer
+        return Promise.resolve(0x40000123);
+      }
+      return Promise.resolve(0);
+    });
+
+    mockLoader.writeReg = vi.fn().mockImplementation((addr: number, val: number) => {
+      calls.push(`writeReg(0x${addr.toString(16)}, 0x${val.toString(16)})`);
+      regsWritten.push({ addr, val });
+      return Promise.resolve();
+    });
+
+    mockLoader.command = vi.fn().mockImplementation((op: number, data: Uint8Array, chk: number, waitResponse: boolean) => {
+      calls.push(`command(0x${op.toString(16)}, waitResponse=${waitResponse})`);
+      return Promise.resolve([0, new Uint8Array(0)]);
+    });
+
+    mockLoader.transport = {
+      read: vi.fn().mockResolvedValue(new TextEncoder().encode('OHAI')),
+    };
+
+    await mockLoader.runStub();
+
+    // Verify step sequence
+    expect(calls).toContain('readReg(0x60007038)');
+    expect(calls).toContain('memFinish(0)');
+    expect(calls).toContain('readReg(0x3fcef688)');
+    expect(calls).toContain('command(0xe, waitResponse=false)');
+    expect(mockLoader.transport.read).toHaveBeenCalled();
+
+    // Verify pointer was hijacked to stub entrypoint and then restored
+    expect(regsWritten.length).toBeGreaterThanOrEqual(2);
+    expect(regsWritten[0].addr).toBe(0x3fcef688);
+    // Stub entrypoint for ESP32-S3 is non-zero (0x40379524 or similar)
+    expect(regsWritten[0].val).toBeGreaterThan(0x40000000);
+    // Pointer restored to 0x40000123
+    expect(regsWritten[1].addr).toBe(0x3fcef688);
+    expect(regsWritten[1].val).toBe(0x40000123);
+
+    expect(mockLoader.IS_STUB).toBe(true);
+  });
+
+  it('patchEsploaderRunStub uses standard memFinish(entry) when ESP32-S3 Secure Boot is not enabled', async () => {
+    const { ESPLoader } = await import('esptool-js');
+    const calls: string[] = [];
+
+    const mockLoader: any = Object.create(ESPLoader.prototype);
+    mockLoader.chip = {
+      CHIP_NAME: 'ESP32-S3',
+      getChipRevision: vi.fn().mockResolvedValue(2),
+    };
+    mockLoader.IS_STUB = false;
+    mockLoader.secureDownloadMode = false;
+    mockLoader.ESP_RAM_BLOCK = 2048;
+    mockLoader.DEFAULT_TIMEOUT = 1000;
+    mockLoader.info = vi.fn();
+    mockLoader.debug = vi.fn();
+    mockLoader.applyUsbFlashWriteSize = vi.fn().mockResolvedValue(undefined);
+    mockLoader.memBegin = vi.fn().mockResolvedValue(undefined);
+    mockLoader.memBlock = vi.fn().mockResolvedValue(undefined);
+
+    mockLoader.memFinish = vi.fn().mockImplementation((entry: number) => {
+      calls.push(`memFinish(0x${entry.toString(16)})`);
+      return Promise.resolve();
+    });
+
+    mockLoader.readReg = vi.fn().mockImplementation((addr: number) => {
+      if (addr === 0x60007038) {
+        // Secure boot bit 20 is NOT set
+        return Promise.resolve(0);
+      }
+      return Promise.resolve(0);
+    });
+
+    mockLoader.writeReg = vi.fn().mockResolvedValue(undefined);
+    mockLoader.command = vi.fn().mockResolvedValue([0, new Uint8Array(0)]);
+    mockLoader.transport = {
+      read: vi.fn().mockResolvedValue(new TextEncoder().encode('OHAI')),
+    };
+
+    await mockLoader.runStub();
+
+    // Standard path should NOT call memFinish(0) and should NOT hijack 0x3fcef688
+    expect(calls).not.toContain('memFinish(0x0)');
+    expect(mockLoader.memFinish).toHaveBeenCalled();
+    const entryArg = mockLoader.memFinish.mock.calls[0][0];
+    expect(entryArg).toBeGreaterThan(0x40000000);
+    expect(mockLoader.IS_STUB).toBe(true);
+  });
 });
 
