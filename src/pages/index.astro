@@ -27,10 +27,10 @@ import Footer from '../components/Footer.astro';
       rel="stylesheet"
     />
     <meta name="generator" content={Astro.generator} />
-    <title>WG1200 Firmware Switcher — WeatherXM Tri-Protocol & Meshtastic</title>
+    <title>WG1200 Firmware Web Flasher — WeatherXM Tri-Protocol & Meshtastic</title>
     <meta
       name="description"
-      content="Use your WeatherXM D1 / WG1200 as a tri-protocol WeatherXM gateway with Meshtastic and MeshCore sensor telemetry, or switch it into a full Meshtastic node over USB. Protected device credentials remain intact."
+      content="Switch between a WeatherXM tri-protocol gateway and a full Meshtastic node compatible with WeatherXM telemetry over USB. Protected device credentials remain intact."
     />
   </head>
 
@@ -168,6 +168,13 @@ import Footer from '../components/Footer.astro';
       let totalLogEvents = 0;
       let hasStartedFlashing = false;
 
+      const defaultBtnConnectHtml = `
+        <svg class="w-5 h-5 text-wxm-abyss" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 10V3L4 14h7v7l9-11h-7z" />
+        </svg>
+        <span class="tracking-wide">Connect WG1200 Gateway</span>
+      `;
+
       // Initialize Controller
       const controller = new FlasherController({
         onStateChange: handleStateChange,
@@ -187,7 +194,20 @@ import Footer from '../components/Footer.astro';
         connectErrorBanner?.classList.add('hidden');
         controller.connectDevice(false);
       });
-      btnDisconnect?.addEventListener('click', () => controller.disconnect());
+      btnDisconnect?.addEventListener('click', async () => {
+        try {
+          if (btnDisconnect) {
+            btnDisconnect.setAttribute('disabled', 'true');
+            btnDisconnect.textContent = 'Releasing Reset…';
+          }
+          await controller.disconnect(true);
+        } finally {
+          if (btnDisconnect) {
+            btnDisconnect.removeAttribute('disabled');
+            btnDisconnect.textContent = 'Disconnect';
+          }
+        }
+      });
 
       btnFlashWxm?.addEventListener('click', () => {
         const selectWxmBuild = document.getElementById('select-wxm-build') as HTMLSelectElement | null;
@@ -209,12 +229,12 @@ import Footer from '../components/Footer.astro';
 
       btnRetryFlash?.addEventListener('click', async () => {
         flashProgressSection?.classList.add('hidden');
-        await controller.disconnect();
+        await controller.disconnect(true);
       });
 
       // Fix reconnect state bug: disconnect() safely resets state to idle
       btnPostFlashDone?.addEventListener('click', async () => {
-        await controller.disconnect();
+        await controller.disconnect(true);
       });
 
       // Advanced Tools listeners
@@ -379,8 +399,7 @@ import Footer from '../components/Footer.astro';
           });
 
           alert('Full 16MB flash restore completed successfully! The device will now reboot.');
-          await controller.hardReset();
-          await controller.disconnect();
+          await controller.disconnect(true);
         } catch (e: any) {
           alert(`Full flash restore failed: ${e.message}`);
         } finally {
@@ -450,6 +469,35 @@ import Footer from '../components/Footer.astro';
           flashProgressSection?.classList.add('hidden');
           postFlashSection?.classList.add('hidden');
           recoveryAlertCard?.classList.add('hidden');
+          if (btnConnect) {
+            btnConnect.removeAttribute('disabled');
+            btnConnect.innerHTML = defaultBtnConnectHtml;
+          }
+          if (btnConnectManual) btnConnectManual.removeAttribute('disabled');
+        } else if (ctx.state === 'connecting') {
+          if (btnConnect) {
+            btnConnect.setAttribute('disabled', 'true');
+            btnConnect.innerHTML = `
+              <svg class="animate-spin w-5 h-5 text-wxm-abyss inline-block" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+              </svg>
+              <span class="tracking-wide">Connecting over USB…</span>
+            `;
+          }
+          if (btnConnectManual) btnConnectManual.setAttribute('disabled', 'true');
+        } else if (ctx.state === 'inspecting') {
+          if (btnConnect) {
+            btnConnect.setAttribute('disabled', 'true');
+            btnConnect.innerHTML = `
+              <svg class="animate-spin w-5 h-5 text-wxm-abyss inline-block" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+              </svg>
+              <span class="tracking-wide">Inspecting Hardware…</span>
+            `;
+          }
+          if (btnConnectManual) btnConnectManual.setAttribute('disabled', 'true');
         } else if (ctx.state === 'ready') {
           connectErrorBanner?.classList.add('hidden');
           panelConnect?.classList.add('hidden');
@@ -458,6 +506,11 @@ import Footer from '../components/Footer.astro';
           flashProgressSection?.classList.add('hidden');
           postFlashSection?.classList.add('hidden');
           recoveryAlertCard?.classList.add('hidden');
+          if (btnConnect) {
+            btnConnect.removeAttribute('disabled');
+            btnConnect.innerHTML = defaultBtnConnectHtml;
+          }
+          if (btnConnectManual) btnConnectManual.removeAttribute('disabled');
         } else if (ctx.state === 'recovery') {
           connectErrorBanner?.classList.add('hidden');
           panelConnect?.classList.add('hidden');
@@ -466,6 +519,11 @@ import Footer from '../components/Footer.astro';
           flashProgressSection?.classList.add('hidden');
           postFlashSection?.classList.add('hidden');
           recoveryAlertCard?.classList.remove('hidden');
+          if (btnConnect) {
+            btnConnect.removeAttribute('disabled');
+            btnConnect.innerHTML = defaultBtnConnectHtml;
+          }
+          if (btnConnectManual) btnConnectManual.removeAttribute('disabled');
         } else if (
           ctx.state === 'downloading' ||
           ctx.state === 'flashing' ||
@@ -503,6 +561,12 @@ import Footer from '../components/Footer.astro';
             instructionsMesh?.classList.remove('hidden');
           }
         } else if (ctx.state === 'error') {
+          if (btnConnect) {
+            btnConnect.removeAttribute('disabled');
+            btnConnect.innerHTML = defaultBtnConnectHtml;
+          }
+          if (btnConnectManual) btnConnectManual.removeAttribute('disabled');
+
           if (!hasStartedFlashing) {
             panelConnect?.classList.remove('hidden');
             deviceStatusCard?.classList.add('hidden');

@@ -105,7 +105,8 @@ export function hasSecureBootV2SignatureBlock(data: Uint8Array): boolean {
  * Fetches the manifest from the specified URL (defaults to /firmware/manifest.json).
  */
 export async function loadManifest(manifestUrl = '/firmware/manifest.json'): Promise<FirmwareManifest> {
-  const response = await fetch(manifestUrl);
+  const url = manifestUrl.includes('?') ? `${manifestUrl}&_t=${Date.now()}` : `${manifestUrl}?_t=${Date.now()}`;
+  const response = await fetch(url, { cache: 'no-store' });
   if (!response.ok) {
     throw new Error(`Failed to load firmware manifest: HTTP ${response.status} ${response.statusText}`);
   }

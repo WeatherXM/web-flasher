@@ -15,5 +15,8 @@ export default defineConfig({
         'esptool-js': 'esptool-js/bundle.js',
       },
     },
+    optimizeDeps: {
+      include: ['esptool-js', 'spark-md5'],
+    },
   },
 });

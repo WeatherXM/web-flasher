@@ -1,18 +1,25 @@
 ---
+import GithubReposButton from './GithubReposButton.astro';
 ---
 
 <footer class="border-t border-wxm-cloud/15 py-8 bg-wxm-midnight text-xs text-wxm-mist">
-  <div class="max-w-5xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+  <div class="max-w-5xl mx-auto px-4 sm:px-6 flex flex-col md:flex-row items-center justify-between gap-4">
     <div class="flex items-center space-x-3">
-      <img src="/brand/logomark-color.svg" alt="WeatherXM" class="w-5 h-5 object-contain" />
-      <span class="text-white font-medium">WeatherXM</span>
-      <span class="text-wxm-slate">•</span>
-      <span class="text-wxm-slate">Weather on Demand</span>
+      <a
+        href="https://weatherxm.com"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="flex items-center space-x-2 group hover:opacity-90 transition-opacity"
+        title="WeatherXM website"
+      >
+        <img src="/brand/logomark-color.svg" alt="WeatherXM" class="w-5 h-5 object-contain" />
+        <span class="text-white font-medium group-hover:text-wxm-zenith transition-colors">WeatherXM</span>
+      </a>
       <span class="text-wxm-slate">•</span>
       <span class="text-wxm-zenith font-mono">flasher.weatherxm.com</span>
     </div>
 
-    <div class="flex items-center space-x-5">
+    <div class="flex flex-wrap items-center justify-center gap-4 sm:gap-5">
       <a
         href="https://weatherxm.com"
         target="_blank"
@@ -29,14 +36,7 @@
       >
         Meshtastic Project
       </a>
-      <a
-        href="https://github.com/WeatherXM/web-flasher"
-        target="_blank"
-        rel="noopener noreferrer"
-        class="text-wxm-mist hover:text-white transition-colors"
-      >
-        Source Code
-      </a>
+      <GithubReposButton />
     </div>
   </div>
 </footer>

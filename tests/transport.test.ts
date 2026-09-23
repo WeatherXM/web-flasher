@@ -220,9 +220,54 @@ describe('transport & serialLog', () => {
     await transport.hardReset();
     expect((transport as any).transport._DTR_state).toBe(false);
     expect(signalCalls).toEqual([
-      { dtr: false, rts: true },  // EN low (reset)
-      { dtr: false, rts: false }, // EN high (run app)
+      { dtr: false, rts: false }, // Step 1: Idle
+      { dtr: false, rts: true },  // Step 2: EN low (reset)
+      { dtr: false, rts: false }, // Step 3: EN high (run app)
     ]);
+  });
+
+  it('disconnect releases reset lines and resets device by default', async () => {
+    const transport = new Wg1200Transport({
+      log: () => {},
+      error: () => {},
+    });
+
+    let resetCalled = false;
+    transport.hardReset = vi.fn().mockImplementation(() => {
+      resetCalled = true;
+      return Promise.resolve();
+    });
+
+    const mockTransport = {
+      disconnect: vi.fn().mockResolvedValue(undefined),
+    };
+    (transport as any).transport = mockTransport;
+
+    await transport.disconnect();
+    expect(resetCalled).toBe(true);
+    expect(mockTransport.disconnect).toHaveBeenCalled();
+  });
+
+  it('disconnect can skip reset when releaseReset is false', async () => {
+    const transport = new Wg1200Transport({
+      log: () => {},
+      error: () => {},
+    });
+
+    let resetCalled = false;
+    transport.hardReset = vi.fn().mockImplementation(() => {
+      resetCalled = true;
+      return Promise.resolve();
+    });
+
+    const mockTransport = {
+      disconnect: vi.fn().mockResolvedValue(undefined),
+    };
+    (transport as any).transport = mockTransport;
+
+    await transport.disconnect(false);
+    expect(resetCalled).toBe(false);
+    expect(mockTransport.disconnect).toHaveBeenCalled();
   });
 
   it('patchTransportRead ignores leading noise bytes before 0xC0 (SLIP_END)', async () => {
@@ -361,6 +406,23 @@ describe('transport & serialLog', () => {
     const entryArg = mockLoader.memFinish.mock.calls[0][0];
     expect(entryArg).toBeGreaterThan(0x40000000);
     expect(mockLoader.IS_STUB).toBe(true);
+  });
+
+  it('patchEsploaderRunStub skips stub upload when syncStubDetected is true', async () => {
+    const { ESPLoader } = await import('esptool-js');
+    const mockLoader: any = Object.create(ESPLoader.prototype);
+    mockLoader.chip = { CHIP_NAME: 'ESP32-S3' };
+    mockLoader.syncStubDetected = true;
+    mockLoader.IS_STUB = false;
+    mockLoader.info = vi.fn();
+    mockLoader.applyUsbFlashWriteSize = vi.fn().mockResolvedValue(undefined);
+    mockLoader.memBegin = vi.fn();
+
+    const chip = await mockLoader.runStub();
+    expect(chip).toBe(mockLoader.chip);
+    expect(mockLoader.IS_STUB).toBe(true);
+    expect(mockLoader.memBegin).not.toHaveBeenCalled();
+    expect(mockLoader.applyUsbFlashWriteSize).toHaveBeenCalled();
   });
 });
 

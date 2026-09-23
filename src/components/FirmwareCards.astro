@@ -1,4 +1,13 @@
 ---
+import manifest from '../../public/firmware/manifest.json';
+
+const wxmEntries = Object.entries(manifest.firmwares)
+  .filter(([key, fw]) => (fw as any).category === 'weatherxm' || key.startsWith('weatherxm'));
+const meshEntries = Object.entries(manifest.firmwares)
+  .filter(([key, fw]) => (fw as any).category === 'meshtastic' || key.startsWith('meshtastic'));
+
+const defaultWxm = wxmEntries[0]?.[1] as any;
+const defaultMesh = (meshEntries.find(([k]) => k === 'meshtastic')?.[1] ?? meshEntries[0]?.[1]) as any;
 ---
 
 <div id="firmware-selection-section" class="hidden max-w-4xl mx-auto px-4 sm:px-6 mb-12">
@@ -30,7 +39,7 @@
 
         <h3 class="text-lg font-bold text-white">WeatherXM Tri-Protocol Gateway</h3>
         <div class="flex items-center space-x-2 mt-1 mb-3">
-          <span class="text-xs text-wxm-mist font-mono font-medium" id="wxm-version">v0.8.25</span>
+          <span class="text-xs text-wxm-mist font-mono font-medium" id="wxm-version">v{defaultWxm?.version ?? '0.8.27'}</span>
           <span class="text-[11px] px-2 py-0.5 rounded bg-wxm-beacon/10 text-wxm-zenith border border-wxm-beacon/25 font-medium">WXM + Meshtastic + MeshCore</span>
         </div>
 
@@ -69,8 +78,14 @@
               id="select-wxm-build"
               class="w-full bg-wxm-midnight border border-wxm-cloud/30 rounded-control py-2.5 px-3 text-xs text-white font-mono focus:outline-none focus:border-wxm-beacon focus:ring-1 focus:ring-wxm-beacon transition-colors appearance-none cursor-pointer pr-8 shadow-inner"
             >
-              <option value="weatherxm" selected>WeatherXM v0.8.25 (Latest Release)</option>
-              <option value="weatherxm_0_8_23">WeatherXM v0.8.23 (Stable Release)</option>
+              {wxmEntries.map(([key, fw]: [string, any], idx: number) => {
+                const mb = (fw.bytes / (1024 * 1024)).toFixed(2);
+                return (
+                  <option value={key} selected={idx === 0}>
+                    {fw.label ?? `${fw.name} v${fw.version}`} ({mb} MB)
+                  </option>
+                );
+              })}
             </select>
             <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2.5 text-wxm-mist">
               <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -79,8 +94,8 @@
             </div>
           </div>
           <div class="flex items-center justify-between text-[11px] text-wxm-mist mt-1.5 px-0.5">
-            <span id="wxm-selected-file" class="font-mono text-[10px] text-wxm-cloud truncate max-w-[200px]">wg1200-0.8.25-signed.bin</span>
-            <span id="wxm-selected-size" class="font-mono text-[10px] text-wxm-beacon font-semibold">3.54 MB</span>
+            <span id="wxm-selected-file" class="font-mono text-[10px] text-wxm-cloud truncate max-w-[200px]">{defaultWxm ? (defaultWxm.file.split('/').pop() ?? defaultWxm.file) : ''}</span>
+            <span id="wxm-selected-size" class="font-mono text-[10px] text-wxm-beacon font-semibold">{defaultWxm ? (defaultWxm.bytes / (1024 * 1024)).toFixed(2) + ' MB' : ''}</span>
           </div>
         </div>
       </div>
@@ -156,8 +171,15 @@
               id="select-mesh-build"
               class="w-full bg-wxm-midnight border border-emerald-500/40 rounded-control py-2.5 px-3 text-xs text-white font-mono focus:outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400 transition-colors appearance-none cursor-pointer pr-8 shadow-inner"
             >
-              <option value="meshtastic" selected>v2.8.1 — TFT Display [Color Screen] (3.80 MB)</option>
-              <option value="meshtastic_standard">v2.8.1 — Standard / No Screen (2.39 MB)</option>
+              {meshEntries.map(([key, fw]: [string, any], idx: number) => {
+                const mb = (fw.bytes / (1024 * 1024)).toFixed(2);
+                const isSelected = key === 'meshtastic' || (idx === 0 && !meshEntries.some(([k]) => k === 'meshtastic'));
+                return (
+                  <option value={key} selected={isSelected}>
+                    {fw.label ?? `${fw.name} v${fw.version}`} ({mb} MB)
+                  </option>
+                );
+              })}
             </select>
             <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2.5 text-emerald-400">
               <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -166,8 +188,8 @@
             </div>
           </div>
           <div class="flex items-center justify-between text-[11px] text-wxm-mist mt-1.5 px-0.5">
-            <span id="mesh-selected-file" class="font-mono text-[10px] text-wxm-cloud truncate max-w-[200px]">firmware-weatherxm-wg1200-tft-2.8.1-signed.bin</span>
-            <span id="mesh-selected-size" class="font-mono text-[10px] text-emerald-400 font-semibold">3.80 MB</span>
+            <span id="mesh-selected-file" class="font-mono text-[10px] text-wxm-cloud truncate max-w-[200px]">{defaultMesh ? (defaultMesh.file.split('/').pop() ?? defaultMesh.file) : ''}</span>
+            <span id="mesh-selected-size" class="font-mono text-[10px] text-emerald-400 font-semibold">{defaultMesh ? (defaultMesh.bytes / (1024 * 1024)).toFixed(2) + ' MB' : ''}</span>
           </div>
         </div>
       </div>

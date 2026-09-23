@@ -12,9 +12,9 @@ export const WG1200_CONSTANTS = {
     { usbVendorId: 0x0403 }, // FTDI
   ],
 
-  // Baud rates
+  // Baud rates (115200 prevents port re-open reset glitches on macOS Chrome Web Serial)
   BAUDRATE_ROM: 115200,
-  BAUDRATE_FLASH: 460800,
+  BAUDRATE_FLASH: 115200,
 
   // Magic values
   PARTITION_TABLE_MAGIC: 0x50aa,

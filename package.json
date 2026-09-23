@@ -11,7 +11,8 @@
     "check": "astro check",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "manifest": "node scripts/update-manifest.mjs"
   },
   "dependencies": {
     "esptool-js": "^0.7.0"

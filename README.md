@@ -1,4 +1,4 @@
-# flasher.weatherxm.com — WG1200 Firmware Switcher
+# flasher.weatherxm.com — WG1200 Firmware Web Flasher
 
 Web-based firmware switcher for the **WeatherXM WG1200 / D1 Gateway**, with two deliberately different operating modes:
 
@@ -38,6 +38,26 @@ This is **not** a generic ESP32 flasher. It is purpose-built with strict hardwar
 | `0x820000` | 4 MB | `ota_1` | Application Slot 1 |
 | `0xC20000` | 4 KB | `nvs_key` | NVS encryption key |
 | `0xC21000` | 3 MB | `spiffs` | File storage |
+
+---
+
+## Adding New Firmware & Updating Manifest
+
+To add a new firmware release:
+
+```bash
+# Option 1: Provide the new binary file directly
+npm run manifest -- path/to/fw_release_0.8.27-gceee14f-signed.bin
+
+# Option 2: Place binary in public/firmware/weatherxm/ or public/firmware/meshtastic/ and run:
+npm run manifest
+```
+
+The script will automatically:
+1. Verify the binary size, ESP-IDF app descriptor, and ESP32-S3 Secure Boot V2 signature (0xE7 magic).
+2. Calculate the exact SHA-256 checksum.
+3. Sort versions semantically and set the newest as the default `weatherxm` release.
+4. Update `public/firmware/manifest.json` and sync with `dist/firmware/manifest.json`.
 
 ---
 

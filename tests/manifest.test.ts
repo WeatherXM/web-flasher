@@ -44,4 +44,38 @@ describe('manifest', () => {
     const invalid = { ...manifestJson, flash_bytes: 4194304 };
     expect(() => validateManifest(invalid)).toThrow(/flash_bytes mismatch/);
   });
+
+  it('removes records when bin files are deleted', async () => {
+    const tempFile = path.resolve(__dirname, '../public/firmware/weatherxm/wg1200-0.8.99-signed.bin');
+    const dummyBuf = Buffer.alloc(1024, 0);
+    // ESP_APP_DESC_MAGIC at offset 0x20
+    dummyBuf.writeUInt32LE(0xabcd5432, 0x20);
+    fs.writeFileSync(tempFile, dummyBuf);
+
+    try {
+      const { generateManifest } = await import('../scripts/update-manifest.mjs');
+      const manifestWithTemp = generateManifest();
+      const hasTempBefore = Object.values(manifestWithTemp.firmwares).some(
+        (fw: any) => fw.version === '0.8.99'
+      );
+      expect(hasTempBefore).toBe(true);
+
+      // Now delete the binary file
+      fs.unlinkSync(tempFile);
+
+      // Re-run manifest generation
+      const manifestAfterDelete = generateManifest();
+      const hasTempAfter = Object.values(manifestAfterDelete.firmwares).some(
+        (fw: any) => fw.version === '0.8.99'
+      );
+      expect(hasTempAfter).toBe(false);
+    } finally {
+      if (fs.existsSync(tempFile)) {
+        fs.unlinkSync(tempFile);
+      }
+      // Restore official manifest
+      const { generateManifest } = await import('../scripts/update-manifest.mjs');
+      generateManifest();
+    }
+  });
 });

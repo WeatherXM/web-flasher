@@ -137,7 +137,7 @@ export function patchEsploaderRunStub(): void {
   const originalRunStub = (ESPLoader.prototype as any).runStub;
 
   (ESPLoader.prototype as any).runStub = async function (this: any) {
-    if (this.IS_STUB) {
+    if (this.syncStubDetected || this.IS_STUB) {
       this.info('Stub is already running. No upload is necessary.');
       this.IS_STUB = true;
       await this.applyUsbFlashWriteSize();
@@ -222,7 +222,12 @@ export function patchEsploaderRunStub(): void {
     const ESP_READ_FLASH_SLOW = 0x0e;
 
     // 1. Leave RAM download mode without entering entrypoint
-    await this.memFinish(0);
+    // Matches esptool.py: MEM_END response may be dropped or delayed by ROM loader; ignore errors
+    try {
+      await this.memFinish(0);
+    } catch (e: any) {
+      this.debug?.(`memFinish(0) ignored error (matching esptool.py): ${e?.message ?? e}`);
+    }
 
     // 2. Read stored pointer at rom_spiflash_legacy_funcs.read
     const storedReadPointer = await this.readReg(ROM_SPIFLASH_LEGACY_FUNCS_READ_PTR);
@@ -230,23 +235,21 @@ export function patchEsploaderRunStub(): void {
     // 3. Hijack pointer to stub entrypoint
     await this.writeReg(ROM_SPIFLASH_LEGACY_FUNCS_READ_PTR, stubFlasher.entry);
 
-    try {
-      // 4. Trigger READ_FLASH_SLOW to force ROM to branch into the stub
-      await this.command(ESP_READ_FLASH_SLOW, new Uint8Array(8), 0, false);
+    // 4. Trigger READ_FLASH_SLOW to force ROM to branch into the stub
+    await this.command(ESP_READ_FLASH_SLOW, new Uint8Array(8), 0, false);
 
-      // 5. Read the stub greeting
-      const packetResult = await this.transport.read(this.DEFAULT_TIMEOUT);
-      const packetStr = String.fromCharCode(...packetResult);
-      if (packetStr !== 'OHAI') {
-        throw new ESPError(`Failed to start stub. Unexpected response ${packetStr}`);
-      }
-    } finally {
-      // 6. Restore original pointer in ROM data table
-      try {
-        await this.writeReg(ROM_SPIFLASH_LEGACY_FUNCS_READ_PTR, storedReadPointer);
-      } catch (e: any) {
-        this.debug?.(`Could not restore ROM spiflash pointer: ${e?.message ?? e}`);
-      }
+    // 5. Read the stub greeting
+    const packetResult = await this.transport.read(this.DEFAULT_TIMEOUT);
+    const packetStr = String.fromCharCode(...packetResult);
+    if (packetStr !== 'OHAI') {
+      throw new ESPError(`Failed to start stub. Unexpected response ${packetStr}`);
+    }
+
+    // 6. Restore original pointer in ROM data table
+    try {
+      await this.writeReg(ROM_SPIFLASH_LEGACY_FUNCS_READ_PTR, storedReadPointer);
+    } catch (e: any) {
+      this.debug?.(`Could not restore ROM spiflash pointer: ${e?.message ?? e}`);
     }
 
     this.info('Stub running...');
@@ -337,7 +340,7 @@ export class Wg1200Transport {
       this.logger.log('Stub running. Inspecting hardware…');
       return await this.inspect();
     } catch (err: any) {
-      await this.disconnect();
+      await this.disconnect(false);
       throw new Error(`Failed to initialize WG1200 serial connection: ${err.message ?? err}`);
     }
   }
@@ -823,44 +826,85 @@ export class Wg1200Transport {
 
   /**
    * Hard-resets the ESP32-S3 chip into normal application run mode.
-   * Coordinates DTR (IO0) and RTS (EN) lines to ensure clean reboot.
+   * Coordinates DTR (IO0) and RTS (EN) lines to ensure clean reboot:
+   * 1. Pulls DTR low (GPIO0 high) so the chip boots normal firmware, not bootloader.
+   * 2. Pulses RTS high (EN low) to reset the chip.
+   * 3. Releases RTS low (EN high) and DTR low to leave reset completely released.
    */
   public async hardReset(): Promise<void> {
-    if (this.transport) {
-      try {
-        // Explicitly clear DTR state so IO0 is high (run application, not bootloader)
-        if ((this.transport as any)._DTR_state !== undefined) {
-          (this.transport as any)._DTR_state = false;
-        }
-        // Assert EN low (chip in reset) with DTR low (IO0 high)
-        if (typeof (this.transport as any).setSignals === 'function') {
-          await (this.transport as any).setSignals(false, true);
-          await new Promise((r) => setTimeout(r, 150));
-          // Release EN high (chip boots application) with DTR low
-          await (this.transport as any).setSignals(false, false);
-        } else {
-          await this.transport.setRTS(true);
-          await new Promise((r) => setTimeout(r, 150));
-          await this.transport.setRTS(false);
-        }
-        await new Promise((r) => setTimeout(r, 100));
-      } catch (e) {
-        this.logger.error(`Hard reset error: ${e}`);
+    const transportObj = this.transport as any;
+    const device = transportObj?.device ?? this.port;
+
+    // Do not attempt to toggle signals if transport or device is unavailable
+    if (!transportObj && !device) {
+      return;
+    }
+
+    try {
+      // Explicitly clear DTR state so IO0 is high (run application, not bootloader)
+      if (transportObj && transportObj._DTR_state !== undefined) {
+        transportObj._DTR_state = false;
       }
+
+      // Step 1: Idle state (DTR=false, RTS=false)
+      if (typeof transportObj?.setSignals === 'function') {
+        await transportObj.setSignals(false, false);
+      } else if (typeof device.setSignals === 'function') {
+        await device.setSignals({ dataTerminalReady: false, requestToSend: false });
+      }
+      await new Promise((r) => setTimeout(r, 50));
+
+      // Step 2: Assert EN low (chip in reset) with DTR low (IO0 high)
+      if (typeof transportObj?.setSignals === 'function') {
+        await transportObj.setSignals(false, true);
+      } else if (typeof device.setSignals === 'function') {
+        await device.setSignals({ dataTerminalReady: false, requestToSend: true });
+      } else if (this.transport) {
+        await this.transport.setRTS(true);
+      }
+      await new Promise((r) => setTimeout(r, 120));
+
+      // Step 3: Release EN high (chip boots application) with DTR low (IO0 high)
+      if (typeof transportObj?.setSignals === 'function') {
+        await transportObj.setSignals(false, false);
+      } else if (typeof device.setSignals === 'function') {
+        await device.setSignals({ dataTerminalReady: false, requestToSend: false });
+      } else if (this.transport) {
+        await this.transport.setRTS(false);
+      }
+
+      // Allow chip time to sample released pins and start boot
+      await new Promise((r) => setTimeout(r, 150));
+    } catch (e) {
+      this.logger.error(`Hard reset error: ${e}`);
     }
   }
 
   /**
-   * Closes loader and disconnects serial port.
+   * Releases reset lines and hard-resets the ESP32-S3 chip so the connected
+   * device boots application firmware, then closes the loader and disconnects the serial port.
+   *
+   * @param releaseReset If true (default), pulses and releases hardware reset (RTS=false, DTR=false)
+   *                     so the ESP32-S3 boots out of ROM bootloader/stub into user firmware.
    */
-  public async disconnect(): Promise<void> {
-    if (this.transport) {
-      try {
-        await this.transport.disconnect();
-      } catch (e) {
-        // ignore
+  public async disconnect(releaseReset: boolean = true): Promise<void> {
+    if (this.transport || this.port) {
+      if (releaseReset && this.transport) {
+        try {
+          this.logger.log('Releasing USB reset and rebooting device into firmware…');
+          await this.hardReset();
+        } catch (e) {
+          this.logger.error(`Error releasing reset: ${e}`);
+        }
       }
-      this.transport = null;
+      if (this.transport) {
+        try {
+          await this.transport.disconnect();
+        } catch (e) {
+          // ignore
+        }
+        this.transport = null;
+      }
     }
     this.loader = null;
     this.port = null;

@@ -120,7 +120,11 @@ export class FlasherStateMachine {
 
   public subscribe(listener: (context: StateContext) => void): () => void {
     this.listeners.push(listener);
-    listener(this.currentContext);
+    try {
+      listener(this.currentContext);
+    } catch (e) {
+      console.error('Error in state machine initial subscriber:', e);
+    }
     return () => {
       this.listeners = this.listeners.filter((l) => l !== listener);
     };

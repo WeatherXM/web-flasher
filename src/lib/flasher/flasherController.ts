@@ -72,7 +72,7 @@ export class FlasherController {
   }
 
   public async initialize(): Promise<void> {
-    this.addLog('Initializing WG1200 Firmware Switcher…');
+    this.addLog('Initializing WG1200 Firmware Web Flasher…');
 
     // 1. Check Web Serial support
     if (typeof navigator === 'undefined' || !('serial' in navigator)) {
@@ -158,7 +158,7 @@ export class FlasherController {
       }
     } catch (err: any) {
       this.addLog(`[ERROR] Connection failed: ${err.message ?? err}`);
-      await this.disconnect();
+      await this.disconnect(false);
       this.stateMachine.setError(err.message ?? 'Failed to connect to WG1200', false);
     }
   }
@@ -376,9 +376,19 @@ export class FlasherController {
     downloadLogFile(this.logLines, `wg1200_flasher_${Date.now()}.txt`);
   }
 
-  public async disconnect(): Promise<void> {
+  public async hardReset(): Promise<void> {
+    if (this.transport.isConnected) {
+      this.addLog('Releasing USB reset and rebooting device…');
+      await this.transport.hardReset();
+    }
+  }
+
+  public async disconnect(releaseReset: boolean = true): Promise<void> {
     try {
-      await this.transport.disconnect();
+      if (this.transport.isConnected && releaseReset) {
+        this.addLog('\nDisconnecting: releasing USB reset so device can boot…');
+      }
+      await this.transport.disconnect(releaseReset);
     } catch (e) {
       // ignore
     }
