@@ -5,13 +5,52 @@ export interface BootLogAnalysis {
 }
 
 /**
+ * Stateful log sanitizer that handles multiline certificate and private key blocks.
+ */
+export class LogSanitizer {
+  private inRedactionBlock = false;
+
+  public sanitizeLine(line: string): string | null {
+    const trimmed = line.trim();
+
+    if (/-----BEGIN [A-Z0-9\s]*(?:CERTIFICATE|PRIVATE KEY|KEY)-----/i.test(trimmed)) {
+      this.inRedactionBlock = true;
+      return '[REDACTED_SENSITIVE_BLOCK_START]';
+    }
+
+    if (this.inRedactionBlock && /-----END [A-Z0-9\s]*(?:CERTIFICATE|PRIVATE KEY|KEY)-----/i.test(trimmed)) {
+      this.inRedactionBlock = false;
+      return '[REDACTED_SENSITIVE_BLOCK_END]';
+    }
+
+    if (this.inRedactionBlock) {
+      return null;
+    }
+
+    return line
+      .replace(/(?:[0-9a-fA-F]{64})/g, '[REDACTED_64_HEX]')
+      .replace(/(?:wifi_password|pass|secret|token)\s*[:=]\s*\S+/gi, '$1=[REDACTED]');
+  }
+
+  public sanitizeText(text: string): string {
+    const lines = text.split('\n');
+    const result: string[] = [];
+    for (const l of lines) {
+      const sanitized = this.sanitizeLine(l);
+      if (sanitized !== null) {
+        result.push(sanitized);
+      }
+    }
+    return result.join('\n');
+  }
+}
+
+/**
  * Sanitizes log output so no accidentally logged keys, NVS dumps, or certificates can leak.
  */
 export function sanitizeLog(text: string): string {
-  return text
-    .replace(/(?:[0-9a-fA-F]{64})/g, '[REDACTED_64_HEX]')
-    .replace(/(?:-----BEGIN [A-Z0-9\s]+-----[\s\S]+?-----END [A-Z0-9\s]+-----)/g, '[REDACTED_CERTIFICATE]')
-    .replace(/(?:wifi_password|pass|secret|token)\s*[:=]\s*\S+/gi, '$1=[REDACTED]');
+  const sanitizer = new LogSanitizer();
+  return sanitizer.sanitizeText(text);
 }
 
 /**
@@ -25,7 +64,7 @@ export async function captureBootLogs(
   const lines: string[] = [];
   let detectedSign: 'weatherxm' | 'meshtastic' | 'booting' | 'none' = 'none';
 
-  if (!port || !port.readable) {
+  if (!port) {
     return { lines: ['Serial port unavailable for boot log capture.'], rawText: '', detectedSign: 'none' };
   }
 

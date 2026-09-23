@@ -10,10 +10,11 @@
       "version": "0.8.25",
       "file": "/firmware/weatherxm/wg1200-0.8.25-signed.bin",
       "bytes": 3543040,
-      "sha256": "3f1533dfd77fa8d8f469ca37346c5fb7432d70b7a580d16094f31790c98b7849",
+      "sha256": "cd2a7df91dc71992d0ba0f311de5b69a65c3db902ae2c4044c1d15dfd4bd26f6",
       "source_repo": "WeatherXM/WG1400",
       "git_commit": "0c2c072",
-      "secure_boot_v2": true
+      "secure_boot_v2": true,
+      "size": 3543040
     },
     "meshtastic": {
       "name": "Meshtastic",

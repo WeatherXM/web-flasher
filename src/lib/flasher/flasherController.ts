@@ -6,7 +6,7 @@ import {
   type FirmwareEntry,
   type FirmwareManifest,
 } from './manifest';
-import { buildUpdatedOtadata } from './otadata';
+import { buildTransactionalOtadataSector, buildUpdatedOtadata } from './otadata';
 import { captureBootLogs, downloadLogFile } from './serialLog';
 import { FlasherStateMachine, type FlasherState, type StateContext } from './state';
 import { Wg1200Transport, type ProtectedRegionSnapshot, type Wg1200Inspection } from './transport';
@@ -144,12 +144,14 @@ export class FlasherController {
         `WeatherXM Identity verified! Fingerprint: ${this.inspection.secureCert.fingerprint}`
       );
       this.addLog(`Active boot slot: ${this.inspection.otadata.activeSlot}`);
-      if (this.inspection.currentFirmware) {
-        this.addLog(`Detected installed firmware: ${this.inspection.currentFirmware.displayTitle}`);
-      }
-
       this.callbacks.onInspection(this.inspection);
-      this.stateMachine.transition('ready', 'WG1200 verified. Ready to choose firmware.');
+
+      if (this.inspection.otadata.isAmbiguous) {
+        this.addLog('[WARNING] Boot state is ambiguous or otadata has invalid/aborted states.');
+        this.stateMachine.transition('recovery', 'Ambiguous boot state detected. Recovery mode active.');
+      } else {
+        this.stateMachine.transition('ready', 'WG1200 verified. Ready to choose firmware.');
+      }
     } catch (err: any) {
       this.addLog(`[ERROR] Connection failed: ${err.message ?? err}`);
       await this.disconnect();
@@ -228,15 +230,20 @@ export class FlasherController {
       this.addLog('On-chip flash MD5 check PASSED!');
       this.stateMachine.setProgress(85, 'MD5 verified');
 
-      // Step 5: Update otadata boot pointer
-      this.addLog(`Updating boot pointer to ${targetSlot} (seq ${this.inspection.otadata.nextSeq})…`);
-      const updatedOtadata = buildUpdatedOtadata(
-        null,
+      // Step 5: Transactional update of otadata boot pointer
+      this.addLog(
+        `Transactionally updating boot pointer to ${targetSlot} (seq ${this.inspection.otadata.nextSeq})…`
+      );
+      const { targetAddress, sectorData } = buildTransactionalOtadataSector(
         this.inspection.otadata.nextSeq,
         this.inspection.otadata.targetSector
       );
-      await this.transport.writeOtadata(updatedOtadata);
-      this.addLog('Otadata sector updated and CRC verified.');
+      await this.transport.writeOtaSelectSector(
+        targetAddress,
+        sectorData,
+        this.inspection.otadata.nextSeq
+      );
+      this.addLog('Transactional otadata update verified: CRC32, sequence, and ESP_OTA_IMG_VALID confirmed.');
       this.stateMachine.setProgress(90, 'Boot pointer updated');
 
       // Step 6: Post-flash protected partitions verification
@@ -278,6 +285,58 @@ export class FlasherController {
     }
   }
 
+  /**
+   * Safe recovery for ambiguous otadata state.
+   */
+  public async executeRecovery(choice: 'weatherxm' | 'meshtastic' | 'rollback_factory'): Promise<void> {
+    if (choice === 'rollback_factory') {
+      await this.executeFactoryRollback();
+      return;
+    }
+    // Transition recovery to downloading
+    this.stateMachine.transition('ready', 'Starting targeted recovery flash…');
+    await this.flashFirmware(choice);
+  }
+
+  /**
+   * Rolls back gateway to factory stock firmware by clearing otadata to 0xFF.
+   */
+  public async executeFactoryRollback(): Promise<void> {
+    if (!this.transport.isConnected) throw new Error('Not connected');
+    this.addLog('\n========================================');
+    this.addLog('EXECUTING FACTORY ROLLBACK (WeatherXM Stock)');
+    this.addLog('Clearing otadata to 0xFF (pointing bootloader to 0x20000 factory partition)…');
+    this.addLog('========================================\n');
+    await this.transport.rollbackToFactory();
+    this.addLog('Hard resetting device into Factory firmware…');
+    await this.transport.hardReset();
+    await this.disconnect();
+    this.addLog('Factory rollback complete! Gateway will reboot into stock WeatherXM firmware.');
+  }
+
+  /**
+   * Backs up full 16 MB flash and triggers browser download.
+   */
+  public async executeFullFlashBackup(onProgress?: (pct: number) => void): Promise<void> {
+    if (!this.transport.isConnected) throw new Error('Not connected');
+    this.addLog('\nStarting full 16 MB flash backup. This may take 1-2 minutes over Web Serial…');
+    const fullData = await this.transport.readFullFlashWithValidation((pct, current, total) => {
+      this.addLog(`Backup progress: ${pct}% (${Math.round(current / 1024)} KB / ${Math.round(total / 1024)} KB)`);
+      if (onProgress) onProgress(pct);
+    });
+
+    const blob = new Blob([fullData.buffer as ArrayBuffer], { type: 'application/octet-stream' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `wg1200_16mb_backup_${Date.now()}.bin`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    this.addLog('Full 16 MB backup downloaded successfully.');
+  }
+
   public downloadLog(): void {
     downloadLogFile(this.logLines, `wg1200_flasher_${Date.now()}.txt`);
   }
@@ -289,9 +348,8 @@ export class FlasherController {
       // ignore
     }
     this.inspection = null;
+    this.serialPort = null;
     this.callbacks.onInspection(null);
-    if (this.stateMachine.state !== 'error' && this.stateMachine.state !== 'unsupported') {
-      this.stateMachine.transition('idle', 'Disconnected. Ready to connect.');
-    }
+    this.stateMachine.reset();
   }
 }

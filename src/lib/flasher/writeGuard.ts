@@ -97,7 +97,54 @@ export function validateAllowedWrite(
 }
 
 /**
+ * Strictly verifies that an application binary write is entirely confined to
+ * ota_0 (0x420000) or ota_1 (0x820000). The factory partition is strictly forbidden
+ * during normal switching to preserve the immutable safe-haven rollback.
+ */
+export function assertAllowedApplicationWrite(
+  address: number,
+  length: number
+): 'ota_0' | 'ota_1' {
+  const result = validateAllowedWrite(address, length, false);
+  if (!result.valid || !result.partitionName) {
+    throw new Error(result.error ?? 'Application write rejected by WG1200 write guard');
+  }
+  if (result.partitionName === 'factory') {
+    throw new Error('Overwriting the factory partition is strictly prohibited by WG1200 security policy');
+  }
+  return result.partitionName;
+}
+
+/**
+ * Strictly verifies that an otadata update targets exactly one 4 KB sector:
+ * - Sector 0: 0x13000 (length 4096)
+ * - Sector 1: 0x14000 (length 4096)
+ * No other address or length is permitted under any circumstances.
+ */
+export function assertAllowedOtaSelectWrite(
+  address: number,
+  length: number
+): { sector: 0 | 1; address: number } {
+  if (length !== 4096) {
+    throw new Error(`OTA select write rejected: length must be exactly 4096 bytes (received ${length})`);
+  }
+
+  if (address === WG1200_CONSTANTS.OTADATA.offset) {
+    return { sector: 0, address: 0x13000 };
+  }
+
+  if (address === WG1200_CONSTANTS.OTADATA.offset + 4096) {
+    return { sector: 1, address: 0x14000 };
+  }
+
+  throw new Error(
+    `OTA select write rejected: address 0x${address.toString(16)} is not an authorized otadata sector (expected 0x13000 or 0x14000)`
+  );
+}
+
+/**
  * Throws an Error if the requested write is not strictly permitted.
+ * Delegates to validateAllowedWrite.
  */
 export function assertAllowedWrite(
   address: number,
@@ -110,3 +157,4 @@ export function assertAllowedWrite(
   }
   return result.partitionName;
 }
+

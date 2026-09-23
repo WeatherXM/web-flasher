@@ -23,6 +23,13 @@ export interface OtadataStatus {
   description: string;
 }
 
+export const ESP_OTA_IMG_NEW = 0;
+export const ESP_OTA_IMG_PENDING_VERIFY = 1;
+export const ESP_OTA_IMG_VALID = 2;
+export const ESP_OTA_IMG_INVALID = 3;
+export const ESP_OTA_IMG_ABORTED = 4;
+export const ESP_OTA_IMG_UNDEFINED = 0xffffffff;
+
 // Precomputed CRC32 table (polynomial 0xEDB88320)
 const CRC32_TABLE = new Uint32Array(256);
 for (let i = 0; i < 256; i++) {
@@ -53,6 +60,8 @@ export function calculateOtaSeqCrc32(seq: number): number {
 
 /**
  * Parses one 4 KB otadata sector.
+ * Considers a sector invalid if CRC fails, sequence is zero/erased,
+ * or ota_state indicates an INVALID (3) or ABORTED (4) image.
  */
 export function parseOtadataSector(bytes: Uint8Array): OtadataSectorStatus {
   if (bytes.byteLength < 32) {
@@ -73,7 +82,15 @@ export function parseOtadataSector(bytes: Uint8Array): OtadataSectorStatus {
 
   const erased = seq === WG1200_CONSTANTS.ERASED_32;
   const expectedCrc = erased ? WG1200_CONSTANTS.ERASED_32 : calculateOtaSeqCrc32(seq);
-  const valid = !erased && seq > 0 && crc === expectedCrc;
+
+  const isInvalidOrAborted = state === ESP_OTA_IMG_INVALID || state === ESP_OTA_IMG_ABORTED;
+  const isValidState =
+    state === ESP_OTA_IMG_VALID ||
+    state === ESP_OTA_IMG_NEW ||
+    state === ESP_OTA_IMG_PENDING_VERIFY ||
+    state === ESP_OTA_IMG_UNDEFINED;
+
+  const valid = !erased && seq > 0 && crc === expectedCrc && isValidState && !isInvalidOrAborted;
 
   return {
     seq,
@@ -168,7 +185,52 @@ export function determineActiveBootSlot(otadataBytes: Uint8Array): OtadataStatus
 }
 
 /**
+ * Builds an exact 4096-byte otadata sector containing a valid sequence record.
+ * Sequence at offset 0, ota_state (2 = ESP_OTA_IMG_VALID) at offset 24, CRC32 at offset 28.
+ */
+export function buildOtadataSector(
+  seq: number,
+  otaState: number = ESP_OTA_IMG_VALID
+): Uint8Array {
+  const sector = new Uint8Array(4096);
+  sector.fill(0xff);
+  const view = new DataView(sector.buffer, sector.byteOffset, 4096);
+
+  // 1. ota_seq (uint32 LE)
+  view.setUint32(0, seq >>> 0, true);
+
+  // 2. ota_label (bytes 4..23 are 0xFF)
+
+  // 3. ota_state (uint32 LE): 2 = ESP_OTA_IMG_VALID
+  view.setUint32(24, otaState >>> 0, true);
+
+  // 4. crc (uint32 LE)
+  const crc = calculateOtaSeqCrc32(seq);
+  view.setUint32(28, crc >>> 0, true);
+
+  return sector;
+}
+
+/**
+ * Builds the exact 4096-byte sector payload and target flash address for a transactional
+ * OTA update. Writes ONLY to the inactive sector (0x13000 or 0x14000), leaving the active
+ * sector untouched.
+ */
+export function buildTransactionalOtadataSector(
+  nextSeq: number,
+  targetSectorIdx: 0 | 1
+): { targetAddress: number; sectorData: Uint8Array } {
+  const targetAddress =
+    targetSectorIdx === 0
+      ? WG1200_CONSTANTS.OTADATA.offset
+      : WG1200_CONSTANTS.OTADATA.offset + 4096;
+  const sectorData = buildOtadataSector(nextSeq, ESP_OTA_IMG_VALID);
+  return { targetAddress, sectorData };
+}
+
+/**
  * Builds an 8192-byte otadata image with the updated target sequence and sector.
+ * Preserves the existing active sector exactly, modifying only the target sector.
  */
 export function buildUpdatedOtadata(
   existingOtadata: Uint8Array | null,
@@ -183,22 +245,8 @@ export function buildUpdatedOtadata(
   }
 
   const start = targetSectorIdx * 4096;
-  const view = new DataView(data.buffer, data.byteOffset + start, 4096);
-
-  // 1. ota_seq (uint32 LE)
-  view.setUint32(0, nextSeq >>> 0, true);
-
-  // 2. ota_label (20 bytes 0xFF)
-  for (let i = 4; i < 24; i++) {
-    data[start + i] = 0xff;
-  }
-
-  // 3. ota_state (uint32 LE): 0 = ESP_OTA_IMG_VALID
-  view.setUint32(24, 0, true);
-
-  // 4. crc (uint32 LE)
-  const crc = calculateOtaSeqCrc32(nextSeq);
-  view.setUint32(28, crc, true);
+  const sector = buildOtadataSector(nextSeq, ESP_OTA_IMG_VALID);
+  data.set(sector, start);
 
   return data;
 }
@@ -211,3 +259,4 @@ export function buildResetOtadata(): Uint8Array {
   data.fill(0xff);
   return data;
 }
+

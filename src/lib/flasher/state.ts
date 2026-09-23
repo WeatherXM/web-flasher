@@ -4,6 +4,7 @@ export type FlasherState =
   | 'connecting'
   | 'inspecting'
   | 'ready'
+  | 'recovery'
   | 'downloading'
   | 'flashing'
   | 'verifying-flash'
@@ -25,7 +26,8 @@ const VALID_TRANSITIONS: Record<FlasherState, readonly FlasherState[]> = {
   unsupported: [],
   idle: ['connecting', 'unsupported', 'error'],
   connecting: ['inspecting', 'idle', 'error'],
-  inspecting: ['ready', 'idle', 'error'],
+  inspecting: ['ready', 'recovery', 'idle', 'error'],
+  recovery: ['ready', 'downloading', 'idle', 'error'],
   ready: ['downloading', 'connecting', 'idle', 'error'],
   downloading: ['flashing', 'error'],
   flashing: ['verifying-flash', 'error'],
@@ -84,6 +86,17 @@ export class FlasherStateMachine {
     this.notify();
   }
 
+  public reset(): void {
+    this.currentContext = {
+      state: 'idle',
+      statusMessage: 'Ready to connect',
+      progressPercent: 0,
+      writtenToFlash: false,
+      canRetry: true,
+    };
+    this.notify();
+  }
+
   public setError(errorMessage: string, writtenToFlash = false): void {
     this.currentContext = {
       ...this.currentContext,
@@ -135,6 +148,8 @@ export class FlasherStateMachine {
         return 'Verifying hardware and partition layout…';
       case 'ready':
         return 'WG1200 verified. Ready to choose firmware.';
+      case 'recovery':
+        return 'Ambiguous boot state detected. Recovery mode active.';
       case 'downloading':
         return 'Downloading signed firmware…';
       case 'flashing':

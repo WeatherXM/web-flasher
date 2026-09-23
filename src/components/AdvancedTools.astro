@@ -1,0 +1,163 @@
+---
+// AdvancedTools.astro - Optional diagnostic and safety tools for WG1200
+---
+
+<section id="advanced-tools-section" class="max-w-4xl mx-auto px-4 mt-8">
+  <!-- Recovery Mode Alert (Visible only when otadata is ambiguous) -->
+  <div id="recovery-alert-card" class="hidden mb-6 bg-amber-500/10 border-2 border-amber-500/40 rounded-2xl p-6 shadow-xl">
+    <div class="flex items-start space-x-4">
+      <div class="p-3 bg-amber-500/20 text-amber-400 rounded-xl">
+        <svg class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+        </svg>
+      </div>
+      <div class="flex-1">
+        <h3 class="text-lg font-bold text-amber-300">Ambiguous Boot Metadata Detected (Recovery Mode)</h3>
+        <p class="text-sm text-slate-300 mt-1">
+          The otadata boot pointers on your gateway are corrupted or in an invalid state. Rather than silently modifying flash, choose a recovery action below:
+        </p>
+        <div class="mt-4 flex flex-wrap gap-3">
+          <button id="btn-recovery-wxm" class="px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-lg font-semibold text-sm transition-all shadow-md">
+            Safe Flash WeatherXM (OTA_0)
+          </button>
+          <button id="btn-recovery-mesh" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-semibold text-sm transition-all shadow-md">
+            Safe Flash Meshtastic (OTA_0)
+          </button>
+          <button id="btn-recovery-rollback" class="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-lg font-semibold text-sm transition-all shadow-md">
+            Factory Rollback (Boot 0x020000)
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Collapsible Advanced Tools Box -->
+  <div class="border border-slate-800 bg-slate-900/60 backdrop-blur rounded-2xl overflow-hidden shadow-lg">
+    <button
+      id="btn-toggle-tools"
+      class="w-full px-6 py-4 flex items-center justify-between text-left hover:bg-slate-800/40 transition-colors"
+      type="button"
+    >
+      <div class="flex items-center space-x-3">
+        <div class="p-2 bg-slate-800 text-slate-300 rounded-lg">
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+        </div>
+        <div>
+          <h4 class="font-semibold text-slate-200">Advanced & Diagnostic Tools</h4>
+          <p class="text-xs text-slate-400">Partition inspection, 16MB backup, factory rollback, and live serial monitor</p>
+        </div>
+      </div>
+      <svg id="tools-chevron" class="w-5 h-5 text-slate-400 transform transition-transform duration-200" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+      </svg>
+    </button>
+
+    <div id="tools-content-wrapper" class="hidden px-6 pb-6 pt-2 border-t border-slate-800">
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+        <!-- Tool 1: Partition & Boot Status -->
+        <div class="bg-slate-800/50 p-4 rounded-xl border border-slate-700/60 flex flex-col justify-between">
+          <div>
+            <div class="text-sky-400 font-semibold flex items-center space-x-2">
+              <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              <span>Partition & Boot Status</span>
+            </div>
+            <p class="text-xs text-slate-300 mt-2">
+              View full partition map, partition table MD5 status, otadata sequence counter, and cert fingerprint.
+            </p>
+          </div>
+          <button id="btn-tool-inspect" class="mt-4 w-full py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-xs font-semibold transition-colors">
+            Inspect Layout
+          </button>
+        </div>
+
+        <!-- Tool 2: Full 16MB Backup -->
+        <div class="bg-slate-800/50 p-4 rounded-xl border border-slate-700/60 flex flex-col justify-between">
+          <div>
+            <div class="text-emerald-400 font-semibold flex items-center space-x-2">
+              <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              <span>Full 16MB Backup</span>
+            </div>
+            <p class="text-xs text-slate-300 mt-2">
+              Dumps the complete 16 MB flash chip to a binary file and validates header signatures.
+            </p>
+          </div>
+          <button id="btn-tool-backup" class="mt-4 w-full py-2 bg-emerald-700 hover:bg-emerald-600 text-white rounded-lg text-xs font-semibold transition-colors">
+            Download 16MB Backup
+          </button>
+        </div>
+
+        <!-- Tool 3: Factory Rollback -->
+        <div class="bg-slate-800/50 p-4 rounded-xl border border-slate-700/60 flex flex-col justify-between">
+          <div>
+            <div class="text-rose-400 font-semibold flex items-center space-x-2">
+              <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+              </svg>
+              <span>Factory Rollback</span>
+            </div>
+            <p class="text-xs text-slate-300 mt-2">
+              Erases otadata sectors to 0xFF, rolling back immediately to the stock factory WeatherXM partition (0x020000).
+            </p>
+          </div>
+          <button id="btn-tool-rollback" class="mt-4 w-full py-2 bg-rose-800 hover:bg-rose-700 text-white rounded-lg text-xs font-semibold transition-colors">
+            Rollback to Factory
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Partition Status Modal -->
+  <div id="modal-partition-info" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm hidden">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-2xl w-full p-6 shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+      <div class="flex items-center justify-between pb-4 border-b border-slate-800">
+        <h3 class="text-lg font-bold text-white flex items-center space-x-2">
+          <span>WG1200 Partition & Boot Layout</span>
+        </h3>
+        <button id="btn-close-partition-modal" class="text-slate-400 hover:text-white transition-colors">
+          <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+      <div id="partition-modal-body" class="overflow-y-auto py-4 text-xs font-mono space-y-4 text-slate-300">
+        <!-- Filled dynamically -->
+      </div>
+      <div class="pt-4 border-t border-slate-800 flex justify-end">
+        <button id="btn-close-partition-modal-2" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-sm font-semibold transition-colors">
+          Close
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Factory Rollback Confirmation Modal -->
+  <div id="modal-rollback-confirm" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm hidden">
+    <div class="bg-slate-900 border border-rose-500/40 rounded-2xl max-w-md w-full p-6 shadow-2xl">
+      <div class="flex items-center space-x-3 text-rose-400 mb-4">
+        <svg class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+        </svg>
+        <h3 class="text-lg font-bold text-white">Confirm Factory Rollback</h3>
+      </div>
+      <p class="text-sm text-slate-300">
+        This will clear otadata sectors to <code class="text-rose-300">0xFF</code>, causing the ESP32-S3 ROM bootloader to boot the original stock WeatherXM firmware located in the immutable <code class="text-sky-300">factory</code> partition (<code class="text-sky-300">0x020000</code>).
+      </p>
+      <div class="mt-6 flex justify-end space-x-3">
+        <button id="btn-cancel-rollback" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-sm font-medium transition-colors">
+          Cancel
+        </button>
+        <button id="btn-confirm-rollback" class="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-sm font-semibold transition-colors shadow-lg">
+          Execute Rollback
+        </button>
+      </div>
+    </div>
+  </div>
+</section>

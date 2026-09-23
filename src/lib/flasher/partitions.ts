@@ -1,4 +1,5 @@
 import { WG1200_CONSTANTS } from './constants';
+import { md5Hex, compareHexHashes } from './hashing';
 
 export interface PartitionRecord {
   label: string;
@@ -9,9 +10,16 @@ export interface PartitionRecord {
   flags: number;
 }
 
+export interface ParsedPartitionTable {
+  partitions: Record<string, PartitionRecord>;
+  duplicateLabels: string[];
+  md5Valid: boolean | null; // null if no MD5 entry present
+}
+
 export interface PartitionVerificationResult {
   valid: boolean;
   partitions: Record<string, PartitionRecord>;
+  md5Verified?: boolean | null;
   errors: string[];
 }
 
@@ -19,7 +27,7 @@ export const EXPECTED_WG1200_PARTITIONS: Record<
   string,
   { offset: number; size: number; type?: number; subtype?: number }
 > = {
-  esp_secure_cert: { offset: 0x00d000, size: 0x002000 },
+  esp_secure_cert: { offset: 0x00d000, size: 0x002000, type: 0x3f, subtype: 0x06 },
   nvs: { offset: 0x00f000, size: 0x004000, type: 0x01, subtype: 0x02 },
   otadata: { offset: 0x013000, size: 0x002000, type: 0x01, subtype: 0x00 },
   phy_init: { offset: 0x015000, size: 0x001000, type: 0x01, subtype: 0x01 },
@@ -32,15 +40,40 @@ export const EXPECTED_WG1200_PARTITIONS: Record<
 
 /**
  * Parses ESP-IDF binary partition table bytes (32-byte records with 0x50AA magic).
+ * Also detects duplicate partition labels and verifies ESP-IDF MD5 checksum (magic 0xEBEB).
  */
-export function parsePartitionTable(bytes: Uint8Array): Record<string, PartitionRecord> {
+export function parsePartitionTableWithMetadata(bytes: Uint8Array): ParsedPartitionTable {
   const partitions: Record<string, PartitionRecord> = {};
+  const duplicateLabels: string[] = [];
+  let md5Valid: boolean | null = null;
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
 
   for (let i = 0; i + 32 <= bytes.byteLength; i += 32) {
     const magic = view.getUint16(i, true);
+
+    // Check for ESP-IDF partition table MD5 record (magic 0xEBEB)
+    if (magic === 0xebeb) {
+      const type = view.getUint8(i + 2);
+      const subtype = view.getUint8(i + 3);
+      if (type === 0x00 && subtype === 0xff) {
+        // MD5 of all preceding partition entries
+        const precedingEntries = bytes.subarray(0, i);
+        const calculatedMd5 = md5Hex(precedingEntries);
+
+        // Stored MD5 is at bytes 16..31 of this 32-byte record
+        const storedMd5Bytes = bytes.subarray(i + 16, i + 32);
+        let storedMd5Hex = '';
+        for (let b = 0; b < 16; b++) {
+          storedMd5Hex += storedMd5Bytes[b].toString(16).padStart(2, '0');
+        }
+
+        md5Valid = compareHexHashes(calculatedMd5, storedMd5Hex);
+      }
+      break;
+    }
+
     if (magic !== WG1200_CONSTANTS.PARTITION_TABLE_MAGIC) {
-      // End of table (or MD5 checksum marker)
+      // End of table (e.g. 0xFFFF unprogrammed flash)
       break;
     }
 
@@ -61,18 +94,29 @@ export function parsePartitionTable(bytes: Uint8Array): Record<string, Partition
     const flags = view.getUint32(i + 28, true);
 
     if (label) {
-      partitions[label] = {
-        label,
-        type,
-        subtype,
-        offset,
-        size,
-        flags,
-      };
+      if (partitions[label]) {
+        duplicateLabels.push(label);
+      } else {
+        partitions[label] = {
+          label,
+          type,
+          subtype,
+          offset,
+          size,
+          flags,
+        };
+      }
     }
   }
 
-  return partitions;
+  return { partitions, duplicateLabels, md5Valid };
+}
+
+/**
+ * Standard parse function returning Record<string, PartitionRecord> for backward compatibility.
+ */
+export function parsePartitionTable(bytes: Uint8Array): Record<string, PartitionRecord> {
+  return parsePartitionTableWithMetadata(bytes).partitions;
 }
 
 /**
@@ -81,7 +125,8 @@ export function parsePartitionTable(bytes: Uint8Array): Record<string, Partition
 export function verifyWg1200PartitionTable(
   partitions: Record<string, PartitionRecord>,
   chipName?: string,
-  flashSizeBytes?: number
+  flashSizeBytes?: number,
+  metadata?: { duplicateLabels?: string[]; md5Valid?: boolean | null }
 ): PartitionVerificationResult {
   const errors: string[] = [];
 
@@ -94,6 +139,16 @@ export function verifyWg1200PartitionTable(
   if (flashSizeBytes !== undefined && flashSizeBytes !== WG1200_CONSTANTS.FLASH_SIZE_BYTES) {
     const detectedMb = (flashSizeBytes / (1024 * 1024)).toFixed(0);
     errors.push(`Expected 16 MB flash size, but detected ${detectedMb} MB (${flashSizeBytes} bytes)`);
+  }
+
+  // Duplicate labels check
+  if (metadata?.duplicateLabels && metadata.duplicateLabels.length > 0) {
+    errors.push(`Duplicate partition labels detected: ${metadata.duplicateLabels.join(', ')}`);
+  }
+
+  // MD5 checksum verification check
+  if (metadata?.md5Valid === false) {
+    errors.push('Partition table MD5 checksum verification failed! Flash corruption suspected.');
   }
 
   // Validate every required WG1200 partition
@@ -130,6 +185,8 @@ export function verifyWg1200PartitionTable(
   return {
     valid: errors.length === 0,
     partitions,
+    md5Verified: metadata?.md5Valid,
     errors,
   };
 }
+

@@ -75,12 +75,20 @@ function classifyFirmware(projectName: string, version: string): DetectedFirmwar
   const p = projectName.toLowerCase();
   const v = version.toLowerCase();
 
-  if (p.includes('wg1') || p.includes('weatherxm') || p.includes('station') || v.includes('wxm')) {
+  // 1. Check explicit project names first to avoid misclassifying Meshtastic versions like '2.8.1-wxm'
+  if (p.includes('meshtastic')) {
+    return 'meshtastic';
+  }
+  if (p.includes('wg1010_port') || p.includes('weatherxm') || p.includes('wg1')) {
     return 'weatherxm';
   }
 
-  if (p.includes('meshtastic') || v.includes('meshtastic')) {
+  // 2. Secondary checks if project name is generic or ambiguous
+  if (v.includes('meshtastic')) {
     return 'meshtastic';
+  }
+  if (v.includes('wxm') || v.includes('weatherxm') || p.includes('station')) {
+    return 'weatherxm';
   }
 
   return 'unknown';

@@ -3,9 +3,9 @@ import { parseAppDescriptor, type AppDescriptor } from './appDescriptor';
 import { WG1200_CONSTANTS } from './constants';
 import { compareHexHashes, sha256Hex } from './hashing';
 import { verifySecureCertIdentity, type SecureCertVerificationResult } from './identity';
-import { determineActiveBootSlot, type OtadataStatus } from './otadata';
-import { parsePartitionTable, verifyWg1200PartitionTable, type PartitionRecord } from './partitions';
-import { assertAllowedWrite } from './writeGuard';
+import { determineActiveBootSlot, parseOtadataSector, type OtadataStatus } from './otadata';
+import { parsePartitionTable, parsePartitionTableWithMetadata, verifyWg1200PartitionTable, type PartitionRecord } from './partitions';
+import { assertAllowedApplicationWrite, assertAllowedOtaSelectWrite, assertAllowedWrite } from './writeGuard';
 
 export interface ProtectedRegionSnapshot {
   name: string;
@@ -96,10 +96,11 @@ export class Wg1200Transport {
     const isEsp32S3 =
       chipName.toLowerCase().includes('esp32-s3') || chipName.toLowerCase().includes('esp32s3');
 
-    // 2. Identify flash size
+    // 2. Identify flash size (normalize KB from esptool-js 0.5.4)
     let flashSizeBytes = 0;
     try {
-      flashSizeBytes = await this.loader.getFlashSize();
+      const rawFlashSize = await this.loader.getFlashSize();
+      flashSizeBytes = rawFlashSize <= 65536 ? rawFlashSize * 1024 : rawFlashSize;
     } catch (e: any) {
       this.logger.error(`Flash size detection failed: ${e.message}`);
     }
@@ -112,8 +113,13 @@ export class Wg1200Transport {
       WG1200_CONSTANTS.PARTITION_TABLE.offset,
       WG1200_CONSTANTS.PARTITION_TABLE.size
     );
-    const partitions = parsePartitionTable(ptBytes);
-    const ptResult = verifyWg1200PartitionTable(partitions, chipName, flashSizeBytes);
+    const parsedPt = parsePartitionTableWithMetadata(ptBytes);
+    const ptResult = verifyWg1200PartitionTable(
+      parsedPt.partitions,
+      chipName,
+      flashSizeBytes,
+      { duplicateLabels: parsedPt.duplicateLabels, md5Valid: parsedPt.md5Valid }
+    );
 
     // 4. Read & Verify esp_secure_cert (0xD000, 8KB)
     this.logger.log('Reading esp_secure_cert from 0xD000…');
@@ -156,7 +162,7 @@ export class Wg1200Transport {
       flashSizeMb,
       isEsp32S3,
       is16Mb,
-      partitions,
+      partitions: parsedPt.partitions,
       partitionErrors: ptResult.errors,
       isPartitionLayoutValid: ptResult.valid,
       secureCert,
@@ -235,8 +241,8 @@ export class Wg1200Transport {
   ): Promise<void> {
     if (!this.loader) throw new Error('Not connected');
 
-    // 1. Guard check: allow only ota_0 or ota_1 by default (preserves factory safe haven)
-    assertAllowedWrite(slotOffset, firmwareBytes.byteLength, false);
+    // 1. Guard check: strictly allow only ota_0 or ota_1 (never factory)
+    assertAllowedApplicationWrite(slotOffset, firmwareBytes.byteLength);
 
     // 2. Convert bytes to binary string for esptool-js
     const bstr = this.ui8ToBstr(firmwareBytes);
@@ -282,7 +288,118 @@ export class Wg1200Transport {
   }
 
   /**
-   * Writes a repaired or updated otadata image to 0x13000.
+   * Transactionally updates a single 4 KB otadata sector.
+   * - Uses assertAllowedOtaSelectWrite to enforce that the target is strictly 0x13000 or 0x14000.
+   * - Leaves the previous active sector untouched.
+   * - Reads back the written 4 KB sector and validates sequence, CRC, and state.
+   */
+  public async writeOtaSelectSector(
+    targetAddress: number,
+    sectorBytes: Uint8Array,
+    expectedSeq: number
+  ): Promise<void> {
+    if (!this.loader) throw new Error('Not connected');
+    const { sector, address } = assertAllowedOtaSelectWrite(targetAddress, sectorBytes.byteLength);
+
+    this.logger.log(`Transactionally writing otadata sector ${sector} @ 0x${address.toString(16)}…`);
+    const bstr = this.ui8ToBstr(sectorBytes);
+
+    await this.loader.writeFlash({
+      fileArray: [
+        {
+          data: bstr,
+          address,
+        },
+      ],
+      flashSize: '16MB',
+      flashMode: 'dio',
+      flashFreq: '80m',
+      eraseAll: false,
+      compress: false,
+    });
+
+    // Read back and verify the sector
+    this.logger.log(`Verifying written otadata sector ${sector} @ 0x${address.toString(16)}…`);
+    const readBack = await this.readRegion(address, 4096);
+    const parsed = parseOtadataSector(readBack);
+
+    if (!parsed.valid || parsed.seq !== expectedSeq) {
+      throw new Error(
+        `Otadata write verification failed! Expected seq ${expectedSeq}, got seq ${parsed.seq} (valid: ${parsed.valid}). ` +
+        `The previous active sector remains untouched.`
+      );
+    }
+
+    this.logger.log(`Otadata sector ${sector} successfully verified with sequence ${parsed.seq}.`);
+  }
+
+  /**
+   * Resets both otadata sectors (0x13000 - 0x14FFF) to 0xFF.
+   * Directs ESP32-S3 ROM bootloader to rollback and boot the immutable factory partition (0x020000).
+   */
+  public async rollbackToFactory(): Promise<void> {
+    if (!this.loader) throw new Error('Not connected');
+    this.logger.log('Writing 0xFF to otadata partition (0x13000, 8KB) to trigger factory rollback…');
+    const blank = new Uint8Array(WG1200_CONSTANTS.OTADATA.size);
+    blank.fill(0xff);
+    const bstr = this.ui8ToBstr(blank);
+
+    await this.loader.writeFlash({
+      fileArray: [
+        {
+          data: bstr,
+          address: WG1200_CONSTANTS.OTADATA.offset,
+        },
+      ],
+      flashSize: '16MB',
+      flashMode: 'dio',
+      flashFreq: '80m',
+      eraseAll: false,
+      compress: false,
+    });
+
+    const readBack = await this.readRegion(WG1200_CONSTANTS.OTADATA.offset, WG1200_CONSTANTS.OTADATA.size);
+    const allErased = readBack.every((b) => b === 0xff);
+    if (!allErased) {
+      throw new Error('Factory rollback failed: otadata was not completely cleared to 0xFF.');
+    }
+    this.logger.log('Factory rollback verified: otadata is 0xFF. Device will boot factory partition.');
+  }
+
+  /**
+   * Reads full 16 MB flash in 64KB blocks and validates bootloader & partition table magics.
+   */
+  public async readFullFlashWithValidation(
+    onProgress?: (percent: number, offset: number, total: number) => void
+  ): Promise<Uint8Array> {
+    if (!this.loader) throw new Error('Not connected');
+    const totalBytes = WG1200_CONSTANTS.FLASH_SIZE_BYTES; // 16777216
+    const chunkSize = 65536;
+    const fullData = new Uint8Array(totalBytes);
+
+    this.logger.log(`Starting full 16 MB backup in ${chunkSize / 1024}KB chunks…`);
+    for (let offset = 0; offset < totalBytes; offset += chunkSize) {
+      const chunk = await this.loader.readFlash(offset, chunkSize);
+      fullData.set(chunk, offset);
+      if (onProgress) {
+        onProgress(Math.round(((offset + chunkSize) / totalBytes) * 100), offset + chunkSize, totalBytes);
+      }
+    }
+
+    // Header validations
+    if (fullData[0] !== 0xe9) {
+      this.logger.error(`Warning: Bootloader magic at 0x0000 is 0x${fullData[0].toString(16)}, expected 0xE9`);
+    }
+    const ptMagic = fullData[0xc000] | (fullData[0xc001] << 8);
+    if (ptMagic !== WG1200_CONSTANTS.PARTITION_TABLE_MAGIC) {
+      this.logger.error(`Warning: Partition table magic at 0xC000 is 0x${ptMagic.toString(16)}, expected 0x50AA`);
+    }
+
+    return fullData;
+  }
+
+  /**
+   * Legacy 8KB otadata write (fallback).
    */
   public async writeOtadata(otadataBytes: Uint8Array): Promise<void> {
     if (!this.loader) throw new Error('Not connected');

@@ -7,6 +7,7 @@ import FirmwareCards from '../components/FirmwareCards.astro';
 import ConfirmationModal from '../components/ConfirmationModal.astro';
 import FlashProgress from '../components/FlashProgress.astro';
 import PostFlashInstructions from '../components/PostFlashInstructions.astro';
+import AdvancedTools from '../components/AdvancedTools.astro';
 import TechnicalLog from '../components/TechnicalLog.astro';
 import Footer from '../components/Footer.astro';
 ---
@@ -42,6 +43,7 @@ import Footer from '../components/Footer.astro';
         <ConnectPanel />
         <DeviceStatus />
         <FirmwareCards />
+        <AdvancedTools />
         <FlashProgress />
         <PostFlashInstructions />
         <TechnicalLog />
@@ -101,6 +103,28 @@ import Footer from '../components/Footer.astro';
       const instructionsMesh = document.getElementById('instructions-mesh');
       const btnPostFlashDone = document.getElementById('btn-post-flash-done');
 
+      // Advanced Tools Elements
+      const recoveryAlertCard = document.getElementById('recovery-alert-card');
+      const btnRecoveryWxm = document.getElementById('btn-recovery-wxm');
+      const btnRecoveryMesh = document.getElementById('btn-recovery-mesh');
+      const btnRecoveryRollback = document.getElementById('btn-recovery-rollback');
+
+      const btnToggleTools = document.getElementById('btn-toggle-tools');
+      const toolsContentWrapper = document.getElementById('tools-content-wrapper');
+      const toolsChevron = document.getElementById('tools-chevron');
+      const btnToolInspect = document.getElementById('btn-tool-inspect');
+      const btnToolBackup = document.getElementById('btn-tool-backup');
+      const btnToolRollback = document.getElementById('btn-tool-rollback');
+
+      const modalPartitionInfo = document.getElementById('modal-partition-info');
+      const partitionModalBody = document.getElementById('partition-modal-body');
+      const btnClosePartitionModal = document.getElementById('btn-close-partition-modal');
+      const btnClosePartitionModal2 = document.getElementById('btn-close-partition-modal-2');
+
+      const modalRollbackConfirm = document.getElementById('modal-rollback-confirm');
+      const btnCancelRollback = document.getElementById('btn-cancel-rollback');
+      const btnConfirmRollback = document.getElementById('btn-confirm-rollback');
+
       const logTerminal = document.getElementById('log-terminal');
       const logCount = document.getElementById('log-count');
       const btnToggleLog = document.getElementById('btn-toggle-log');
@@ -138,19 +162,75 @@ import Footer from '../components/Footer.astro';
         }
       });
 
-      btnRetryFlash?.addEventListener('click', () => {
+      btnRetryFlash?.addEventListener('click', async () => {
         flashProgressSection?.classList.add('hidden');
-        if (controller.inspectionData) {
-          deviceStatusCard?.classList.remove('hidden');
-          firmwareSelectionSection?.classList.remove('hidden');
-        } else {
-          panelConnect?.classList.remove('hidden');
+        await controller.disconnect();
+      });
+
+      // Fix reconnect state bug: disconnect() safely resets state to idle
+      btnPostFlashDone?.addEventListener('click', async () => {
+        await controller.disconnect();
+      });
+
+      // Advanced Tools listeners
+      btnToggleTools?.addEventListener('click', () => {
+        const isHidden = toolsContentWrapper?.classList.toggle('hidden');
+        if (toolsChevron) {
+          toolsChevron.style.transform = isHidden ? 'rotate(0deg)' : 'rotate(180deg)';
         }
       });
 
-      btnPostFlashDone?.addEventListener('click', () => {
-        postFlashSection?.classList.add('hidden');
-        panelConnect?.classList.remove('hidden');
+      btnToolInspect?.addEventListener('click', () => {
+        renderPartitionModal();
+        modalPartitionInfo?.classList.remove('hidden');
+      });
+
+      btnClosePartitionModal?.addEventListener('click', () => {
+        modalPartitionInfo?.classList.add('hidden');
+      });
+      btnClosePartitionModal2?.addEventListener('click', () => {
+        modalPartitionInfo?.classList.add('hidden');
+      });
+
+      btnToolBackup?.addEventListener('click', async () => {
+        try {
+          btnToolBackup.setAttribute('disabled', 'true');
+          btnToolBackup.textContent = 'Dumping 16MB…';
+          await controller.executeFullFlashBackup();
+        } catch (e: any) {
+          alert(`Backup failed: ${e.message}`);
+        } finally {
+          btnToolBackup.removeAttribute('disabled');
+          btnToolBackup.textContent = 'Download 16MB Backup';
+        }
+      });
+
+      btnToolRollback?.addEventListener('click', () => {
+        modalRollbackConfirm?.classList.remove('hidden');
+      });
+
+      btnCancelRollback?.addEventListener('click', () => {
+        modalRollbackConfirm?.classList.add('hidden');
+      });
+
+      btnConfirmRollback?.addEventListener('click', async () => {
+        modalRollbackConfirm?.classList.add('hidden');
+        try {
+          await controller.executeFactoryRollback();
+        } catch (e: any) {
+          alert(`Rollback failed: ${e.message}`);
+        }
+      });
+
+      // Recovery button listeners
+      btnRecoveryWxm?.addEventListener('click', () => {
+        controller.executeRecovery('weatherxm');
+      });
+      btnRecoveryMesh?.addEventListener('click', () => {
+        controller.executeRecovery('meshtastic');
+      });
+      btnRecoveryRollback?.addEventListener('click', () => {
+        controller.executeRecovery('rollback_factory');
       });
 
       btnToggleLog?.addEventListener('click', () => {
@@ -183,12 +263,21 @@ import Footer from '../components/Footer.astro';
           firmwareSelectionSection?.classList.add('hidden');
           flashProgressSection?.classList.add('hidden');
           postFlashSection?.classList.add('hidden');
+          recoveryAlertCard?.classList.add('hidden');
         } else if (ctx.state === 'ready') {
           panelConnect?.classList.add('hidden');
           deviceStatusCard?.classList.remove('hidden');
           firmwareSelectionSection?.classList.remove('hidden');
           flashProgressSection?.classList.add('hidden');
           postFlashSection?.classList.add('hidden');
+          recoveryAlertCard?.classList.add('hidden');
+        } else if (ctx.state === 'recovery') {
+          panelConnect?.classList.add('hidden');
+          deviceStatusCard?.classList.remove('hidden');
+          firmwareSelectionSection?.classList.add('hidden');
+          flashProgressSection?.classList.add('hidden');
+          postFlashSection?.classList.add('hidden');
+          recoveryAlertCard?.classList.remove('hidden');
         } else if (
           ctx.state === 'downloading' ||
           ctx.state === 'flashing' ||
@@ -202,6 +291,7 @@ import Footer from '../components/Footer.astro';
           flashProgressSection?.classList.remove('hidden');
           postFlashSection?.classList.add('hidden');
           flashErrorBox?.classList.add('hidden');
+          recoveryAlertCard?.classList.add('hidden');
 
           if (progressTitle) progressTitle.textContent = getStageTitle(ctx.state);
           if (progressStatus) progressStatus.textContent = ctx.statusMessage;
@@ -211,6 +301,7 @@ import Footer from '../components/Footer.astro';
         } else if (ctx.state === 'success') {
           flashProgressSection?.classList.add('hidden');
           postFlashSection?.classList.remove('hidden');
+          recoveryAlertCard?.classList.add('hidden');
 
           if (pendingTargetFw === 'weatherxm') {
             instructionsWxm?.classList.remove('hidden');
@@ -222,6 +313,7 @@ import Footer from '../components/Footer.astro';
         } else if (ctx.state === 'error') {
           flashProgressSection?.classList.remove('hidden');
           flashErrorBox?.classList.remove('hidden');
+          recoveryAlertCard?.classList.add('hidden');
           if (flashErrorMsg) flashErrorMsg.textContent = ctx.errorMessage ?? 'Operation failed';
         }
       }
@@ -339,6 +431,81 @@ import Footer from '../components/Footer.astro';
             el.className = 'flex items-center space-x-2 text-wxm-muted';
           }
         });
+      }
+
+      function renderPartitionModal() {
+        if (!partitionModalBody) return;
+        const data = controller.inspectionData;
+        if (!data) {
+          partitionModalBody.innerHTML = `
+            <div class="p-4 bg-amber-500/10 border border-amber-500/30 rounded-lg text-amber-300">
+              No device is currently connected. Please connect your WG1200 gateway first.
+            </div>
+          `;
+          return;
+        }
+
+        const partitionRows = data.partitions
+          .map((p) => {
+            const isProtected = ['nvs', 'otadata', 'factory', 'esp_secure_cert'].includes(p.name);
+            const badge = isProtected
+              ? '<span class="text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded text-[10px]">PROTECTED</span>'
+              : '<span class="text-sky-400 bg-sky-500/10 px-1.5 py-0.5 rounded text-[10px]">APP SLOT</span>';
+            return `
+              <tr class="border-b border-slate-800 hover:bg-slate-800/40">
+                <td class="py-1.5 px-2 text-slate-200 font-bold">${p.name}</td>
+                <td class="py-1.5 px-2 text-slate-400">0x${p.type.toString(16)}/0x${p.subtype.toString(16)}</td>
+                <td class="py-1.5 px-2 text-slate-300 font-mono">0x${p.offset.toString(16).padStart(6, '0')}</td>
+                <td class="py-1.5 px-2 text-slate-300">${Math.round(p.size / 1024)} KB</td>
+                <td class="py-1.5 px-2">${badge}</td>
+              </tr>
+            `;
+          })
+          .join('');
+
+        partitionModalBody.innerHTML = `
+          <div class="space-y-4">
+            <div class="bg-slate-950 p-3 rounded-lg border border-slate-800">
+              <div class="text-slate-400 text-[11px] uppercase tracking-wider mb-1">Hardware & Identity</div>
+              <div class="grid grid-cols-2 gap-2 text-xs">
+                <div>Chip: <span class="text-white font-semibold">${data.chipName}</span></div>
+                <div>Flash: <span class="text-white font-semibold">${data.flashSizeMb} MB (16 MB verified)</span></div>
+                <div class="col-span-2 truncate">Identity SHA-256: <span class="text-sky-300 font-semibold">${data.secureCert.fingerprint}</span></div>
+                <div class="col-span-2">Device Credential Status: <span class="${data.secureCert.valid ? 'text-emerald-400 font-bold' : 'text-rose-400 font-bold'}">${data.secureCert.valid ? 'VALID (Untouched)' : 'INVALID'}</span></div>
+              </div>
+            </div>
+
+            <div class="bg-slate-950 p-3 rounded-lg border border-slate-800">
+              <div class="text-slate-400 text-[11px] uppercase tracking-wider mb-2">Dual-Boot Otadata Geometry</div>
+              <div class="grid grid-cols-2 gap-2 text-xs">
+                <div>Active Slot: <span class="text-emerald-400 font-bold">${data.otadata.activeSlot.toUpperCase()}</span></div>
+                <div>Target Inactive Slot: <span class="text-sky-400 font-bold">${data.otadata.targetSlot.toUpperCase()} (0x${data.otadata.targetOffset.toString(16)})</span></div>
+                <div>Next Sequence: <span class="text-white font-semibold">${data.otadata.nextSeq}</span></div>
+                <div>Boot State Ambiguous: <span class="${data.otadata.isAmbiguous ? 'text-rose-400 font-bold' : 'text-slate-400'}">${data.otadata.isAmbiguous ? 'YES' : 'NO'}</span></div>
+                <div>Sector 0 (0x13000): seq=${data.otadata.sector0.seq}, valid=${data.otadata.sector0.valid}</div>
+                <div>Sector 1 (0x14000): seq=${data.otadata.sector1.seq}, valid=${data.otadata.sector1.valid}</div>
+              </div>
+            </div>
+
+            <div class="bg-slate-950 p-3 rounded-lg border border-slate-800 overflow-x-auto">
+              <div class="text-slate-400 text-[11px] uppercase tracking-wider mb-2">Partition Layout (ESP-IDF 16MB)</div>
+              <table class="w-full text-left text-xs">
+                <thead>
+                  <tr class="text-slate-400 border-b border-slate-800">
+                    <th class="py-1 px-2">Label</th>
+                    <th class="py-1 px-2">Type</th>
+                    <th class="py-1 px-2">Offset</th>
+                    <th class="py-1 px-2">Size</th>
+                    <th class="py-1 px-2">Protection</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${partitionRows}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        `;
       }
     </script>
   </body>
