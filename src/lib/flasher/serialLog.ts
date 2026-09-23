@@ -69,6 +69,9 @@ export async function captureBootLogs(
   }
 
   try {
+    // Brief settle delay to allow WebSerial driver to release previous handle
+    await new Promise((r) => setTimeout(r, 200));
+
     if (!port.readable) {
       await port.open({ baudRate: 115200 });
     }
@@ -104,9 +107,16 @@ export async function captureBootLogs(
             const lower = cleanLine.toLowerCase();
             if (lower.includes('weatherxm') || lower.includes('thingsboard') || lower.includes('wg1200')) {
               detectedSign = 'weatherxm';
-            } else if (lower.includes('meshtastic') || lower.includes('lora') || lower.includes('sx1262')) {
+            } else if (lower.includes('meshtastic') || lower.includes('lora') || lower.includes('sx1262') || lower.includes('mesh')) {
               detectedSign = 'meshtastic';
-            } else if (lower.includes('esp-idf') || lower.includes('boot:')) {
+            } else if (
+              lower.includes('esp-idf') ||
+              lower.includes('boot:') ||
+              lower.includes('rst:') ||
+              lower.includes('configsip') ||
+              lower.includes('entry 0x') ||
+              lower.includes('load:0x')
+            ) {
               if (detectedSign === 'none') detectedSign = 'booting';
             }
           }

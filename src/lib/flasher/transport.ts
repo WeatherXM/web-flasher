@@ -1,4 +1,4 @@
-import { ESPLoader, Transport } from 'esptool-js';
+import { ESPLoader, Transport, ESPError } from 'esptool-js';
 import { parseAppDescriptor, type AppDescriptor } from './appDescriptor';
 import { WG1200_CONSTANTS } from './constants';
 import { compareHexHashes, sha256Hex } from './hashing';
@@ -6,6 +6,106 @@ import { verifySecureCertIdentity, type SecureCertVerificationResult } from './i
 import { determineActiveBootSlot, parseOtadataSector, type OtadataStatus } from './otadata';
 import { parsePartitionTableWithMetadata, verifyWg1200PartitionTable, type PartitionRecord } from './partitions';
 import { assertAllowedApplicationWrite, assertAllowedFactoryRollbackWrite, assertAllowedOtaSelectWrite } from './writeGuard';
+
+let isTransportPatched = false;
+
+/**
+ * Monkey-patches esptool-js Transport.prototype.read to enforce RFC 1055 SLIP framing tolerance.
+ * Standard esptool-js throws "Invalid head of packet (0x...)" if the very first byte received is not 0xC0 (SLIP_END).
+ * On ESP32-S3 boards (especially over WCH CH340 or when entering flasher stub), UART transitions / baud glitches
+ * can produce a transient glitch byte like 0xfc or 0x00 before the SLIP frame starts.
+ * This patch discards leading line noise bytes before SLIP_END (0xC0), perfectly matching esptool.py behavior.
+ */
+export function patchTransportRead(): void {
+  if (isTransportPatched) return;
+  isTransportPatched = true;
+
+  (Transport.prototype as any).read = async function (timeout: number) {
+    let partialPacket: Uint8Array | null = null;
+    let isEscaping = false;
+    let readBytes: Uint8Array | null = null;
+    let leadingNoiseCount = 0;
+    const MAX_LEADING_NOISE = 2048;
+
+    while (true) {
+      const timeStamp = Date.now();
+      readBytes = new Uint8Array(0);
+
+      while (Date.now() - timeStamp < timeout) {
+        if (this.buffer.length > 0) {
+          readBytes = this.buffer;
+          this.buffer = new Uint8Array(0);
+          break;
+        } else {
+          await new Promise((r) => setTimeout(r, 1));
+        }
+      }
+
+      if (!readBytes || readBytes.length === 0) {
+        const msg =
+          partialPacket === null
+            ? 'Serial data stream stopped: Possible serial noise or corruption.'
+            : 'No serial data received.';
+        if (this.tracing) {
+          this.trace(msg);
+        }
+        throw new ESPError(msg);
+      }
+
+      if (this.tracing) {
+        this.trace(`Read ${readBytes.length} bytes: ${this.hexConvert(readBytes)}`);
+      }
+
+      for (let i = 0; i < readBytes.length; i++) {
+        const byte = readBytes[i];
+        if (partialPacket === null) {
+          if (byte === this.SLIP_END) {
+            partialPacket = new Uint8Array(0);
+            leadingNoiseCount = 0;
+          } else {
+            // RFC 1055 SLIP framing compliance: discard leading noise before 0xC0
+            leadingNoiseCount++;
+            if (leadingNoiseCount > MAX_LEADING_NOISE) {
+              const remainingData = this.buffer;
+              this.detectPanicHandler(new Uint8Array([...readBytes, ...(remainingData || [])]));
+              throw new ESPError(`Invalid head of packet (0x${byte.toString(16)}): Possible serial noise or corruption.`);
+            }
+          }
+        } else if (isEscaping) {
+          isEscaping = false;
+          if (byte === this.SLIP_ESC_END) {
+            partialPacket = this.appendArray(partialPacket, new Uint8Array([this.SLIP_END]));
+          } else if (byte === this.SLIP_ESC_ESC) {
+            partialPacket = this.appendArray(partialPacket, new Uint8Array([this.SLIP_ESC]));
+          } else {
+            if (this.tracing) {
+              this.trace(`Read invalid data: ${this.hexConvert(readBytes)}`);
+            }
+            const remainingData = this.buffer;
+            this.detectPanicHandler(new Uint8Array([...readBytes, ...(remainingData || [])]));
+            throw new ESPError(`Invalid SLIP escape (0xdb, 0x${byte.toString(16)})`);
+          }
+        } else if (byte === this.SLIP_ESC) {
+          isEscaping = true;
+        } else if (byte === this.SLIP_END) {
+          if (this.tracing) {
+            this.trace(`Received full packet: ${this.hexConvert(partialPacket)}`);
+          }
+          if (i + 1 < readBytes.length) {
+            const remainingBytes = readBytes.slice(i + 1);
+            this.buffer = this.appendArray(remainingBytes, this.buffer);
+          }
+          return partialPacket;
+        } else {
+          partialPacket = this.appendArray(partialPacket, new Uint8Array([byte]));
+        }
+      }
+    }
+  };
+}
+
+patchTransportRead();
+
 
 export interface ProtectedRegionSnapshot {
   name: string;
@@ -191,21 +291,56 @@ export class Wg1200Transport {
 
   /**
    * Safely reads a flash memory region with automatic retry on serial jitter.
+   * Large reads (>4KB) are chunked into 4KB segments to prevent CH340 FIFO overflow.
    */
   public async readRegion(offset: number, size: number, retries = 2): Promise<Uint8Array> {
     if (!this.loader) throw new Error('Not connected');
+
+    if (size <= 4096) {
+      return await this.readChunkWithRetry(offset, size, retries);
+    }
+
+    const CHUNK_SIZE = 4096;
+    const fullBuffer = new Uint8Array(size);
+    let bytesRead = 0;
+
+    while (bytesRead < size) {
+      const currentChunkSize = Math.min(CHUNK_SIZE, size - bytesRead);
+      const chunkData = await this.readChunkWithRetry(offset + bytesRead, currentChunkSize, retries);
+      fullBuffer.set(chunkData, bytesRead);
+      bytesRead += currentChunkSize;
+      if (bytesRead < size) {
+        await new Promise((r) => setTimeout(r, 25));
+      }
+    }
+
+    return fullBuffer;
+  }
+
+  private async readChunkWithRetry(offset: number, size: number, retries: number): Promise<Uint8Array> {
     let lastError: any = null;
     for (let attempt = 0; attempt <= retries; attempt++) {
       try {
         if (attempt > 0) {
+          if (this.transport) {
+            try {
+              (this.transport as any).flushInput();
+            } catch (_) {}
+          }
           await new Promise((r) => setTimeout(r, 120));
         }
-        return await this.loader.readFlash(offset, size);
+        return await this.loader!.readFlash(offset, size);
       } catch (err: any) {
         lastError = err;
-        this.logger.error(
-          `readFlash at 0x${offset.toString(16)} (size: ${size}) attempt ${attempt + 1} failed: ${err.message || err}`
-        );
+        if (attempt < retries) {
+          this.logger.debug?.(
+            `readFlash at 0x${offset.toString(16)} (size: ${size}) attempt ${attempt + 1} hiccup, retrying...`
+          );
+        } else {
+          this.logger.error(
+            `readFlash at 0x${offset.toString(16)} (size: ${size}) attempt ${attempt + 1} failed: ${err.message || err}`
+          );
+        }
       }
     }
     throw lastError;
@@ -490,14 +625,28 @@ export class Wg1200Transport {
   }
 
   /**
-   * Hard-resets the ESP32-S3 chip via RTS line.
+   * Hard-resets the ESP32-S3 chip into normal application run mode.
+   * Coordinates DTR (IO0) and RTS (EN) lines to ensure clean reboot.
    */
   public async hardReset(): Promise<void> {
     if (this.transport) {
       try {
-        await this.transport.setRTS(true);
+        // Explicitly clear DTR state so IO0 is high (run application, not bootloader)
+        if ((this.transport as any)._DTR_state !== undefined) {
+          (this.transport as any)._DTR_state = false;
+        }
+        // Assert EN low (chip in reset) with DTR low (IO0 high)
+        if (typeof (this.transport as any).setSignals === 'function') {
+          await (this.transport as any).setSignals(false, true);
+          await new Promise((r) => setTimeout(r, 150));
+          // Release EN high (chip boots application) with DTR low
+          await (this.transport as any).setSignals(false, false);
+        } else {
+          await this.transport.setRTS(true);
+          await new Promise((r) => setTimeout(r, 150));
+          await this.transport.setRTS(false);
+        }
         await new Promise((r) => setTimeout(r, 100));
-        await this.transport.setRTS(false);
       } catch (e) {
         this.logger.error(`Hard reset error: ${e}`);
       }

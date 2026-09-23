@@ -120,4 +120,67 @@ describe('transport & serialLog', () => {
     expect(capturedOptions.fileArray[0].data).toBe(firmwareData);
     expect(capturedOptions.eraseAll).toBe(false);
   });
+
+  it('chunks readRegion into 4096-byte slices for large reads', async () => {
+    const transport = new Wg1200Transport({
+      log: () => {},
+      error: () => {},
+    });
+
+    const calls: { offset: number; size: number }[] = [];
+    (transport as any).loader = {
+      readFlash: vi.fn().mockImplementation((offset: number, size: number) => {
+        calls.push({ offset, size });
+        return Promise.resolve(new Uint8Array(size).fill(0x55));
+      }),
+    };
+
+    // 8192 bytes (e.g. esp_secure_cert)
+    const result = await transport.readRegion(0xd000, 8192);
+    expect(result.length).toBe(8192);
+    expect(calls).toEqual([
+      { offset: 0xd000, size: 4096 },
+      { offset: 0xe000, size: 4096 },
+    ]);
+  });
+
+  it('hardReset cleanly coordinates DTR and RTS signals to boot application', async () => {
+    const transport = new Wg1200Transport({
+      log: () => {},
+      error: () => {},
+    });
+
+    const signalCalls: { dtr: boolean; rts: boolean }[] = [];
+    (transport as any).transport = {
+      _DTR_state: true,
+      setSignals: vi.fn().mockImplementation((dtr: boolean, rts: boolean) => {
+        signalCalls.push({ dtr, rts });
+        return Promise.resolve();
+      }),
+    };
+
+    await transport.hardReset();
+    expect((transport as any).transport._DTR_state).toBe(false);
+    expect(signalCalls).toEqual([
+      { dtr: false, rts: true },  // EN low (reset)
+      { dtr: false, rts: false }, // EN high (run app)
+    ]);
+  });
+
+  it('patchTransportRead ignores leading noise bytes before 0xC0 (SLIP_END)', async () => {
+    const { Transport } = await import('esptool-js');
+    const mockDevice = {
+      setSignals: vi.fn(),
+      open: vi.fn(),
+      close: vi.fn(),
+    };
+    const t = new Transport(mockDevice as any);
+
+    // Provide buffer containing leading UART pin glitches (0xfc, 0x00) followed by valid SLIP packet [0xc0, 0x01, 0x02, 0xc0]
+    (t as any).buffer = new Uint8Array([0xfc, 0x00, 0xc0, 0x01, 0x02, 0xc0]);
+
+    const packet = await (t as any).read(1000);
+    expect(Array.from(packet)).toEqual([0x01, 0x02]);
+  });
 });
+
