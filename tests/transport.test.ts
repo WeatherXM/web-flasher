@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { Wg1200Transport } from '../src/lib/flasher/transport';
 import { LogSanitizer } from '../src/lib/flasher/serialLog';
+import { WG1200_CONSTANTS } from '../src/lib/flasher/constants';
 
 describe('transport & serialLog', () => {
   it('correctly normalizes 16MB string returned by esptool-js 0.7.0 detectFlashSize to 16,777,216 bytes', async () => {
@@ -119,6 +120,63 @@ describe('transport & serialLog', () => {
     expect(capturedOptions.fileArray[0].data).toBeInstanceOf(Uint8Array);
     expect(capturedOptions.fileArray[0].data).toBe(firmwareData);
     expect(capturedOptions.eraseAll).toBe(false);
+  });
+
+  it('restoreFullFlash invokes loader.writeFlash for 16MB image and verifies bootloader', async () => {
+    const transport = new Wg1200Transport({
+      log: () => {},
+      error: () => {},
+    });
+
+    let capturedOptions: any = null;
+    (transport as any).loader = {
+      writeFlash: vi.fn().mockImplementation((opts: any) => {
+        capturedOptions = opts;
+        return Promise.resolve();
+      }),
+      readFlash: vi.fn().mockImplementation((offset: number, size: number) => {
+        const buf = new Uint8Array(size);
+        if (offset === 0) {
+          buf[0] = 0xe9;
+        }
+        return Promise.resolve(buf);
+      }),
+    };
+
+    const fullData = new Uint8Array(WG1200_CONSTANTS.FLASH_SIZE_BYTES);
+    fullData[0] = 0xe9;
+
+    let progressReported = false;
+    await transport.restoreFullFlash(fullData, (_pct) => {
+      progressReported = true;
+    });
+
+    expect(capturedOptions).not.toBeNull();
+    expect(capturedOptions.fileArray[0].address).toBe(0);
+    expect(capturedOptions.fileArray[0].data).toBe(fullData);
+    expect(capturedOptions.flashSize).toBe('16MB');
+    expect(capturedOptions.compress).toBe(true);
+
+    // Call reportProgress callback to verify progress handling
+    capturedOptions.reportProgress(0, 50, 100);
+    expect(progressReported).toBe(true);
+  });
+
+  it('restoreFullFlash throws if verification fails', async () => {
+    const transport = new Wg1200Transport({
+      log: () => {},
+      error: () => {},
+    });
+
+    (transport as any).loader = {
+      writeFlash: vi.fn().mockResolvedValue(undefined),
+      readFlash: vi.fn().mockResolvedValue(new Uint8Array([0x00, 0x00, 0x00, 0x00])),
+    };
+
+    const fullData = new Uint8Array(WG1200_CONSTANTS.FLASH_SIZE_BYTES);
+    await expect(transport.restoreFullFlash(fullData)).rejects.toThrow(
+      /Flash restore verification failed/
+    );
   });
 
   it('chunks readRegion into 4096-byte slices for large reads', async () => {

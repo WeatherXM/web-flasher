@@ -61,6 +61,7 @@ import Footer from '../components/Footer.astro';
       import type { Wg1200Inspection } from '../lib/flasher/transport';
       import type { FirmwareManifest } from '../lib/flasher/manifest';
       import { WG1200_CONSTANTS } from '../lib/flasher/constants';
+      import { validateFullBackupImage } from '../lib/flasher/writeGuard';
 
       // DOM Elements
       const browserWarning = document.getElementById('browser-warning');
@@ -121,6 +122,8 @@ import Footer from '../components/Footer.astro';
       const toolsChevron = document.getElementById('tools-chevron');
       const btnToolInspect = document.getElementById('btn-tool-inspect');
       const btnToolBackup = document.getElementById('btn-tool-backup');
+      const btnToolRestore = document.getElementById('btn-tool-restore');
+      const fileRestoreBackup = document.getElementById('file-restore-backup') as HTMLInputElement | null;
       const btnToolRollback = document.getElementById('btn-tool-rollback');
 
       const modalPartitionInfo = document.getElementById('modal-partition-info');
@@ -136,6 +139,22 @@ import Footer from '../components/Footer.astro';
       const chkBackupAcknowledge = document.getElementById('chk-backup-acknowledge') as HTMLInputElement | null;
       const btnCancelBackup = document.getElementById('btn-cancel-backup');
       const btnConfirmBackup = document.getElementById('btn-confirm-backup');
+
+      const modalRestoreConfirm = document.getElementById('modal-restore-confirm');
+      const restoreModalTitle = document.getElementById('restore-modal-title');
+      const restoreModalSubtitle = document.getElementById('restore-modal-subtitle');
+      const restoreIconContainer = document.getElementById('restore-icon-container');
+      const restoreMetaFilename = document.getElementById('restore-meta-filename');
+      const restoreMetaSize = document.getElementById('restore-meta-size');
+      const restoreMetaSignature = document.getElementById('restore-meta-signature');
+      const restoreWarningContainer = document.getElementById('restore-warning-container');
+      const restoreInfoContainer = document.getElementById('restore-info-container');
+      const chkRestoreAcknowledge = document.getElementById('chk-restore-acknowledge') as HTMLInputElement | null;
+      const restoreAcknowledgeText = document.getElementById('restore-acknowledge-text');
+      const btnCancelRestore = document.getElementById('btn-cancel-restore');
+      const btnConfirmRestore = document.getElementById('btn-confirm-restore');
+
+      let pendingRestoreData: Uint8Array | null = null;
 
       const logTerminal = document.getElementById('log-terminal');
       const logCount = document.getElementById('log-count');
@@ -250,6 +269,124 @@ import Footer from '../components/Footer.astro';
         } finally {
           btnToolBackup?.removeAttribute('disabled');
           if (btnToolBackup) btnToolBackup.textContent = 'Download 16MB Backup';
+        }
+      });
+
+      btnToolRestore?.addEventListener('click', () => {
+        if (fileRestoreBackup) {
+          fileRestoreBackup.value = '';
+          fileRestoreBackup.click();
+        }
+      });
+
+      fileRestoreBackup?.addEventListener('change', async (e: Event) => {
+        const target = e.target as HTMLInputElement;
+        const file = target.files?.[0];
+        if (!file) return;
+
+        try {
+          const buffer = await file.arrayBuffer();
+          const data = new Uint8Array(buffer);
+
+          const validation = validateFullBackupImage(data);
+          if (!validation.valid) {
+            alert(`Cannot restore backup:\n${validation.error}`);
+            return;
+          }
+
+          pendingRestoreData = data;
+
+          if (restoreMetaFilename) restoreMetaFilename.textContent = file.name;
+          if (restoreMetaSize) restoreMetaSize.textContent = `${data.byteLength.toLocaleString()} bytes (16 MB)`;
+
+          if (chkRestoreAcknowledge) chkRestoreAcknowledge.checked = false;
+          btnConfirmRestore?.setAttribute('disabled', 'true');
+
+          if (validation.isSigned) {
+            if (restoreModalTitle) restoreModalTitle.textContent = 'Restore Full 16MB Backup';
+            if (restoreModalSubtitle) restoreModalSubtitle.textContent = 'Bit-for-bit flash restoration';
+            if (restoreIconContainer) {
+              restoreIconContainer.className = 'w-8 h-8 rounded-control flex items-center justify-center flex-shrink-0 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30';
+              restoreIconContainer.innerHTML = '<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>';
+            }
+            if (restoreMetaSignature) {
+              restoreMetaSignature.textContent = '✓ Secure Boot V2 Verified';
+              restoreMetaSignature.className = 'font-semibold text-emerald-400';
+            }
+            restoreWarningContainer?.classList.add('hidden');
+            restoreInfoContainer?.classList.remove('hidden');
+            if (restoreAcknowledgeText) {
+              restoreAcknowledgeText.textContent = 'I understand this will overwrite the entire 16MB flash memory.';
+            }
+            if (btnConfirmRestore) {
+              btnConfirmRestore.textContent = 'Restore 16MB Flash';
+              btnConfirmRestore.className = 'px-4 py-2 bg-wxm-beacon hover:bg-wxm-horizon disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold rounded-control text-sm transition-colors shadow-card cursor-pointer';
+            }
+          } else {
+            if (restoreModalTitle) restoreModalTitle.textContent = '⚠️ Unsigned Full Backup Detected';
+            if (restoreModalSubtitle) restoreModalSubtitle.textContent = 'Hardware Secure Boot Warning';
+            if (restoreIconContainer) {
+              restoreIconContainer.className = 'w-8 h-8 rounded-control flex items-center justify-center flex-shrink-0 bg-wxm-error/20 text-wxm-error border border-wxm-error/40';
+              restoreIconContainer.innerHTML = '<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>';
+            }
+            if (restoreMetaSignature) {
+              restoreMetaSignature.textContent = '⚠ Missing Secure Boot V2 Signature';
+              restoreMetaSignature.className = 'font-semibold text-wxm-error';
+            }
+            restoreWarningContainer?.classList.remove('hidden');
+            restoreInfoContainer?.classList.add('hidden');
+            if (restoreAcknowledgeText) {
+              restoreAcknowledgeText.textContent = 'I understand this backup is unsigned and the device will not boot unless signed with the matching key. Proceed anyway.';
+            }
+            if (btnConfirmRestore) {
+              btnConfirmRestore.textContent = 'Restore Unsigned Backup Anyway';
+              btnConfirmRestore.className = 'px-4 py-2 bg-wxm-error hover:bg-wxm-error/80 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold rounded-control text-sm transition-colors shadow-card cursor-pointer';
+            }
+          }
+
+          modalRestoreConfirm?.classList.remove('hidden');
+        } catch (err: any) {
+          alert(`Error reading backup file: ${err.message}`);
+        }
+      });
+
+      chkRestoreAcknowledge?.addEventListener('change', () => {
+        if (chkRestoreAcknowledge.checked) {
+          btnConfirmRestore?.removeAttribute('disabled');
+        } else {
+          btnConfirmRestore?.setAttribute('disabled', 'true');
+        }
+      });
+
+      btnCancelRestore?.addEventListener('click', () => {
+        modalRestoreConfirm?.classList.add('hidden');
+        pendingRestoreData = null;
+      });
+
+      btnConfirmRestore?.addEventListener('click', async () => {
+        if (!pendingRestoreData) return;
+        modalRestoreConfirm?.classList.add('hidden');
+        const dataToRestore = pendingRestoreData;
+        pendingRestoreData = null;
+
+        try {
+          btnToolRestore?.setAttribute('disabled', 'true');
+          if (btnToolRestore) btnToolRestore.textContent = 'Restoring 16MB… (0%)';
+          btnToolBackup?.setAttribute('disabled', 'true');
+
+          await controller.executeFullFlashRestore(dataToRestore, (pct) => {
+            if (btnToolRestore) btnToolRestore.textContent = `Restoring 16MB… (${pct}%)`;
+          });
+
+          alert('Full 16MB flash restore completed successfully! The device will now reboot.');
+          await controller.hardReset();
+          await controller.disconnect();
+        } catch (e: any) {
+          alert(`Full flash restore failed: ${e.message}`);
+        } finally {
+          btnToolRestore?.removeAttribute('disabled');
+          if (btnToolRestore) btnToolRestore.textContent = 'Restore Full Backup';
+          btnToolBackup?.removeAttribute('disabled');
         }
       });
 

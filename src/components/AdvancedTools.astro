@@ -83,25 +83,34 @@
           </button>
         </div>
 
-        <!-- Tool 2: Full 16MB Backup -->
+        <!-- Tool 2: Full 16MB Backup & Restore -->
         <div class="bg-wxm-midnight/60 p-4 rounded-control border border-wxm-cloud/10 flex flex-col justify-between">
           <div>
             <div class="text-wxm-live font-bold flex items-center space-x-2">
               <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
               </svg>
-              <span>Full 16MB Backup</span>
+              <span>Full 16MB Backup & Restore</span>
             </div>
             <p class="text-xs text-wxm-mist mt-2 leading-relaxed">
-              Dumps the complete 16 MB flash chip to a binary file and validates header signatures. Contains sensitive credentials.
+              Dumps or restores the complete 16 MB flash chip. Contains bootloader, partition table, factory recovery, and device credentials.
             </p>
           </div>
-          <button id="btn-tool-backup" class="mt-4 w-full py-2.5 px-3 bg-wxm-storm/80 hover:bg-wxm-storm border border-wxm-cloud/25 text-white rounded-control text-xs font-bold transition-all shadow-card cursor-pointer flex items-center justify-center space-x-2 active:scale-98">
-            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
-            </svg>
-            <span>Download 16MB Backup</span>
-          </button>
+          <div class="mt-4 space-y-2">
+            <button id="btn-tool-backup" class="w-full py-2.5 px-3 bg-wxm-storm/80 hover:bg-wxm-storm border border-wxm-cloud/25 text-white rounded-control text-xs font-bold transition-all shadow-card cursor-pointer flex items-center justify-center space-x-2 active:scale-98">
+              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+              </svg>
+              <span>Download 16MB Backup</span>
+            </button>
+            <button id="btn-tool-restore" class="w-full py-2.5 px-3 bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 hover:text-white rounded-control text-xs font-bold transition-all shadow-card cursor-pointer flex items-center justify-center space-x-2 active:scale-98">
+              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m4-8l4-4m0 0l4 4m-4-4v12" />
+              </svg>
+              <span>Restore Full Backup</span>
+            </button>
+            <input type="file" id="file-restore-backup" accept=".bin" class="hidden" />
+          </div>
         </div>
 
         <!-- Tool 3: Factory Rollback -->
@@ -207,6 +216,86 @@
         </button>
         <button id="btn-confirm-rollback" class="px-4 py-2 bg-wxm-error hover:bg-wxm-error/80 text-white rounded-control text-sm font-bold transition-colors shadow-card cursor-pointer">
           Execute Rollback
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 16MB Restore Modal (Signed & Unsigned Handling) -->
+  <div id="modal-restore-confirm" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-wxm-ink/80 backdrop-blur-sm hidden">
+    <div class="bg-wxm-midnight border border-wxm-cloud/25 rounded-modal max-w-lg w-full p-6 shadow-2xl space-y-4">
+      <!-- Modal Header -->
+      <div id="restore-modal-header" class="flex items-center space-x-3 text-white">
+        <div id="restore-icon-container" class="w-8 h-8 rounded-control flex items-center justify-center flex-shrink-0 bg-amber-500/20 text-amber-400 border border-amber-500/30">
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m4-8l4-4m0 0l4 4m-4-4v12" />
+          </svg>
+        </div>
+        <div>
+          <h3 id="restore-modal-title" class="text-lg font-bold text-white">Restore Full 16MB Backup</h3>
+          <p id="restore-modal-subtitle" class="text-xs text-wxm-mist">Bit-for-bit flash restoration</p>
+        </div>
+      </div>
+
+      <!-- File Metadata Card -->
+      <div class="bg-wxm-abyss/80 border border-wxm-cloud/15 p-3.5 rounded-control space-y-2 text-xs font-mono text-wxm-cloud">
+        <div class="flex justify-between items-center">
+          <span class="text-wxm-mist">File:</span>
+          <span id="restore-meta-filename" class="text-white font-semibold truncate max-w-[280px]">backup.bin</span>
+        </div>
+        <div class="flex justify-between items-center">
+          <span class="text-wxm-mist">Size:</span>
+          <span id="restore-meta-size" class="text-emerald-400">16,777,216 bytes (16 MB)</span>
+        </div>
+        <div class="flex justify-between items-center">
+          <span class="text-wxm-mist">Signature:</span>
+          <span id="restore-meta-signature" class="font-semibold">Checking…</span>
+        </div>
+      </div>
+
+      <!-- Warning Container (shown if unsigned) -->
+      <div id="restore-warning-container" class="p-3.5 bg-wxm-error/15 border border-wxm-error/40 rounded-control text-xs space-y-2 hidden">
+        <div class="flex items-center space-x-2 font-bold text-wxm-error">
+          <svg class="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+          </svg>
+          <span>Hardware Secure Boot Warning: Unsigned Image</span>
+        </div>
+        <p class="text-wxm-cloud leading-relaxed">
+          This backup file is <strong class="text-white">not signed</strong> with a Secure Boot V2 signature block.
+          Because this WG1200 has <strong class="text-white">Hardware Secure Boot enabled</strong>, the ESP32-S3 ROM bootloader will <span class="text-wxm-error font-semibold">refuse to boot</span> this firmware on restart.
+        </p>
+        <p class="text-wxm-mist leading-relaxed text-[11px]">
+          The hardware will halt at bootloader verification until a validly signed backup or official WeatherXM / Meshtastic firmware is restored.
+        </p>
+      </div>
+
+      <!-- Normal Info (shown if signed) -->
+      <div id="restore-info-container" class="text-xs text-wxm-cloud leading-relaxed space-y-2">
+        <p>
+          Restoring this backup will overwrite the entire 16 MB flash memory, replacing the bootloader, partition table, recovery factory slot, OTA application slots, and stored Wi-Fi / identity credentials.
+        </p>
+        <div class="p-2.5 bg-emerald-500/10 border border-emerald-500/30 rounded-control text-emerald-300 text-[11px] flex items-center space-x-2">
+          <svg class="w-4 h-4 flex-shrink-0 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+          </svg>
+          <span>Authentic ESP32-S3 Secure Boot V2 signature block verified.</span>
+        </div>
+      </div>
+
+      <!-- Acknowledgment Checkbox -->
+      <label class="flex items-start space-x-2.5 text-xs text-wxm-cloud cursor-pointer pt-2">
+        <input type="checkbox" id="chk-restore-acknowledge" class="mt-0.5 rounded-control border-wxm-cloud/30 bg-wxm-abyss text-wxm-beacon focus:ring-0 focus:outline-none" />
+        <span id="restore-acknowledge-text">I understand this will overwrite the entire 16MB flash memory.</span>
+      </label>
+
+      <!-- Action Buttons -->
+      <div class="pt-2 flex justify-end space-x-3">
+        <button id="btn-cancel-restore" class="px-4 py-2 bg-wxm-storm/60 hover:bg-wxm-storm border border-wxm-cloud/20 text-wxm-cloud rounded-control text-sm font-medium transition-colors cursor-pointer">
+          Cancel
+        </button>
+        <button id="btn-confirm-restore" disabled class="px-4 py-2 bg-amber-500 hover:bg-amber-400 disabled:opacity-40 disabled:cursor-not-allowed text-wxm-abyss font-bold rounded-control text-sm transition-colors shadow-card cursor-pointer">
+          Restore 16MB Flash
         </button>
       </div>
     </div>
