@@ -1,0 +1,64 @@
+---
+---
+
+<div id="device-status-card" class="hidden max-w-4xl mx-auto px-4 sm:px-6 mb-8">
+  <div class="rounded-2xl border border-wxm-border bg-wxm-card/90 backdrop-blur-md p-5 sm:p-6 shadow-xl">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-wxm-border/60">
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+          </svg>
+        </div>
+        <div>
+          <div class="flex items-center space-x-2">
+            <h2 class="text-base font-bold text-white">WeatherXM WG1200 Gateway</h2>
+            <span class="px-2 py-0.5 text-[11px] font-semibold rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400">
+              Verified & Safe
+            </span>
+          </div>
+          <p class="text-xs text-wxm-muted">Hardware and identity verified over Web Serial</p>
+        </div>
+      </div>
+
+      <button
+        id="btn-disconnect"
+        type="button"
+        class="self-start sm:self-auto px-3.5 py-1.5 rounded-lg text-xs font-medium text-wxm-muted hover:text-white border border-wxm-border bg-wxm-surface hover:bg-slate-700 transition-colors cursor-pointer"
+      >
+        Disconnect
+      </button>
+    </div>
+
+    <!-- Parameter Badges -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-5">
+      <div class="p-3 rounded-xl bg-wxm-surface/60 border border-wxm-border/50">
+        <span class="text-[11px] font-medium text-wxm-muted block">Microcontroller</span>
+        <span id="dev-chip" class="text-sm font-semibold text-white mt-0.5 block">ESP32-S3</span>
+      </div>
+
+      <div class="p-3 rounded-xl bg-wxm-surface/60 border border-wxm-border/50">
+        <span class="text-[11px] font-medium text-wxm-muted block">Flash Capacity</span>
+        <span id="dev-flash" class="text-sm font-semibold text-white mt-0.5 block">16 MB</span>
+      </div>
+
+      <div class="p-3 rounded-xl bg-wxm-surface/60 border border-wxm-border/50">
+        <span class="text-[11px] font-medium text-wxm-muted block">Active Slot</span>
+        <span id="dev-slot" class="text-sm font-semibold text-sky-400 mt-0.5 block font-mono">OTA_0</span>
+      </div>
+
+      <div class="p-3 rounded-xl bg-wxm-surface/60 border border-wxm-border/50">
+        <span class="text-[11px] font-medium text-wxm-muted block">Identity Certificate</span>
+        <span id="dev-cert" class="text-sm font-semibold text-emerald-400 mt-0.5 block font-mono">Verified</span>
+      </div>
+    </div>
+
+    <div class="mt-4 p-3.5 rounded-xl bg-wxm-surface/40 border border-wxm-border/40 flex items-center justify-between">
+      <div class="flex items-center space-x-2">
+        <span class="text-xs text-wxm-muted">Currently Running:</span>
+        <span id="dev-running-fw" class="text-xs font-semibold text-white">WeatherXM Gateway</span>
+      </div>
+      <span class="text-[11px] text-wxm-muted">Next flash target: <span id="dev-target-slot" class="font-mono text-wxm-accent">OTA_1</span></span>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,29 @@
+{
+  "schema": 1,
+  "hardware": "WG1200",
+  "chip": "ESP32-S3",
+  "flash_bytes": 16777216,
+  "app_partition_bytes": 4194304,
+  "firmwares": {
+    "weatherxm": {
+      "name": "WeatherXM",
+      "version": "0.8.25",
+      "file": "/firmware/weatherxm/wg1200-0.8.25-signed.bin",
+      "bytes": 3543040,
+      "sha256": "3f1533dfd77fa8d8f469ca37346c5fb7432d70b7a580d16094f31790c98b7849",
+      "source_repo": "WeatherXM/WG1400",
+      "git_commit": "0c2c072",
+      "secure_boot_v2": true
+    },
+    "meshtastic": {
+      "name": "Meshtastic",
+      "version": "2.8.1-wxm",
+      "file": "/firmware/meshtastic/wg1200-2.8.1-wxm-signed.bin",
+      "bytes": 2387968,
+      "sha256": "88f761b29228d867e3e6b7fde64894c2885dae7e2144a52642640b62d63883f5",
+      "source_repo": "WeatherXM/Meshtastic-firmware",
+      "git_commit": "6201f02",
+      "secure_boot_v2": true
+    }
+  }
+}

@@ -1,0 +1,345 @@
+---
+import Header from '../components/Header.astro';
+import BrowserNotice from '../components/BrowserNotice.astro';
+import ConnectPanel from '../components/ConnectPanel.astro';
+import DeviceStatus from '../components/DeviceStatus.astro';
+import FirmwareCards from '../components/FirmwareCards.astro';
+import ConfirmationModal from '../components/ConfirmationModal.astro';
+import FlashProgress from '../components/FlashProgress.astro';
+import PostFlashInstructions from '../components/PostFlashInstructions.astro';
+import TechnicalLog from '../components/TechnicalLog.astro';
+import Footer from '../components/Footer.astro';
+---
+
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="generator" content={Astro.generator} />
+    <title>WG1200 Firmware Switcher — WeatherXM & Meshtastic</title>
+    <meta
+      name="description"
+      content="Switch your WeatherXM D1 / WG1200 gateway safely between WeatherXM and Meshtastic firmware over USB in your browser. Device credentials remain intact."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+
+  <body class="min-h-screen bg-wxm-dark text-wxm-text font-sans antialiased flex flex-col justify-between selection:bg-wxm-primary selection:text-white">
+    <div class="fixed inset-0 bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(2,132,199,0.15),rgba(255,255,255,0))] pointer-events-none"></div>
+
+    <div class="relative z-10 flex-1 flex flex-col">
+      <Header />
+      <BrowserNotice />
+
+      <main class="flex-1 py-6">
+        <ConnectPanel />
+        <DeviceStatus />
+        <FirmwareCards />
+        <FlashProgress />
+        <PostFlashInstructions />
+        <TechnicalLog />
+      </main>
+
+      <Footer />
+    </div>
+
+    <ConfirmationModal />
+
+    <script>
+      import { FlasherController } from '../lib/flasher/flasherController';
+      import type { StateContext } from '../lib/flasher/state';
+      import type { Wg1200Inspection } from '../lib/flasher/transport';
+      import type { FirmwareManifest } from '../lib/flasher/manifest';
+
+      // DOM Elements
+      const browserWarning = document.getElementById('browser-warning');
+      const panelConnect = document.getElementById('panel-connect');
+      const btnConnect = document.getElementById('btn-connect');
+      const btnConnectManual = document.getElementById('btn-connect-manual');
+      const btnDisconnect = document.getElementById('btn-disconnect');
+
+      const deviceStatusCard = document.getElementById('device-status-card');
+      const devChip = document.getElementById('dev-chip');
+      const devFlash = document.getElementById('dev-flash');
+      const devSlot = document.getElementById('dev-slot');
+      const devCert = document.getElementById('dev-cert');
+      const devRunningFw = document.getElementById('dev-running-fw');
+      const devTargetSlot = document.getElementById('dev-target-slot');
+
+      const firmwareSelectionSection = document.getElementById('firmware-selection-section');
+      const btnFlashWxm = document.getElementById('btn-flash-weatherxm');
+      const btnFlashMesh = document.getElementById('btn-flash-meshtastic');
+      const badgeWxmStatus = document.getElementById('badge-wxm-status');
+      const badgeMeshStatus = document.getElementById('badge-mesh-status');
+      const wxmVersionText = document.getElementById('wxm-version');
+      const meshVersionText = document.getElementById('mesh-version');
+
+      const modalConfirm = document.getElementById('modal-confirm');
+      const modalFwName = document.getElementById('modal-fw-name');
+      const modalFwVersion = document.getElementById('modal-fw-version');
+      const modalTargetSlot = document.getElementById('modal-target-slot');
+      const btnModalCancel = document.getElementById('btn-modal-cancel');
+      const btnModalConfirm = document.getElementById('btn-modal-confirm');
+
+      const flashProgressSection = document.getElementById('flash-progress-section');
+      const progressTitle = document.getElementById('progress-title');
+      const progressStatus = document.getElementById('progress-status');
+      const progressBarFill = document.getElementById('progress-bar-fill');
+      const flashErrorBox = document.getElementById('flash-error-box');
+      const flashErrorMsg = document.getElementById('flash-error-msg');
+      const btnRetryFlash = document.getElementById('btn-retry-flash');
+
+      const postFlashSection = document.getElementById('post-flash-section');
+      const instructionsWxm = document.getElementById('instructions-wxm');
+      const instructionsMesh = document.getElementById('instructions-mesh');
+      const btnPostFlashDone = document.getElementById('btn-post-flash-done');
+
+      const logTerminal = document.getElementById('log-terminal');
+      const logCount = document.getElementById('log-count');
+      const btnToggleLog = document.getElementById('btn-toggle-log');
+      const logContentWrapper = document.getElementById('log-content-wrapper');
+      const logChevron = document.getElementById('log-chevron');
+      const btnClearLog = document.getElementById('btn-clear-log');
+      const btnDownloadLog = document.getElementById('btn-download-log');
+
+      let pendingTargetFw: 'weatherxm' | 'meshtastic' | null = null;
+      let totalLogEvents = 0;
+
+      // Initialize Controller
+      const controller = new FlasherController({
+        onStateChange: handleStateChange,
+        onLog: handleLog,
+        onInspection: handleInspection,
+        onManifest: handleManifest,
+      });
+
+      controller.initialize();
+
+      // Event Listeners
+      btnConnect?.addEventListener('click', () => controller.connectDevice(true));
+      btnConnectManual?.addEventListener('click', () => controller.connectDevice(false));
+      btnDisconnect?.addEventListener('click', () => controller.disconnect());
+
+      btnFlashWxm?.addEventListener('click', () => openConfirmModal('weatherxm'));
+      btnFlashMesh?.addEventListener('click', () => openConfirmModal('meshtastic'));
+
+      btnModalCancel?.addEventListener('click', closeConfirmModal);
+      btnModalConfirm?.addEventListener('click', () => {
+        closeConfirmModal();
+        if (pendingTargetFw) {
+          controller.flashFirmware(pendingTargetFw);
+        }
+      });
+
+      btnRetryFlash?.addEventListener('click', () => {
+        flashProgressSection?.classList.add('hidden');
+        if (controller.inspectionData) {
+          deviceStatusCard?.classList.remove('hidden');
+          firmwareSelectionSection?.classList.remove('hidden');
+        } else {
+          panelConnect?.classList.remove('hidden');
+        }
+      });
+
+      btnPostFlashDone?.addEventListener('click', () => {
+        postFlashSection?.classList.add('hidden');
+        panelConnect?.classList.remove('hidden');
+      });
+
+      btnToggleLog?.addEventListener('click', () => {
+        const isHidden = logContentWrapper?.classList.toggle('hidden');
+        if (logChevron) {
+          logChevron.style.transform = isHidden ? 'rotate(-90deg)' : 'rotate(0deg)';
+        }
+      });
+
+      btnClearLog?.addEventListener('click', () => {
+        if (logTerminal) logTerminal.innerHTML = '';
+        totalLogEvents = 0;
+        if (logCount) logCount.textContent = '0 events';
+      });
+
+      btnDownloadLog?.addEventListener('click', () => {
+        controller.downloadLog();
+      });
+
+      function handleStateChange(ctx: StateContext) {
+        if (ctx.state === 'unsupported') {
+          browserWarning?.classList.remove('hidden');
+          btnConnect?.setAttribute('disabled', 'true');
+          btnConnectManual?.setAttribute('disabled', 'true');
+        }
+
+        if (ctx.state === 'idle') {
+          panelConnect?.classList.remove('hidden');
+          deviceStatusCard?.classList.add('hidden');
+          firmwareSelectionSection?.classList.add('hidden');
+          flashProgressSection?.classList.add('hidden');
+          postFlashSection?.classList.add('hidden');
+        } else if (ctx.state === 'ready') {
+          panelConnect?.classList.add('hidden');
+          deviceStatusCard?.classList.remove('hidden');
+          firmwareSelectionSection?.classList.remove('hidden');
+          flashProgressSection?.classList.add('hidden');
+          postFlashSection?.classList.add('hidden');
+        } else if (
+          ctx.state === 'downloading' ||
+          ctx.state === 'flashing' ||
+          ctx.state === 'verifying-flash' ||
+          ctx.state === 'verifying-protected-data' ||
+          ctx.state === 'rebooting'
+        ) {
+          panelConnect?.classList.add('hidden');
+          deviceStatusCard?.classList.add('hidden');
+          firmwareSelectionSection?.classList.add('hidden');
+          flashProgressSection?.classList.remove('hidden');
+          postFlashSection?.classList.add('hidden');
+          flashErrorBox?.classList.add('hidden');
+
+          if (progressTitle) progressTitle.textContent = getStageTitle(ctx.state);
+          if (progressStatus) progressStatus.textContent = ctx.statusMessage;
+          if (progressBarFill) progressBarFill.style.width = `${ctx.progressPercent}%`;
+
+          updatePipelineSteps(ctx.state);
+        } else if (ctx.state === 'success') {
+          flashProgressSection?.classList.add('hidden');
+          postFlashSection?.classList.remove('hidden');
+
+          if (pendingTargetFw === 'weatherxm') {
+            instructionsWxm?.classList.remove('hidden');
+            instructionsMesh?.classList.add('hidden');
+          } else {
+            instructionsWxm?.classList.add('hidden');
+            instructionsMesh?.classList.remove('hidden');
+          }
+        } else if (ctx.state === 'error') {
+          flashProgressSection?.classList.remove('hidden');
+          flashErrorBox?.classList.remove('hidden');
+          if (flashErrorMsg) flashErrorMsg.textContent = ctx.errorMessage ?? 'Operation failed';
+        }
+      }
+
+      function handleLog(line: string) {
+        if (!logTerminal) return;
+        const entry = document.createElement('div');
+        if (line.includes('[ERROR]') || line.includes('[FATAL ERROR]')) {
+          entry.className = 'text-red-400 font-semibold';
+        } else if (line.includes('verified') || line.includes('PASSED') || line.includes('SUCCESS')) {
+          entry.className = 'text-emerald-400';
+        } else if (line.includes('[BOOT]')) {
+          entry.className = 'text-sky-300';
+        } else {
+          entry.className = 'text-slate-300';
+        }
+        entry.textContent = line;
+        logTerminal.appendChild(entry);
+        logTerminal.scrollTop = logTerminal.scrollHeight;
+
+        totalLogEvents++;
+        if (logCount) logCount.textContent = `${totalLogEvents} events`;
+      }
+
+      function handleInspection(data: Wg1200Inspection | null) {
+        if (!data) return;
+        if (devChip) devChip.textContent = data.chipName;
+        if (devFlash) devFlash.textContent = `${data.flashSizeMb} MB`;
+        if (devSlot) devSlot.textContent = data.otadata.activeSlot.toUpperCase();
+        if (devCert) devCert.textContent = data.secureCert.fingerprint;
+        if (devRunningFw) {
+          devRunningFw.textContent = data.currentFirmware?.displayTitle ?? 'WeatherXM Gateway';
+        }
+        if (devTargetSlot) {
+          devTargetSlot.textContent = data.otadata.targetSlot.toUpperCase();
+        }
+
+        const isWxmActive = data.currentFirmware?.firmwareType === 'weatherxm';
+        const isMeshActive = data.currentFirmware?.firmwareType === 'meshtastic';
+
+        if (badgeWxmStatus) {
+          badgeWxmStatus.textContent = isWxmActive ? 'Active on Device' : 'Ready to Switch';
+          badgeWxmStatus.className = isWxmActive
+            ? 'px-2.5 py-1 text-xs font-semibold rounded-full bg-sky-500/20 text-sky-400 border border-sky-500/40'
+            : 'px-2.5 py-1 text-xs font-semibold rounded-full bg-slate-800 text-slate-300 border border-slate-700';
+        }
+
+        if (badgeMeshStatus) {
+          badgeMeshStatus.textContent = isMeshActive ? 'Active on Device' : 'Ready to Switch';
+          badgeMeshStatus.className = isMeshActive
+            ? 'px-2.5 py-1 text-xs font-semibold rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
+            : 'px-2.5 py-1 text-xs font-semibold rounded-full bg-slate-800 text-slate-300 border border-slate-700';
+        }
+      }
+
+      function handleManifest(manifest: FirmwareManifest | null) {
+        if (!manifest) return;
+        if (wxmVersionText) wxmVersionText.textContent = `v${manifest.firmwares.weatherxm.version}`;
+        if (meshVersionText) meshVersionText.textContent = `v${manifest.firmwares.meshtastic.version}`;
+      }
+
+      function openConfirmModal(targetFw: 'weatherxm' | 'meshtastic') {
+        pendingTargetFw = targetFw;
+        const manifest = controller.manifestData;
+        const inspection = controller.inspectionData;
+        if (!manifest || !inspection) return;
+
+        const fw = manifest.firmwares[targetFw];
+        if (modalFwName) modalFwName.textContent = fw.name;
+        if (modalFwVersion) modalFwVersion.textContent = `v${fw.version}`;
+        if (modalTargetSlot) {
+          modalTargetSlot.textContent = `${inspection.otadata.targetSlot.toUpperCase()} (0x${inspection.otadata.targetOffset.toString(16)})`;
+        }
+        modalConfirm?.classList.remove('hidden');
+      }
+
+      function closeConfirmModal() {
+        modalConfirm?.classList.add('hidden');
+      }
+
+      function getStageTitle(state: string): string {
+        switch (state) {
+          case 'downloading':
+            return 'Downloading Firmware…';
+          case 'flashing':
+            return 'Writing Application to Flash…';
+          case 'verifying-flash':
+            return 'Verifying Hardware MD5…';
+          case 'verifying-protected-data':
+            return 'Verifying Protected Partitions…';
+          case 'rebooting':
+            return 'Restarting Device & Verifying Boot…';
+          default:
+            return 'Processing…';
+        }
+      }
+
+      function updatePipelineSteps(state: string) {
+        const steps = ['download', 'snapshot', 'write', 'md5', 'otadata', 'reboot'];
+        let activeIdx = 0;
+        if (state === 'downloading') activeIdx = 0;
+        else if (state === 'flashing') activeIdx = 2;
+        else if (state === 'verifying-flash') activeIdx = 3;
+        else if (state === 'verifying-protected-data') activeIdx = 4;
+        else if (state === 'rebooting') activeIdx = 5;
+
+        steps.forEach((name, idx) => {
+          const el = document.getElementById(`step-${name}`);
+          if (!el) return;
+          if (idx < activeIdx) {
+            el.className = 'flex items-center space-x-2 text-emerald-400 font-medium';
+          } else if (idx === activeIdx) {
+            el.className = 'flex items-center space-x-2 text-white font-bold animate-pulse';
+          } else {
+            el.className = 'flex items-center space-x-2 text-wxm-muted';
+          }
+        });
+      }
+    </script>
+  </body>
+</html>

@@ -1,0 +1,32 @@
+{
+  "name": "wg1200-web-flasher",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "description": "WeatherXM WG1200 / D1 Firmware Switcher between WeatherXM and Meshtastic",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "check": "astro check",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "esptool-js": "0.5.4"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.4",
+    "@astrojs/tailwind": "^5.1.5",
+    "@types/node": "^22.13.9",
+    "astro": "^5.4.1",
+    "lucide": "^0.477.0",
+    "lucide-static": "^0.477.0",
+    "spark-md5": "3.0.2",
+    "@types/spark-md5": "3.0.4",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.8.2",
+    "vitest": "^3.0.7"
+  }
+}
