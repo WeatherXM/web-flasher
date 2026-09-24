@@ -1,0 +1,70 @@
+---
+---
+
+<div id="modal-confirm" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-wxm-ink/80 backdrop-blur-sm">
+  <div class="max-w-lg w-full rounded-modal border border-wxm-cloud/20 bg-wxm-midnight p-6 shadow-2xl relative text-left">
+    <div class="flex items-center space-x-3 mb-4">
+      <div class="w-10 h-10 rounded-control bg-wxm-beacon/15 border border-wxm-beacon/30 flex items-center justify-center text-wxm-zenith">
+        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+        </svg>
+      </div>
+      <div>
+        <h3 class="text-lg font-bold text-white">Confirm Firmware Switch</h3>
+        <p class="text-xs text-wxm-mist">Verify target details before flashing</p>
+      </div>
+    </div>
+
+    <div class="space-y-3 py-3 border-y border-wxm-cloud/15 text-xs">
+      <div class="flex justify-between items-center py-1">
+        <span class="text-wxm-mist">Target Firmware:</span>
+        <span id="modal-fw-name" class="font-bold text-white">WeatherXM Gateway</span>
+      </div>
+      <div class="flex justify-between items-center py-1">
+        <span class="text-wxm-mist">Firmware Version:</span>
+        <span id="modal-fw-version" class="font-mono text-white">v0.8.27</span>
+      </div>
+      <div class="flex justify-between items-center py-1">
+        <span class="text-wxm-mist">Binary Image:</span>
+        <span id="modal-fw-file" class="font-mono text-emerald-400 text-[11px] truncate max-w-[240px]">fw_release_0.8.27-gceee14f-signed.bin</span>
+      </div>
+      <div class="flex justify-between items-center py-1">
+        <span class="text-wxm-mist">Image Size:</span>
+        <span id="modal-fw-size" class="font-mono text-white text-[11px]">3.38 MB</span>
+      </div>
+      <div class="flex justify-between items-center py-1">
+        <span class="text-wxm-mist">Destination Flash Slot:</span>
+        <span id="modal-target-slot" class="font-mono text-wxm-zenith">OTA_0 (0x420000)</span>
+      </div>
+      <div class="flex justify-between items-center py-1">
+        <span class="text-wxm-mist">Factory Partition (0x020000):</span>
+        <span class="font-semibold text-wxm-live">Untouched & Safe</span>
+      </div>
+      <div class="flex justify-between items-center py-1">
+        <span class="text-wxm-mist">WeatherXM Device Credentials:</span>
+        <span class="font-semibold text-wxm-live">Protected & Untouched</span>
+      </div>
+    </div>
+
+    <p class="text-xs text-wxm-mist mt-4 leading-relaxed">
+      Please keep your WG1200 connected and do not unplug the USB cable during the flashing process.
+    </p>
+
+    <div class="mt-6 flex space-x-3 justify-end">
+      <button
+        id="btn-modal-cancel"
+        type="button"
+        class="px-4 py-2.5 rounded-control text-xs font-semibold text-wxm-cloud hover:text-white border border-wxm-cloud/20 bg-wxm-storm/50 hover:bg-wxm-storm transition-colors cursor-pointer"
+      >
+        Cancel
+      </button>
+      <button
+        id="btn-modal-confirm"
+        type="button"
+        class="px-5 py-2.5 rounded-control text-xs font-bold text-white bg-wxm-beacon hover:bg-wxm-horizon shadow-card shadow-wxm-beacon/25 transition-all cursor-pointer"
+      >
+        Confirm and Flash
+      </button>
+    </div>
+  </div>
+</div>

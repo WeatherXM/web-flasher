@@ -1,0 +1,935 @@
+---
+import '../styles/global.css';
+import Header from '../components/Header.astro';
+import BrowserNotice from '../components/BrowserNotice.astro';
+import ConnectPanel from '../components/ConnectPanel.astro';
+import DeviceStatus from '../components/DeviceStatus.astro';
+import FirmwareCards from '../components/FirmwareCards.astro';
+import ConfirmationModal from '../components/ConfirmationModal.astro';
+import FlashProgress from '../components/FlashProgress.astro';
+import PostFlashInstructions from '../components/PostFlashInstructions.astro';
+import AdvancedTools from '../components/AdvancedTools.astro';
+import TechnicalLog from '../components/TechnicalLog.astro';
+import SafetyProtections from '../components/SafetyProtections.astro';
+import Footer from '../components/Footer.astro';
+---
+
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/brand/logomark-color.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <meta name="generator" content={Astro.generator} />
+    <title>WG1200 Firmware Web Flasher — WeatherXM Tri-Protocol & Meshtastic</title>
+    <meta
+      name="description"
+      content="Switch between a WeatherXM tri-protocol gateway and a full Meshtastic node compatible with WeatherXM telemetry over USB. Protected device credentials remain intact."
+    />
+  </head>
+
+  <body class="min-h-screen bg-dark-atmospheric bg-dot-grid text-white font-sans antialiased flex flex-col justify-between selection:bg-wxm-beacon selection:text-white">
+    <div class="relative z-10 flex-1 flex flex-col">
+      <Header />
+      <BrowserNotice />
+
+      <main class="flex-1 py-4 lg:py-6">
+        <ConnectPanel />
+        <DeviceStatus />
+        <FirmwareCards />
+        <FlashProgress />
+        <PostFlashInstructions />
+        <AdvancedTools />
+        <div id="console-home"><TechnicalLog /></div>
+      </main>
+
+      <SafetyProtections />
+      <Footer />
+    </div>
+
+    <ConfirmationModal />
+
+    <script>
+      import { FlasherController } from '../lib/flasher/flasherController';
+      import type { StateContext } from '../lib/flasher/state';
+      import type { Wg1200Inspection } from '../lib/flasher/transport';
+      import type { FirmwareManifest } from '../lib/flasher/manifest';
+      import { WG1200_CONSTANTS } from '../lib/flasher/constants';
+      import { validateFullBackupImage } from '../lib/flasher/writeGuard';
+
+      // DOM Elements
+      const browserWarning = document.getElementById('browser-warning');
+      const panelConnect = document.getElementById('panel-connect');
+      const btnConnect = document.getElementById('btn-connect');
+      const btnConnectManual = document.getElementById('btn-connect-manual');
+      const btnDisconnect = document.getElementById('btn-disconnect');
+      const connectErrorBanner = document.getElementById('connect-error-banner');
+      const connectErrorDetail = document.getElementById('connect-error-detail');
+
+      const deviceStatusCard = document.getElementById('device-status-card');
+      const devChip = document.getElementById('dev-chip');
+      const devFlash = document.getElementById('dev-flash');
+      const devSlot = document.getElementById('dev-slot');
+      const devCert = document.getElementById('dev-cert');
+      const devRunningFw = document.getElementById('dev-running-fw');
+      const devTargetSlot = document.getElementById('dev-target-slot');
+
+      const firmwareSelectionSection = document.getElementById('firmware-selection-section');
+      const btnFlashWxm = document.getElementById('btn-flash-weatherxm');
+      const btnFlashMesh = document.getElementById('btn-flash-meshtastic');
+      const btnFlashWxmLabel = document.getElementById('btn-flash-wxm-label');
+      const btnFlashMeshLabel = document.getElementById('btn-flash-mesh-label');
+      const badgeWxmStatus = document.getElementById('badge-wxm-status');
+      const badgeMeshStatus = document.getElementById('badge-mesh-status');
+      const wxmVersionText = document.getElementById('wxm-version');
+      const meshVersionText = document.getElementById('mesh-version');
+
+      const modalConfirm = document.getElementById('modal-confirm');
+      const modalFwName = document.getElementById('modal-fw-name');
+      const modalFwVersion = document.getElementById('modal-fw-version');
+      const modalTargetSlot = document.getElementById('modal-target-slot');
+      const btnModalCancel = document.getElementById('btn-modal-cancel');
+      const btnModalConfirm = document.getElementById('btn-modal-confirm');
+
+      const flashProgressSection = document.getElementById('flash-progress-section');
+      const progressTitle = document.getElementById('progress-title');
+      const progressStatus = document.getElementById('progress-status');
+      const progressBarFill = document.getElementById('progress-bar-fill');
+      const flashErrorBox = document.getElementById('flash-error-box');
+      const flashErrorMsg = document.getElementById('flash-error-msg');
+      const btnRetryFlash = document.getElementById('btn-retry-flash');
+
+      const postFlashSection = document.getElementById('post-flash-section');
+      const instructionsWxm = document.getElementById('instructions-wxm');
+      const instructionsMesh = document.getElementById('instructions-mesh');
+      const btnPostFlashDone = document.getElementById('btn-post-flash-done');
+
+      // Advanced Tools Elements
+      const recoveryAlertCard = document.getElementById('recovery-alert-card');
+      const btnRecoveryWxm = document.getElementById('btn-recovery-wxm');
+      const btnRecoveryMesh = document.getElementById('btn-recovery-mesh');
+      const btnRecoveryRollback = document.getElementById('btn-recovery-rollback');
+
+      const btnToggleTools = document.getElementById('btn-toggle-tools');
+      const toolsToggleLabel = document.getElementById('tools-toggle-label');
+      const toolsContentWrapper = document.getElementById('tools-content-wrapper');
+      const toolsChevron = document.getElementById('tools-chevron');
+      const btnToolInspect = document.getElementById('btn-tool-inspect');
+      const btnToolBackup = document.getElementById('btn-tool-backup');
+      const btnToolRestore = document.getElementById('btn-tool-restore');
+      const fileRestoreBackup = document.getElementById('file-restore-backup') as HTMLInputElement | null;
+      const btnToolRollback = document.getElementById('btn-tool-rollback');
+
+      const modalPartitionInfo = document.getElementById('modal-partition-info');
+      const partitionModalBody = document.getElementById('partition-modal-body');
+      const btnClosePartitionModal = document.getElementById('btn-close-partition-modal');
+      const btnClosePartitionModal2 = document.getElementById('btn-close-partition-modal-2');
+
+      const modalRollbackConfirm = document.getElementById('modal-rollback-confirm');
+      const btnCancelRollback = document.getElementById('btn-cancel-rollback');
+      const btnConfirmRollback = document.getElementById('btn-confirm-rollback');
+
+      const modalBackupWarning = document.getElementById('modal-backup-warning');
+      const chkBackupAcknowledge = document.getElementById('chk-backup-acknowledge') as HTMLInputElement | null;
+      const btnCancelBackup = document.getElementById('btn-cancel-backup');
+      const btnConfirmBackup = document.getElementById('btn-confirm-backup');
+
+      const modalRestoreConfirm = document.getElementById('modal-restore-confirm');
+      const restoreModalTitle = document.getElementById('restore-modal-title');
+      const restoreModalSubtitle = document.getElementById('restore-modal-subtitle');
+      const restoreIconContainer = document.getElementById('restore-icon-container');
+      const restoreMetaFilename = document.getElementById('restore-meta-filename');
+      const restoreMetaSize = document.getElementById('restore-meta-size');
+      const restoreMetaSignature = document.getElementById('restore-meta-signature');
+      const restoreWarningContainer = document.getElementById('restore-warning-container');
+      const restoreInfoContainer = document.getElementById('restore-info-container');
+      const chkRestoreAcknowledge = document.getElementById('chk-restore-acknowledge') as HTMLInputElement | null;
+      const restoreAcknowledgeText = document.getElementById('restore-acknowledge-text');
+      const btnCancelRestore = document.getElementById('btn-cancel-restore');
+      const btnConfirmRestore = document.getElementById('btn-confirm-restore');
+
+      let pendingRestoreData: Uint8Array | null = null;
+
+      const logTerminal = document.getElementById('log-terminal');
+      const logCount = document.getElementById('log-count');
+      const btnToggleLog = document.getElementById('btn-toggle-log');
+      const logContentWrapper = document.getElementById('log-content-wrapper');
+      const logChevron = document.getElementById('log-chevron');
+      const btnClearLog = document.getElementById('btn-clear-log');
+      const btnDownloadLog = document.getElementById('btn-download-log');
+
+      // Layout B: compact device bar, console docking and sticky utility bar
+      const devStatusPill = document.getElementById('dev-status-pill');
+      const devStatusText = document.getElementById('dev-status-text');
+      const consoleHome = document.getElementById('console-home');
+      const progressLogSlot = document.getElementById('progress-log-slot');
+      const technicalLogSection = document.getElementById('technical-log-section');
+      const barLogCount = document.getElementById('bar-log-count');
+      const btnBarTools = document.getElementById('btn-bar-tools');
+      const btnBarConsole = document.getElementById('btn-bar-console');
+      const CONSOLE_HOME_CLASSES = ['max-w-7xl', 'mx-auto', 'px-4', 'sm:px-8', 'mb-8'];
+
+      // While flashing, dock the console next to the progress card so both fit on one screen.
+      function placeConsole(inProgress: boolean) {
+        if (!technicalLogSection) return;
+        const target = inProgress ? progressLogSlot : consoleHome;
+        if (target && technicalLogSection.parentElement !== target) target.appendChild(technicalLogSection);
+        CONSOLE_HOME_CLASSES.forEach((c) => technicalLogSection.classList.toggle(c, !inProgress));
+        technicalLogSection.classList.toggle('h-full', inProgress);
+        logTerminal?.classList.toggle('h-48', !inProgress);
+        logTerminal?.classList.toggle('h-[22rem]', inProgress);
+        if (inProgress && logContentWrapper?.classList.contains('hidden')) btnToggleLog?.click();
+        if (logTerminal) logTerminal.scrollTop = logTerminal.scrollHeight;
+      }
+
+      function setDeviceStatus(mode: 'ok' | 'flashing') {
+        const flashing = mode === 'flashing';
+        if (devStatusPill) {
+          devStatusPill.className = flashing
+            ? 'badge-status-warn inline-flex items-center space-x-1.5'
+            : 'badge-status-green inline-flex items-center space-x-1.5';
+        }
+        if (devStatusText) devStatusText.textContent = flashing ? 'Flashing — keep plugged in' : 'Connected & Verified';
+        if (flashing) btnDisconnect?.setAttribute('disabled', 'true');
+        else btnDisconnect?.removeAttribute('disabled');
+      }
+
+      let pendingTargetFw: string | null = null;
+      let totalLogEvents = 0;
+      let hasStartedFlashing = false;
+
+      const defaultBtnConnectHtml = `
+        <svg class="w-5 h-5 text-wxm-abyss" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 10V3L4 14h7v7l9-11h-7z" />
+        </svg>
+        <span class="tracking-wide">Connect WG1200 Gateway</span>
+      `;
+
+      // Initialize Controller
+      const controller = new FlasherController({
+        onStateChange: handleStateChange,
+        onLog: handleLog,
+        onInspection: handleInspection,
+        onManifest: handleManifest,
+      });
+
+      controller.initialize();
+
+      // Event Listeners
+      btnConnect?.addEventListener('click', () => {
+        connectErrorBanner?.classList.add('hidden');
+        controller.connectDevice(true);
+      });
+      btnConnectManual?.addEventListener('click', () => {
+        connectErrorBanner?.classList.add('hidden');
+        controller.connectDevice(false);
+      });
+      btnDisconnect?.addEventListener('click', async () => {
+        try {
+          if (btnDisconnect) {
+            btnDisconnect.setAttribute('disabled', 'true');
+            btnDisconnect.textContent = 'Releasing Reset…';
+          }
+          await controller.disconnect(true);
+        } finally {
+          if (btnDisconnect) {
+            btnDisconnect.removeAttribute('disabled');
+            btnDisconnect.textContent = 'Disconnect';
+          }
+        }
+      });
+
+      btnFlashWxm?.addEventListener('click', () => {
+        const selectWxmBuild = document.getElementById('select-wxm-build') as HTMLSelectElement | null;
+        openConfirmModal(selectWxmBuild?.value || 'weatherxm');
+      });
+      btnFlashMesh?.addEventListener('click', () => {
+        const selectMeshBuild = document.getElementById('select-mesh-build') as HTMLSelectElement | null;
+        openConfirmModal(selectMeshBuild?.value || 'meshtastic');
+      });
+
+      btnModalCancel?.addEventListener('click', closeConfirmModal);
+      btnModalConfirm?.addEventListener('click', () => {
+        closeConfirmModal();
+        if (pendingTargetFw) {
+          hasStartedFlashing = true;
+          controller.flashFirmware(pendingTargetFw);
+        }
+      });
+
+      btnRetryFlash?.addEventListener('click', async () => {
+        flashProgressSection?.classList.add('hidden');
+        await controller.disconnect(true);
+      });
+
+      // Fix reconnect state bug: disconnect() safely resets state to idle
+      btnPostFlashDone?.addEventListener('click', async () => {
+        await controller.disconnect(true);
+      });
+
+      // Advanced Tools listeners
+      btnToggleTools?.addEventListener('click', () => {
+        const isHidden = toolsContentWrapper?.classList.toggle('hidden');
+        if (toolsChevron) {
+          toolsChevron.style.transform = isHidden ? 'rotate(0deg)' : 'rotate(180deg)';
+        }
+        if (toolsToggleLabel) {
+          toolsToggleLabel.textContent = isHidden ? 'Expand Tools' : 'Collapse Tools';
+        }
+      });
+
+      btnToolInspect?.addEventListener('click', () => {
+        renderPartitionModal();
+        modalPartitionInfo?.classList.remove('hidden');
+      });
+
+      btnClosePartitionModal?.addEventListener('click', () => {
+        modalPartitionInfo?.classList.add('hidden');
+      });
+      btnClosePartitionModal2?.addEventListener('click', () => {
+        modalPartitionInfo?.classList.add('hidden');
+      });
+
+      btnToolBackup?.addEventListener('click', () => {
+        if (chkBackupAcknowledge) chkBackupAcknowledge.checked = false;
+        btnConfirmBackup?.setAttribute('disabled', 'true');
+        modalBackupWarning?.classList.remove('hidden');
+      });
+
+      chkBackupAcknowledge?.addEventListener('change', () => {
+        if (chkBackupAcknowledge.checked) {
+          btnConfirmBackup?.removeAttribute('disabled');
+        } else {
+          btnConfirmBackup?.setAttribute('disabled', 'true');
+        }
+      });
+
+      btnCancelBackup?.addEventListener('click', () => {
+        modalBackupWarning?.classList.add('hidden');
+      });
+
+      btnConfirmBackup?.addEventListener('click', async () => {
+        modalBackupWarning?.classList.add('hidden');
+        try {
+          btnToolBackup?.setAttribute('disabled', 'true');
+          if (btnToolBackup) btnToolBackup.textContent = 'Dumping 16MB…';
+          await controller.executeFullFlashBackup();
+        } catch (e: any) {
+          alert(`Backup failed: ${e.message}`);
+        } finally {
+          btnToolBackup?.removeAttribute('disabled');
+          if (btnToolBackup) btnToolBackup.textContent = 'Download 16MB Backup';
+        }
+      });
+
+      btnToolRestore?.addEventListener('click', () => {
+        if (fileRestoreBackup) {
+          fileRestoreBackup.value = '';
+          fileRestoreBackup.click();
+        }
+      });
+
+      fileRestoreBackup?.addEventListener('change', async (e: Event) => {
+        const target = e.target as HTMLInputElement;
+        const file = target.files?.[0];
+        if (!file) return;
+
+        try {
+          const buffer = await file.arrayBuffer();
+          const data = new Uint8Array(buffer);
+
+          const validation = validateFullBackupImage(data);
+          if (!validation.valid) {
+            alert(`Cannot restore backup:\n${validation.error}`);
+            return;
+          }
+
+          pendingRestoreData = data;
+
+          if (restoreMetaFilename) restoreMetaFilename.textContent = file.name;
+          if (restoreMetaSize) restoreMetaSize.textContent = `${data.byteLength.toLocaleString()} bytes (16 MB)`;
+
+          if (chkRestoreAcknowledge) chkRestoreAcknowledge.checked = false;
+          btnConfirmRestore?.setAttribute('disabled', 'true');
+
+          if (validation.isSigned) {
+            if (restoreModalTitle) restoreModalTitle.textContent = 'Restore Full 16MB Backup';
+            if (restoreModalSubtitle) restoreModalSubtitle.textContent = 'Bit-for-bit flash restoration';
+            if (restoreIconContainer) {
+              restoreIconContainer.className = 'w-8 h-8 rounded-control flex items-center justify-center flex-shrink-0 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30';
+              restoreIconContainer.innerHTML = '<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>';
+            }
+            if (restoreMetaSignature) {
+              restoreMetaSignature.textContent = '✓ Secure Boot V2 Verified';
+              restoreMetaSignature.className = 'font-semibold text-emerald-400';
+            }
+            restoreWarningContainer?.classList.add('hidden');
+            restoreInfoContainer?.classList.remove('hidden');
+            if (restoreAcknowledgeText) {
+              restoreAcknowledgeText.textContent = 'I understand this will overwrite the entire 16MB flash memory.';
+            }
+            if (btnConfirmRestore) {
+              btnConfirmRestore.textContent = 'Restore 16MB Flash';
+              btnConfirmRestore.className = 'px-4 py-2 bg-wxm-beacon hover:bg-wxm-horizon disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold rounded-control text-sm transition-colors shadow-card cursor-pointer';
+            }
+          } else {
+            if (restoreModalTitle) restoreModalTitle.textContent = '⚠️ Unsigned Full Backup Detected';
+            if (restoreModalSubtitle) restoreModalSubtitle.textContent = 'Hardware Secure Boot Warning';
+            if (restoreIconContainer) {
+              restoreIconContainer.className = 'w-8 h-8 rounded-control flex items-center justify-center flex-shrink-0 bg-wxm-error/20 text-wxm-error border border-wxm-error/40';
+              restoreIconContainer.innerHTML = '<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>';
+            }
+            if (restoreMetaSignature) {
+              restoreMetaSignature.textContent = '⚠ Missing Secure Boot V2 Signature';
+              restoreMetaSignature.className = 'font-semibold text-wxm-error';
+            }
+            restoreWarningContainer?.classList.remove('hidden');
+            restoreInfoContainer?.classList.add('hidden');
+            if (restoreAcknowledgeText) {
+              restoreAcknowledgeText.textContent = 'I understand this backup is unsigned and the device will not boot unless signed with the matching key. Proceed anyway.';
+            }
+            if (btnConfirmRestore) {
+              btnConfirmRestore.textContent = 'Restore Unsigned Backup Anyway';
+              btnConfirmRestore.className = 'px-4 py-2 bg-wxm-error hover:bg-wxm-error/80 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold rounded-control text-sm transition-colors shadow-card cursor-pointer';
+            }
+          }
+
+          modalRestoreConfirm?.classList.remove('hidden');
+        } catch (err: any) {
+          alert(`Error reading backup file: ${err.message}`);
+        }
+      });
+
+      chkRestoreAcknowledge?.addEventListener('change', () => {
+        if (chkRestoreAcknowledge.checked) {
+          btnConfirmRestore?.removeAttribute('disabled');
+        } else {
+          btnConfirmRestore?.setAttribute('disabled', 'true');
+        }
+      });
+
+      btnCancelRestore?.addEventListener('click', () => {
+        modalRestoreConfirm?.classList.add('hidden');
+        pendingRestoreData = null;
+      });
+
+      btnConfirmRestore?.addEventListener('click', async () => {
+        if (!pendingRestoreData) return;
+        modalRestoreConfirm?.classList.add('hidden');
+        const dataToRestore = pendingRestoreData;
+        pendingRestoreData = null;
+
+        try {
+          btnToolRestore?.setAttribute('disabled', 'true');
+          if (btnToolRestore) btnToolRestore.textContent = 'Restoring 16MB… (0%)';
+          btnToolBackup?.setAttribute('disabled', 'true');
+
+          await controller.executeFullFlashRestore(dataToRestore, (pct) => {
+            if (btnToolRestore) btnToolRestore.textContent = `Restoring 16MB… (${pct}%)`;
+          });
+
+          alert('Full 16MB flash restore completed successfully! The device will now reboot.');
+          await controller.disconnect(true);
+        } catch (e: any) {
+          alert(`Full flash restore failed: ${e.message}`);
+        } finally {
+          btnToolRestore?.removeAttribute('disabled');
+          if (btnToolRestore) btnToolRestore.textContent = 'Restore Full Backup';
+          btnToolBackup?.removeAttribute('disabled');
+        }
+      });
+
+      btnToolRollback?.addEventListener('click', () => {
+        modalRollbackConfirm?.classList.remove('hidden');
+      });
+
+      btnCancelRollback?.addEventListener('click', () => {
+        modalRollbackConfirm?.classList.add('hidden');
+      });
+
+      btnConfirmRollback?.addEventListener('click', async () => {
+        modalRollbackConfirm?.classList.add('hidden');
+        try {
+          await controller.executeFactoryRollback();
+        } catch (e: any) {
+          alert(`Rollback failed: ${e.message}`);
+        }
+      });
+
+      // Recovery button listeners
+      btnRecoveryWxm?.addEventListener('click', () => {
+        controller.executeRecovery('weatherxm');
+      });
+      btnRecoveryMesh?.addEventListener('click', () => {
+        controller.executeRecovery('meshtastic');
+      });
+      btnRecoveryRollback?.addEventListener('click', () => {
+        controller.executeRecovery('rollback_factory');
+      });
+
+      btnToggleLog?.addEventListener('click', () => {
+        const isHidden = logContentWrapper?.classList.toggle('hidden');
+        if (logChevron) {
+          logChevron.style.transform = isHidden ? 'rotate(-90deg)' : 'rotate(0deg)';
+        }
+      });
+
+      btnClearLog?.addEventListener('click', () => {
+        if (logTerminal) logTerminal.innerHTML = '';
+        totalLogEvents = 0;
+        if (logCount) logCount.textContent = '0';
+        if (barLogCount) barLogCount.textContent = '0';
+      });
+
+      btnBarTools?.addEventListener('click', () => {
+        if (toolsContentWrapper?.classList.contains('hidden')) btnToggleTools?.click();
+        document.getElementById('advanced-tools-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+
+      btnBarConsole?.addEventListener('click', () => {
+        if (logContentWrapper?.classList.contains('hidden')) btnToggleLog?.click();
+        technicalLogSection?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+
+      btnDownloadLog?.addEventListener('click', () => {
+        controller.downloadLog();
+      });
+
+      function handleStateChange(ctx: StateContext) {
+        if (ctx.state === 'unsupported') {
+          browserWarning?.classList.remove('hidden');
+          btnConnect?.setAttribute('disabled', 'true');
+          btnConnectManual?.setAttribute('disabled', 'true');
+        }
+
+        if (ctx.state === 'idle') {
+          hasStartedFlashing = false;
+          placeConsole(false);
+          panelConnect?.classList.remove('hidden');
+          deviceStatusCard?.classList.add('hidden');
+          firmwareSelectionSection?.classList.add('hidden');
+          flashProgressSection?.classList.add('hidden');
+          postFlashSection?.classList.add('hidden');
+          recoveryAlertCard?.classList.add('hidden');
+          if (btnConnect) {
+            btnConnect.removeAttribute('disabled');
+            btnConnect.innerHTML = defaultBtnConnectHtml;
+          }
+          if (btnConnectManual) btnConnectManual.removeAttribute('disabled');
+        } else if (ctx.state === 'connecting') {
+          if (btnConnect) {
+            btnConnect.setAttribute('disabled', 'true');
+            btnConnect.innerHTML = `
+              <svg class="animate-spin w-5 h-5 text-wxm-abyss inline-block" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+              </svg>
+              <span class="tracking-wide">Connecting over USB…</span>
+            `;
+          }
+          if (btnConnectManual) btnConnectManual.setAttribute('disabled', 'true');
+        } else if (ctx.state === 'inspecting') {
+          if (btnConnect) {
+            btnConnect.setAttribute('disabled', 'true');
+            btnConnect.innerHTML = `
+              <svg class="animate-spin w-5 h-5 text-wxm-abyss inline-block" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+              </svg>
+              <span class="tracking-wide">Inspecting Hardware…</span>
+            `;
+          }
+          if (btnConnectManual) btnConnectManual.setAttribute('disabled', 'true');
+        } else if (ctx.state === 'ready') {
+          setDeviceStatus('ok');
+          placeConsole(false);
+          connectErrorBanner?.classList.add('hidden');
+          panelConnect?.classList.add('hidden');
+          deviceStatusCard?.classList.remove('hidden');
+          firmwareSelectionSection?.classList.remove('hidden');
+          flashProgressSection?.classList.add('hidden');
+          postFlashSection?.classList.add('hidden');
+          recoveryAlertCard?.classList.add('hidden');
+          if (btnConnect) {
+            btnConnect.removeAttribute('disabled');
+            btnConnect.innerHTML = defaultBtnConnectHtml;
+          }
+          if (btnConnectManual) btnConnectManual.removeAttribute('disabled');
+        } else if (ctx.state === 'recovery') {
+          setDeviceStatus('ok');
+          placeConsole(false);
+          connectErrorBanner?.classList.add('hidden');
+          panelConnect?.classList.add('hidden');
+          deviceStatusCard?.classList.remove('hidden');
+          firmwareSelectionSection?.classList.add('hidden');
+          flashProgressSection?.classList.add('hidden');
+          postFlashSection?.classList.add('hidden');
+          recoveryAlertCard?.classList.remove('hidden');
+          if (btnConnect) {
+            btnConnect.removeAttribute('disabled');
+            btnConnect.innerHTML = defaultBtnConnectHtml;
+          }
+          if (btnConnectManual) btnConnectManual.removeAttribute('disabled');
+        } else if (
+          ctx.state === 'downloading' ||
+          ctx.state === 'flashing' ||
+          ctx.state === 'verifying-flash' ||
+          ctx.state === 'verifying-protected-data' ||
+          ctx.state === 'rebooting'
+        ) {
+          hasStartedFlashing = true;
+          connectErrorBanner?.classList.add('hidden');
+          panelConnect?.classList.add('hidden');
+          deviceStatusCard?.classList.remove('hidden');
+          setDeviceStatus('flashing');
+          placeConsole(true);
+          firmwareSelectionSection?.classList.add('hidden');
+          flashProgressSection?.classList.remove('hidden');
+          postFlashSection?.classList.add('hidden');
+          flashErrorBox?.classList.add('hidden');
+          recoveryAlertCard?.classList.add('hidden');
+
+          if (progressTitle) progressTitle.textContent = getStageTitle(ctx.state);
+          if (progressStatus) progressStatus.textContent = ctx.statusMessage;
+          if (progressBarFill) progressBarFill.style.width = `${ctx.progressPercent}%`;
+
+          updatePipelineSteps(ctx.state);
+        } else if (ctx.state === 'success') {
+          hasStartedFlashing = false;
+          flashProgressSection?.classList.add('hidden');
+          deviceStatusCard?.classList.add('hidden');
+          setDeviceStatus('ok');
+          placeConsole(false);
+          postFlashSection?.classList.remove('hidden');
+          recoveryAlertCard?.classList.add('hidden');
+
+          const isWxm = pendingTargetFw ? pendingTargetFw.startsWith('weatherxm') : true;
+          if (isWxm) {
+            instructionsWxm?.classList.remove('hidden');
+            instructionsMesh?.classList.add('hidden');
+          } else {
+            instructionsWxm?.classList.add('hidden');
+            instructionsMesh?.classList.remove('hidden');
+          }
+        } else if (ctx.state === 'error') {
+          if (btnConnect) {
+            btnConnect.removeAttribute('disabled');
+            btnConnect.innerHTML = defaultBtnConnectHtml;
+          }
+          if (btnConnectManual) btnConnectManual.removeAttribute('disabled');
+
+          btnDisconnect?.removeAttribute('disabled');
+          if (!hasStartedFlashing) {
+            placeConsole(false);
+            panelConnect?.classList.remove('hidden');
+            deviceStatusCard?.classList.add('hidden');
+            firmwareSelectionSection?.classList.add('hidden');
+            flashProgressSection?.classList.add('hidden');
+            recoveryAlertCard?.classList.add('hidden');
+            connectErrorBanner?.classList.remove('hidden');
+            if (connectErrorDetail) {
+              connectErrorDetail.textContent = ctx.errorMessage ?? 'Failed to connect to WG1200 device.';
+            }
+          } else {
+            flashProgressSection?.classList.remove('hidden');
+            flashErrorBox?.classList.remove('hidden');
+            recoveryAlertCard?.classList.add('hidden');
+            if (flashErrorMsg) flashErrorMsg.textContent = ctx.errorMessage ?? 'Operation failed';
+          }
+        }
+      }
+
+      function handleLog(line: string) {
+        if (!logTerminal) return;
+        const entry = document.createElement('div');
+        if (line.includes('[ERROR]') || line.includes('[FATAL ERROR]')) {
+          entry.className = 'text-wxm-error font-semibold';
+        } else if (line.includes('verified') || line.includes('PASSED') || line.includes('SUCCESS')) {
+          entry.className = 'text-wxm-live font-medium';
+        } else if (line.includes('[BOOT]')) {
+          entry.className = 'text-wxm-zenith';
+        } else {
+          entry.className = 'text-wxm-cloud';
+        }
+        entry.textContent = line;
+        logTerminal.appendChild(entry);
+        logTerminal.scrollTop = logTerminal.scrollHeight;
+
+        totalLogEvents++;
+        if (logCount) logCount.textContent = `${totalLogEvents}`;
+        if (barLogCount) barLogCount.textContent = `${totalLogEvents}`;
+      }
+
+      function handleInspection(data: Wg1200Inspection | null) {
+        if (!data) return;
+        if (devChip) devChip.textContent = data.chipName;
+        if (devFlash) devFlash.textContent = `${data.flashSizeMb} MB (Quad SPI)`;
+        const activeOffset =
+          data.otadata.activeSlot === 'ota_0'
+            ? WG1200_CONSTANTS.APP_OTA_0.offset
+            : data.otadata.activeSlot === 'ota_1'
+              ? WG1200_CONSTANTS.APP_OTA_1.offset
+              : WG1200_CONSTANTS.APP_FACTORY.offset;
+        if (devSlot) devSlot.textContent = `${data.otadata.activeSlot.toUpperCase()} (0x${activeOffset.toString(16)})`;
+        if (devCert) devCert.textContent = data.secureCert.valid ? 'esp_secure_cert OK' : 'Cert Invalid';
+        if (devRunningFw) {
+          devRunningFw.textContent = data.currentFirmware?.displayTitle ?? 'WeatherXM Gateway';
+        }
+        if (devTargetSlot) {
+          devTargetSlot.textContent = `${data.otadata.targetSlot.toUpperCase()} (0x${data.otadata.targetOffset.toString(16)})`;
+        }
+
+        const isWxmActive = data.currentFirmware?.firmwareType === 'weatherxm';
+        const isMeshActive = data.currentFirmware?.firmwareType === 'meshtastic';
+
+        if (badgeWxmStatus) {
+          badgeWxmStatus.textContent = isWxmActive ? 'Active on Gateway' : 'Ready to Switch';
+          badgeWxmStatus.className = isWxmActive
+            ? 'px-2.5 py-1 text-xs font-semibold rounded-full bg-wxm-live/15 text-wxm-live border border-wxm-live/30'
+            : 'px-2.5 py-1 text-xs font-semibold rounded-full bg-wxm-midnight/70 text-wxm-mist border border-wxm-cloud/20';
+        }
+
+        if (badgeMeshStatus) {
+          badgeMeshStatus.textContent = isMeshActive ? 'Active on Gateway' : 'Ready to Switch';
+          badgeMeshStatus.className = isMeshActive
+            ? 'px-2.5 py-1 text-xs font-semibold rounded-full bg-wxm-live/15 text-wxm-live border border-wxm-live/30'
+            : 'px-2.5 py-1 text-xs font-semibold rounded-full bg-wxm-midnight/70 text-wxm-mist border border-wxm-cloud/20';
+        }
+
+        if (btnFlashWxmLabel) {
+          btnFlashWxmLabel.textContent = isWxmActive ? 'Reinstall WeatherXM Tri-Protocol' : 'Switch to WeatherXM Tri-Protocol';
+        }
+        if (btnFlashMeshLabel) {
+          btnFlashMeshLabel.textContent = isMeshActive ? 'Reinstall Full Meshtastic' : 'Switch to Full Meshtastic';
+        }
+      }
+
+      function handleManifest(manifest: FirmwareManifest | null) {
+        if (!manifest) return;
+        const selectWxmBuild = document.getElementById('select-wxm-build') as HTMLSelectElement | null;
+        const selectMeshBuild = document.getElementById('select-mesh-build') as HTMLSelectElement | null;
+        const wxmSelectedFile = document.getElementById('wxm-selected-file');
+        const wxmSelectedSize = document.getElementById('wxm-selected-size');
+        const meshSelectedFile = document.getElementById('mesh-selected-file');
+        const meshSelectedSize = document.getElementById('mesh-selected-size');
+
+        if (selectWxmBuild) {
+          selectWxmBuild.innerHTML = '';
+          for (const [key, fw] of Object.entries(manifest.firmwares)) {
+            if (fw.category === 'weatherxm' || key.startsWith('weatherxm')) {
+              const opt = document.createElement('option');
+              opt.value = key;
+              const mb = (fw.bytes / (1024 * 1024)).toFixed(2);
+              opt.textContent = `${fw.label ?? fw.name + ' v' + fw.version} (${mb} MB)`;
+              selectWxmBuild.appendChild(opt);
+            }
+          }
+        }
+
+        if (selectMeshBuild) {
+          selectMeshBuild.innerHTML = '';
+          for (const [key, fw] of Object.entries(manifest.firmwares)) {
+            if (fw.category === 'meshtastic' || key.startsWith('meshtastic')) {
+              const opt = document.createElement('option');
+              opt.value = key;
+              const mb = (fw.bytes / (1024 * 1024)).toFixed(2);
+              opt.textContent = `${fw.label ?? fw.name + ' v' + fw.version} (${mb} MB)`;
+              selectMeshBuild.appendChild(opt);
+            }
+          }
+        }
+
+        function updateWxmDetails() {
+          if (!selectWxmBuild || !manifest) return;
+          const fw = manifest.firmwares[selectWxmBuild.value];
+          if (!fw) return;
+          if (wxmVersionText) wxmVersionText.textContent = `v${fw.version}`;
+          if (wxmSelectedFile) wxmSelectedFile.textContent = fw.file.split('/').pop() ?? fw.file;
+          if (wxmSelectedSize) wxmSelectedSize.textContent = `${(fw.bytes / (1024 * 1024)).toFixed(2)} MB`;
+        }
+
+        function updateMeshDetails() {
+          if (!selectMeshBuild || !manifest) return;
+          const fw = manifest.firmwares[selectMeshBuild.value];
+          if (!fw) return;
+          if (meshVersionText) meshVersionText.textContent = `v${fw.version}`;
+          if (meshSelectedFile) meshSelectedFile.textContent = fw.file.split('/').pop() ?? fw.file;
+          if (meshSelectedSize) meshSelectedSize.textContent = `${(fw.bytes / (1024 * 1024)).toFixed(2)} MB`;
+        }
+
+        selectWxmBuild?.addEventListener('change', updateWxmDetails);
+        selectMeshBuild?.addEventListener('change', updateMeshDetails);
+
+        updateWxmDetails();
+        updateMeshDetails();
+      }
+
+      function openConfirmModal(targetFw: string) {
+        pendingTargetFw = targetFw;
+        const manifest = controller.manifestData;
+        const inspection = controller.inspectionData;
+        if (!manifest || !inspection) return;
+
+        const fw = manifest.firmwares[targetFw];
+        if (!fw) return;
+
+        if (modalFwName) modalFwName.textContent = fw.label ?? fw.name;
+        if (modalFwVersion) modalFwVersion.textContent = `v${fw.version}`;
+        const modalFwFile = document.getElementById('modal-fw-file');
+        const modalFwSize = document.getElementById('modal-fw-size');
+        if (modalFwFile) modalFwFile.textContent = fw.file.split('/').pop() ?? fw.file;
+        if (modalFwSize) modalFwSize.textContent = `${(fw.bytes / (1024 * 1024)).toFixed(2)} MB (${fw.bytes.toLocaleString()} bytes)`;
+
+        if (modalTargetSlot) {
+          modalTargetSlot.textContent = `${inspection.otadata.targetSlot.toUpperCase()} (0x${inspection.otadata.targetOffset.toString(16)})`;
+        }
+        modalConfirm?.classList.remove('hidden');
+      }
+
+      function closeConfirmModal() {
+        modalConfirm?.classList.add('hidden');
+      }
+
+      function getStageTitle(state: string): string {
+        switch (state) {
+          case 'downloading':
+            return 'Downloading Firmware…';
+          case 'flashing':
+            return 'Writing Application to Flash…';
+          case 'verifying-flash':
+            return 'Verifying Hardware MD5…';
+          case 'verifying-protected-data':
+            return 'Verifying Protected Partitions…';
+          case 'rebooting':
+            return 'Restarting Device & Verifying Boot…';
+          default:
+            return 'Processing…';
+        }
+      }
+
+      function updatePipelineSteps(state: string) {
+        const steps = ['download', 'snapshot', 'write', 'md5', 'otadata', 'reboot'];
+        let activeIdx = 0;
+        if (state === 'downloading') activeIdx = 0;
+        else if (state === 'flashing') activeIdx = 2;
+        else if (state === 'verifying-flash') activeIdx = 3;
+        else if (state === 'verifying-protected-data') activeIdx = 4;
+        else if (state === 'rebooting') activeIdx = 5;
+
+        steps.forEach((name, idx) => {
+          const el = document.getElementById(`step-${name}`);
+          if (!el) return;
+          if (idx < activeIdx) {
+            el.className = 'flex items-center space-x-2 text-wxm-live font-medium';
+          } else if (idx === activeIdx) {
+            el.className = 'flex items-center space-x-2 text-white font-bold animate-pulse';
+          } else {
+            el.className = 'flex items-center space-x-2 text-wxm-mist';
+          }
+        });
+      }
+
+      function escapeHtml(str: string): string {
+        return str
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#039;');
+      }
+
+      function renderPartitionModal() {
+        if (!partitionModalBody) return;
+        const data = controller.getInspectionData();
+        if (!data || !data.partitions) {
+          partitionModalBody.innerHTML = `
+            <div class="p-4 bg-wxm-warning/10 border border-wxm-warning/30 rounded-control text-wxm-warning">
+              No device is currently connected. Please connect your WG1200 gateway first.
+            </div>
+          `;
+          return;
+        }
+
+        const partitionsList = Object.values(data.partitions) as Array<{
+          label: string;
+          type: number;
+          subtype: number;
+          offset: number;
+          size: number;
+        }>;
+
+        const partitionRows = partitionsList
+          .map((p) => {
+            const isProtected = ['nvs', 'otadata', 'factory', 'esp_secure_cert', 'nvs_key'].includes(p.label);
+            const badge = isProtected
+              ? '<span class="text-wxm-warning bg-wxm-warning/10 px-1.5 py-0.5 rounded-control text-[10px] border border-wxm-warning/20">PROTECTED</span>'
+              : '<span class="text-wxm-zenith bg-wxm-beacon/10 px-1.5 py-0.5 rounded-control text-[10px] border border-wxm-beacon/20">APP SLOT</span>';
+            const safeLabel = escapeHtml(p.label);
+            return `
+              <tr class="border-b border-wxm-cloud/10 hover:bg-wxm-storm/20">
+                <td class="py-1.5 px-2 text-white font-bold font-mono">${safeLabel}</td>
+                <td class="py-1.5 px-2 text-wxm-mist">0x${p.type.toString(16)}/0x${p.subtype.toString(16)}</td>
+                <td class="py-1.5 px-2 text-wxm-cloud font-mono">0x${p.offset.toString(16).padStart(6, '0')}</td>
+                <td class="py-1.5 px-2 text-wxm-cloud">${Math.round(p.size / 1024)} KB</td>
+                <td class="py-1.5 px-2">${badge}</td>
+              </tr>
+            `;
+          })
+          .join('');
+
+        const safeChip = escapeHtml(data.chipName);
+        const safeFingerprint = escapeHtml(data.secureCert.fingerprint);
+
+        partitionModalBody.innerHTML = `
+          <div class="space-y-4">
+            <div class="bg-wxm-abyss/80 p-3.5 rounded-control border border-wxm-cloud/15">
+              <div class="text-wxm-mist text-[11px] uppercase tracking-wider mb-2 font-semibold">Hardware & Identity</div>
+              <div class="grid grid-cols-2 gap-2 text-xs">
+                <div>Chip: <span class="text-white font-semibold">${safeChip}</span></div>
+                <div>Flash: <span class="text-white font-semibold">${data.flashSizeMb} MB (16 MB verified)</span></div>
+                <div class="col-span-2 truncate">Identity SHA-256: <span class="text-wxm-zenith font-semibold">${safeFingerprint}</span></div>
+                <div class="col-span-2">Device Credential Status: <span class="${data.secureCert.valid ? 'text-wxm-live font-bold' : 'text-wxm-error font-bold'}">${data.secureCert.valid ? 'VALID (Untouched)' : 'INVALID'}</span></div>
+              </div>
+            </div>
+
+            <div class="bg-wxm-abyss/80 p-3.5 rounded-control border border-wxm-cloud/15">
+              <div class="text-wxm-mist text-[11px] uppercase tracking-wider mb-2 font-semibold">Dual-Boot Otadata Geometry</div>
+              <div class="grid grid-cols-2 gap-2 text-xs">
+                <div>Active Slot: <span class="text-wxm-live font-bold">${data.otadata.activeSlot.toUpperCase()}</span></div>
+                <div>Target Inactive Slot: <span class="text-wxm-zenith font-bold">${data.otadata.targetSlot.toUpperCase()} (0x${data.otadata.targetOffset.toString(16)})</span></div>
+                <div>Next Sequence: <span class="text-white font-semibold">${data.otadata.nextSeq}</span></div>
+                <div>Boot State Ambiguous: <span class="${data.otadata.isAmbiguous ? 'text-wxm-error font-bold' : 'text-wxm-mist'}">${data.otadata.isAmbiguous ? 'YES' : 'NO'}</span></div>
+                <div class="text-wxm-mist">Sector 0 (0x13000): <span class="text-wxm-cloud">seq=${data.otadata.sector0.seq}, valid=${data.otadata.sector0.valid}</span></div>
+                <div class="text-wxm-mist">Sector 1 (0x14000): <span class="text-wxm-cloud">seq=${data.otadata.sector1.seq}, valid=${data.otadata.sector1.valid}</span></div>
+              </div>
+            </div>
+
+            <div class="bg-wxm-abyss/80 p-3.5 rounded-control border border-wxm-cloud/15 overflow-x-auto">
+              <div class="text-wxm-mist text-[11px] uppercase tracking-wider mb-2 font-semibold">Partition Layout (ESP-IDF 16MB)</div>
+              <table class="w-full text-left text-xs">
+                <thead>
+                  <tr class="text-wxm-mist border-b border-wxm-cloud/15">
+                    <th class="py-1.5 px-2">Label</th>
+                    <th class="py-1.5 px-2">Type</th>
+                    <th class="py-1.5 px-2">Offset</th>
+                    <th class="py-1.5 px-2">Size</th>
+                    <th class="py-1.5 px-2">Protection</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${partitionRows}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        `;
+      }
+    </script>
+  </body>
+</html>

@@ -1,0 +1,158 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* WeatherXM Design Tokens & Global Styles v1.2 — matching official weatherxmcom-website */
+
+:root {
+  /* Core blues (from logo v1.1) */
+  --wxm-zenith: #317AE8;
+  --wxm-beacon: #2F74DC;   /* primary */
+  --wxm-horizon: #2761B7;  /* hover/pressed */
+  --wxm-deep-sky: #22549F;
+  --wxm-storm: #1A407A;
+  --wxm-midnight: #132C51; /* dark surfaces */
+  --wxm-abyss: #0C1D38;    /* deepest atmospheric floor */
+
+  /* Neutrals */
+  --wxm-ink: #10151E;
+  --wxm-slate: #4B5668;
+  --wxm-mist: #9AA5B5;
+  --wxm-cloud: #E4E9F0;
+  --wxm-paper: #F7F9FC;
+  --wxm-white: #FFFFFF;
+
+  /* Tints */
+  --wxm-blue-tint: #EAF1FC;
+  --wxm-blue-wash: #C9DBF7;
+
+  /* Functional & Vivid Status */
+  --wxm-live: #10B981;
+  --wxm-live-bright: #34D399;
+  --wxm-success: #1E8E5A;
+  --wxm-warning: #DC9A0E;
+  --wxm-error: #CE4034;
+
+  /* Typography */
+  --wxm-font-sans: "Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --wxm-font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  /* Shape & elevation */
+  --wxm-radius-control: 8px;
+  --wxm-radius-card: 12px;
+  --wxm-radius-modal: 16px;
+  --wxm-shadow-card: 0 1px 3px rgba(19, 44, 81, 0.08), 0 4px 12px rgba(19, 44, 81, 0.06);
+  --wxm-shadow-lift: 0 2px 6px rgba(19, 44, 81, 0.10), 0 12px 32px rgba(19, 44, 81, 0.10);
+  --wxm-focus-ring: 0 0 0 2px var(--wxm-white), 0 0 0 4px var(--wxm-zenith);
+}
+
+/* Atmospheric dark bands matching weatherxmcom-website */
+.bg-dark-atmospheric {
+  background-color: #132C51;
+  background-image: linear-gradient(180deg, #0C1D38 0%, #132C51 60%, #17335E 100%);
+  position: relative;
+}
+
+.bg-dot-grid {
+  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.055) 1px, transparent 1.4px);
+  background-size: 26px 26px;
+}
+
+.bg-dark-atmospheric.bg-dot-grid {
+  background-image:
+    radial-gradient(circle, rgba(255, 255, 255, 0.055) 1px, transparent 1.4px),
+    linear-gradient(180deg, #0C1D38 0%, #132C51 60%, #17335E 100%);
+  background-size: 26px 26px, cover;
+  background-attachment: fixed;
+}
+
+/* Card utilities */
+.card-dark {
+  background-color: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(228, 233, 240, 0.12);
+  border-radius: 12px;
+}
+
+/* ==========================================================================
+   UNMISTAKABLE BUTTON & AFFORDANCE UTILITIES (Direct CSS Fallbacks)
+   ========================================================================== */
+
+/* Unmistakable Primary Action Button (Vibrant Green) */
+.btn-primary-green {
+  background: #10B981 !important;
+  background: linear-gradient(135deg, #10B981 0%, #059669 100%) !important;
+  color: #0A192F !important;
+  font-weight: 800 !important;
+  border: 1px solid #6EE7B7 !important;
+  box-shadow: 0 4px 16px rgba(16, 185, 129, 0.4), 0 0 24px rgba(16, 185, 129, 0.25) !important;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.btn-primary-green:hover {
+  background: #059669 !important;
+  background: linear-gradient(135deg, #34D399 0%, #10B981 100%) !important;
+  color: #0A192F !important;
+  box-shadow: 0 6px 24px rgba(16, 185, 129, 0.6), 0 0 32px rgba(16, 185, 129, 0.4) !important;
+  transform: translateY(-1px);
+}
+
+.btn-primary-green:active {
+  transform: scale(0.99) translateY(0) !important;
+}
+
+/* Unmistakable Blue Beacon Button */
+.btn-primary-beacon {
+  background: #2F74DC !important;
+  background: linear-gradient(135deg, #317AE8 0%, #2761B7 100%) !important;
+  color: #FFFFFF !important;
+  font-weight: 800 !important;
+  border: 1px solid #60A5FA !important;
+  box-shadow: 0 4px 16px rgba(47, 116, 220, 0.4) !important;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.btn-primary-beacon:hover {
+  background: #2761B7 !important;
+  box-shadow: 0 6px 24px rgba(47, 116, 220, 0.6) !important;
+  transform: translateY(-1px);
+}
+
+.btn-primary-beacon:active {
+  transform: scale(0.99) translateY(0) !important;
+}
+
+/* Unmistakable Green Status Badges */
+.badge-status-green {
+  background-color: rgba(16, 185, 129, 0.18) !important;
+  border: 1px solid rgba(52, 211, 153, 0.5) !important;
+  color: #34D399 !important;
+  font-weight: 700 !important;
+  padding: 0.25rem 0.625rem !important;
+  border-radius: 9999px !important;
+  font-size: 0.75rem !important;
+  line-height: 1rem !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 0.25rem !important;
+}
+
+/* Pulsing Green Indicator Dot */
+.indicator-dot-green {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 9999px;
+  background-color: #10B981;
+  box-shadow: 0 0 10px #10B981;
+}
+
+/* Amber status badge (e.g. "Flashing — keep plugged in") */
+.badge-status-warn {
+  background-color: rgba(220, 154, 14, 0.15);
+  border: 1px solid rgba(240, 178, 58, 0.5);
+  color: #F0B23A;
+  font-weight: 700;
+  padding: 0.25rem 0.625rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  line-height: 1rem;
+}

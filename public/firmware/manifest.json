@@ -1,0 +1,45 @@
+{
+  "schema": 1,
+  "hardware": "WG1200",
+  "chip": "ESP32-S3",
+  "flash_bytes": 16777216,
+  "app_partition_bytes": 4194304,
+  "firmwares": {
+    "weatherxm": {
+      "name": "WeatherXM",
+      "version": "0.8.27",
+      "label": "WeatherXM v0.8.27 (Latest Release)",
+      "category": "weatherxm",
+      "file": "/firmware/weatherxm/fw_release_0.8.27-gceee14f-signed.bin",
+      "bytes": 3543040,
+      "sha256": "7a394f858ab9c4a04ed653d20ca1337be9eb4112d741b21c4eacad3e0fc953a6",
+      "source_repo": "WeatherXM/wg1200-firmware",
+      "git_commit": "ceee14f",
+      "secure_boot_v2": true
+    },
+    "meshtastic_standard": {
+      "name": "Meshtastic",
+      "version": "2.8.1-standard",
+      "label": "Meshtastic v2.8.1 (Standard / No TFT)",
+      "category": "meshtastic",
+      "file": "/firmware/meshtastic/firmware-weatherxm-wg1200-2.8.1-signed.bin",
+      "bytes": 2387968,
+      "sha256": "5be9785196bd19f27f463cb4bd47179085854660771879587e9ae916c34b91ee",
+      "source_repo": "WeatherXM/Meshtastic-firmware",
+      "git_commit": "6201f02",
+      "secure_boot_v2": true
+    },
+    "meshtastic": {
+      "name": "Meshtastic",
+      "version": "2.8.1-wxm",
+      "label": "Meshtastic v2.8.1 (TFT Display)",
+      "category": "meshtastic",
+      "file": "/firmware/meshtastic/firmware-weatherxm-wg1200-tft-2.8.1-signed.bin",
+      "bytes": 3801088,
+      "sha256": "ca56cecdb93f917368741e59410101ec72d7efee465e1cc83723b09fac8ffb62",
+      "source_repo": "WeatherXM/Meshtastic-firmware",
+      "git_commit": "caa2e99",
+      "secure_boot_v2": true
+    }
+  }
+}

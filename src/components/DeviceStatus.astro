@@ -1,0 +1,60 @@
+---
+---
+
+<div id="device-status-card" class="hidden max-w-7xl mx-auto px-4 sm:px-8 mb-5">
+  <div class="rounded-card border border-wxm-cloud/15 bg-wxm-storm/30 backdrop-blur-md px-4 py-3 shadow-card flex flex-wrap items-center gap-x-6 gap-y-3">
+    <!-- Identity -->
+    <div class="flex items-center gap-3">
+      <img src="/wg1200-gateway.png" alt="WG1200" class="w-10 h-10 object-contain select-none" />
+      <div class="space-y-1">
+        <h2 class="text-sm font-bold text-white leading-none">WeatherXM WG1200</h2>
+        <span id="dev-status-pill" class="badge-status-green inline-flex items-center space-x-1.5">
+          <span class="indicator-dot-green animate-pulse"></span>
+          <span id="dev-status-text">Connected & Verified</span>
+        </span>
+      </div>
+    </div>
+
+    <span class="hidden md:block w-px self-stretch bg-wxm-cloud/15"></span>
+
+    <!-- Hardware readout (read-only telemetry) -->
+    <dl class="flex flex-wrap items-center gap-x-6 gap-y-2 select-none" title="Hardware identity, certificate integrity, and partition map verified">
+      <div>
+        <dt class="text-[11px] text-wxm-mist">Chip</dt>
+        <dd id="dev-chip" class="text-xs font-bold text-white font-mono">ESP32-S3</dd>
+      </div>
+      <div>
+        <dt class="text-[11px] text-wxm-mist">Flash</dt>
+        <dd id="dev-flash" class="text-xs font-bold text-white font-mono">16 MB (Quad SPI)</dd>
+      </div>
+      <div>
+        <dt class="text-[11px] text-wxm-mist">Active slot</dt>
+        <dd id="dev-slot" class="text-xs font-bold text-wxm-zenith font-mono">OTA_0</dd>
+      </div>
+      <div>
+        <dt class="text-[11px] text-wxm-mist">Keystore</dt>
+        <dd id="dev-cert" class="text-xs font-bold text-wxm-live font-mono">esp_secure_cert OK</dd>
+      </div>
+      <div>
+        <dt class="text-[11px] text-wxm-mist">Currently booting</dt>
+        <dd id="dev-running-fw" class="text-xs font-bold text-white">WeatherXM Gateway</dd>
+      </div>
+      <div>
+        <dt class="text-[11px] text-wxm-mist">Target slot</dt>
+        <dd id="dev-target-slot" class="text-xs font-bold text-wxm-zenith font-mono">OTA_1 (0x390000)</dd>
+      </div>
+    </dl>
+
+    <!-- Disconnect -->
+    <button
+      id="btn-disconnect"
+      type="button"
+      class="ml-auto px-3.5 py-2 rounded-control text-xs font-bold text-wxm-cloud border border-wxm-cloud/20 bg-wxm-midnight/80 hover:bg-wxm-error/20 hover:border-wxm-error/40 hover:text-wxm-error disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center space-x-1.5 cursor-pointer shadow-sm active:scale-95"
+    >
+      <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+      </svg>
+      <span>Disconnect</span>
+    </button>
+  </div>
+</div>
