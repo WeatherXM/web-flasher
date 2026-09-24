@@ -1,67 +1,31 @@
 ---
+// Compact sticky utility bar: safety guarantees + shortcuts to secondary tools.
 ---
 
-<div id="safety-protections-section" class="max-w-4xl mx-auto px-4 sm:px-6 mb-12">
-  <div class="text-center">
-    <!-- Built-in Safety Information (Unmistakable Green Protection Badges) -->
-    <div class="flex items-center justify-center space-x-2 text-xs font-bold text-emerald-400 uppercase tracking-wider mb-4 select-none">
-      <svg class="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-      </svg>
-      <span>Built-in Safety Protections (Non-destructive)</span>
-    </div>
+<div id="safety-protections-section" class="sticky bottom-0 z-30 border-t border-wxm-cloud/15 bg-wxm-abyss/95 backdrop-blur-md">
+  <div class="max-w-7xl mx-auto px-4 sm:px-8 py-2.5 flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-wxm-cloud select-none">
+    <span class="flex items-center gap-1.5" title="Factory keys and certificates in esp_secure_cert are never erased or modified.">
+      <svg class="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+      Credentials protected
+    </span>
+    <span class="flex items-center gap-1.5" title="Full chip erase is disabled. Strict partition address bounds enforce writing solely to OTA app slots.">
+      <svg class="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+      Hardware-guarded writes
+    </span>
+    <span class="flex items-center gap-1.5" title="Dual-partition architecture lets you switch between WeatherXM and Meshtastic whenever you like.">
+      <svg class="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+      Switch back anytime
+    </span>
 
-    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-left">
-      <div class="p-4 rounded-card border border-wxm-cloud/15 bg-wxm-storm/20 select-none">
-        <div class="flex items-center justify-between mb-2.5">
-          <div class="w-8 h-8 rounded-control bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
-            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
-            </svg>
-          </div>
-          <span class="badge-status-green">
-            ✓ Protected
-          </span>
-        </div>
-        <h4 class="text-sm font-semibold text-white">Credentials Protected</h4>
-        <p class="text-xs text-wxm-mist mt-1 leading-relaxed">
-          Factory keys and certificates in <code class="text-emerald-400 font-mono text-[11px]">esp_secure_cert</code> are never erased or modified.
-        </p>
-      </div>
-
-      <div class="p-4 rounded-card border border-wxm-cloud/15 bg-wxm-storm/20 select-none">
-        <div class="flex items-center justify-between mb-2.5">
-          <div class="w-8 h-8 rounded-control bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
-            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
-            </svg>
-          </div>
-          <span class="badge-status-green">
-            ✓ Hardware Guard
-          </span>
-        </div>
-        <h4 class="text-sm font-semibold text-white">Hardware Guarded</h4>
-        <p class="text-xs text-wxm-mist mt-1 leading-relaxed">
-          Full chip erase is disabled. Strict partition address bounds enforce writing solely to OTA app slots.
-        </p>
-      </div>
-
-      <div class="p-4 rounded-card border border-wxm-cloud/15 bg-wxm-storm/20 select-none">
-        <div class="flex items-center justify-between mb-2.5">
-          <div class="w-8 h-8 rounded-control bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
-            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-            </svg>
-          </div>
-          <span class="badge-status-green">
-            ✓ Dual-Boot
-          </span>
-        </div>
-        <h4 class="text-sm font-semibold text-white">Switch Back Anytime</h4>
-        <p class="text-xs text-wxm-mist mt-1 leading-relaxed">
-          Dual-partition architecture allows you to easily switch between WeatherXM and Meshtastic whenever you like.
-        </p>
-      </div>
+    <div class="ml-auto flex items-center gap-2">
+      <button id="btn-bar-tools" type="button" class="px-3 py-1.5 rounded-control font-bold text-wxm-cloud hover:text-white border border-wxm-cloud/20 bg-wxm-storm/40 hover:bg-wxm-storm/80 transition-all flex items-center gap-1.5 cursor-pointer">
+        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 16v-2m6-6h2M4 12h2m10.24-4.24l1.42-1.42M6.34 17.66l1.42-1.42m0-8.48L6.34 6.34m11.32 11.32l-1.42-1.42M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+        Advanced tools
+      </button>
+      <button id="btn-bar-console" type="button" class="px-3 py-1.5 rounded-control font-bold text-wxm-cloud hover:text-white border border-wxm-cloud/20 bg-wxm-storm/40 hover:bg-wxm-storm/80 transition-all flex items-center gap-1.5 cursor-pointer">
+        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 17l6-5-6-5M12 19h8"/></svg>
+        Console · <span id="bar-log-count" class="font-mono">0</span>
+      </button>
     </div>
   </div>
 </div>

@@ -10,46 +10,46 @@ const defaultWxm = wxmEntries[0]?.[1] as any;
 const defaultMesh = (meshEntries.find(([k]) => k === 'meshtastic')?.[1] ?? meshEntries[0]?.[1]) as any;
 ---
 
-<div id="firmware-selection-section" class="hidden max-w-4xl mx-auto px-4 sm:px-6 mb-12">
-  <div class="mb-6 space-y-1">
-    <span class="text-[11px] font-bold text-wxm-zenith uppercase tracking-wider block">Step 2 — Choose Firmware Mode</span>
+<div id="firmware-selection-section" class="hidden max-w-7xl mx-auto px-4 sm:px-8 mb-6">
+  <div class="mb-4 flex flex-wrap items-baseline gap-x-4 gap-y-1">
+    <span class="text-[11px] font-bold text-wxm-zenith uppercase tracking-wider">Step 2</span>
     <h2 class="text-xl font-bold text-white tracking-tight">Choose how this WG1200 should operate</h2>
-    <p class="text-xs text-wxm-mist leading-relaxed max-w-3xl">
-      <strong class="text-white">WeatherXM Tri-Protocol</strong> keeps the gateway doing its normal weather job and can publish the paired station as Meshtastic and MeshCore sensor telemetry.
-      <strong class="text-white">Full Meshtastic</strong> replaces the gateway application in the active OTA slot and turns the WG1200 itself into a general-purpose Meshtastic node.
-      Protected credentials and the factory recovery image remain untouched in either mode.
-    </p>
+    <p class="text-xs text-wxm-mist">Protected credentials and the factory recovery image remain untouched in either mode.</p>
   </div>
 
-  <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
     <!-- WeatherXM Card -->
-    <div id="card-wxm" class="rounded-card border-2 border-wxm-cloud/15 bg-wxm-storm/30 p-6 flex flex-col justify-between transition-all shadow-card backdrop-blur-md relative overflow-hidden">
+    <div id="card-wxm" class="rounded-card border-2 border-wxm-cloud/15 bg-wxm-storm/30 p-5 flex flex-col justify-between transition-all shadow-card backdrop-blur-md relative overflow-hidden">
       <div>
-        <div class="flex items-center justify-between mb-4">
-          <div class="w-12 h-12 rounded-control bg-wxm-beacon/15 border border-wxm-beacon/30 flex items-center justify-center text-wxm-zenith">
-            <svg class="w-6 h-6" viewBox="0 0 32 32" fill="none">
+        <div class="flex items-start justify-between gap-3 mb-3">
+          <div class="flex items-center gap-3 min-w-0">
+            <div class="w-10 h-10 flex-shrink-0 rounded-control bg-wxm-beacon/15 border border-wxm-beacon/30 flex items-center justify-center text-wxm-zenith">
+            <svg class="w-5 h-5" viewBox="0 0 32 32" fill="none">
               <path d="M7 16L12 9L17 16L22 9L27 16" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
               <path d="M7 23L12 16L17 23L22 16L27 23" stroke="#2F74DC" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
+          </div>
+            <div class="min-w-0">
+              <h3 class="text-lg font-bold text-white">WeatherXM Tri-Protocol Gateway</h3>
+              <div class="flex items-center space-x-2 mt-0.5">
+                <span class="text-xs text-wxm-mist font-mono font-medium" id="wxm-version">v{defaultWxm?.version ?? '0.8.27'}</span>
+                <span class="text-[11px] px-2 py-0.5 rounded bg-wxm-beacon/10 text-wxm-zenith border border-wxm-beacon/25 font-medium">WXM + Meshtastic + MeshCore</span>
+              </div>
+            </div>
           </div>
           <span id="badge-wxm-status" class="px-2.5 py-1 text-xs font-semibold rounded-full bg-wxm-midnight/70 border border-wxm-cloud/20 text-wxm-mist">
             Available
           </span>
         </div>
 
-        <h3 class="text-lg font-bold text-white">WeatherXM Tri-Protocol Gateway</h3>
-        <div class="flex items-center space-x-2 mt-1 mb-3">
-          <span class="text-xs text-wxm-mist font-mono font-medium" id="wxm-version">v{defaultWxm?.version ?? '0.8.27'}</span>
-          <span class="text-[11px] px-2 py-0.5 rounded bg-wxm-beacon/10 text-wxm-zenith border border-wxm-beacon/25 font-medium">WXM + Meshtastic + MeshCore</span>
-        </div>
 
         <p class="text-xs text-wxm-mist leading-relaxed">
-          Keep the WG1200 as a full WeatherXM weather gateway while also exposing its paired station to open LoRa mesh ecosystems. The same observations can be published as WeatherXM-native data, standard Meshtastic environmental telemetry, and MeshCore sensor-node telemetry. Mesh publishing is configurable and does not replace WeatherXM operation.
+          Keeps the WG1200 as a full WeatherXM weather gateway while also publishing its paired station to open LoRa mesh ecosystems. Mesh publishing is configurable and does not replace WeatherXM operation.
         </p>
 
-        <div class="mt-4 pt-3 border-t border-wxm-cloud/10">
+        <div class="mt-3 pt-3 border-t border-wxm-cloud/10">
           <span class="text-[10px] font-bold text-wxm-mist uppercase tracking-wider block mb-2 select-none">Included Capabilities</span>
-          <ul class="space-y-2 text-xs text-wxm-cloud select-none">
+          <ul class="space-y-1 text-xs text-wxm-cloud select-none">
             <li class="flex items-center space-x-2">
               <svg class="w-4 h-4 text-wxm-live flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
               <span>WeatherXM cloud, app, rewards and OTA remain active</span>
@@ -69,14 +69,14 @@ const defaultMesh = (meshEntries.find(([k]) => k === 'meshtastic')?.[1] ?? meshE
           </ul>
         </div>
 
-        <div class="mt-4 pt-3 border-t border-wxm-cloud/10">
+        <div class="mt-3 pt-3 border-t border-wxm-cloud/10">
           <label for="select-wxm-build" class="block text-[11px] font-bold text-wxm-cloud uppercase tracking-wider mb-1.5 select-none">
             Choose Firmware Build / Version:
           </label>
           <div class="relative">
             <select
               id="select-wxm-build"
-              class="w-full bg-wxm-midnight border border-wxm-cloud/30 rounded-control py-2.5 px-3 text-xs text-white font-mono focus:outline-none focus:border-wxm-beacon focus:ring-1 focus:ring-wxm-beacon transition-colors appearance-none cursor-pointer pr-8 shadow-inner"
+              class="w-full bg-wxm-midnight border border-wxm-cloud/30 rounded-control py-2 px-3 text-xs text-white font-mono focus:outline-none focus:border-wxm-beacon focus:ring-1 focus:ring-wxm-beacon transition-colors appearance-none cursor-pointer pr-8 shadow-inner"
             >
               {wxmEntries.map(([key, fw]: [string, any], idx: number) => {
                 const mb = (fw.bytes / (1024 * 1024)).toFixed(2);
@@ -101,11 +101,11 @@ const defaultMesh = (meshEntries.find(([k]) => k === 'meshtastic')?.[1] ?? meshE
       </div>
 
       <!-- Action Button Area -->
-      <div class="mt-6 pt-5 border-t border-wxm-cloud/15">
+      <div class="mt-4 pt-4 border-t border-wxm-cloud/15">
         <button
           id="btn-flash-weatherxm"
           type="button"
-          class="w-full py-3.5 px-4 rounded-control font-extrabold btn-primary-beacon flex items-center justify-center space-x-2 text-sm cursor-pointer active:scale-98 select-none"
+          class="w-full py-3 px-4 rounded-control font-extrabold btn-primary-beacon flex items-center justify-center space-x-2 text-sm cursor-pointer active:scale-98 select-none"
         >
           <svg class="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
@@ -116,32 +116,36 @@ const defaultMesh = (meshEntries.find(([k]) => k === 'meshtastic')?.[1] ?? meshE
     </div>
 
     <!-- Meshtastic Card -->
-    <div id="card-mesh" class="rounded-card border-2 border-wxm-cloud/15 bg-wxm-storm/30 p-6 flex flex-col justify-between transition-all shadow-card backdrop-blur-md relative overflow-hidden">
+    <div id="card-mesh" class="rounded-card border-2 border-wxm-cloud/15 bg-wxm-storm/30 p-5 flex flex-col justify-between transition-all shadow-card backdrop-blur-md relative overflow-hidden">
       <div>
-        <div class="flex items-center justify-between mb-4">
-          <div class="w-12 h-12 rounded-control bg-wxm-live/15 border border-wxm-live/30 flex items-center justify-center text-wxm-live">
-            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <div class="flex items-start justify-between gap-3 mb-3">
+          <div class="flex items-center gap-3 min-w-0">
+            <div class="w-10 h-10 flex-shrink-0 rounded-control bg-wxm-live/15 border border-wxm-live/30 flex items-center justify-center text-wxm-live">
+            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0" />
             </svg>
+          </div>
+            <div class="min-w-0">
+              <h3 class="text-lg font-bold text-white">Full Meshtastic Node</h3>
+              <div class="flex items-center space-x-2 mt-0.5">
+                <span class="text-xs text-wxm-mist font-mono font-medium" id="mesh-version">v2.8.1-wxm</span>
+                <span class="text-[11px] px-2 py-0.5 rounded bg-wxm-live/10 text-wxm-live border border-wxm-live/25 font-medium">Gateway becomes Meshtastic</span>
+              </div>
+            </div>
           </div>
           <span id="badge-mesh-status" class="px-2.5 py-1 text-xs font-semibold rounded-full bg-wxm-midnight/70 border border-wxm-cloud/20 text-wxm-mist">
             Available
           </span>
         </div>
 
-        <h3 class="text-lg font-bold text-white">Full Meshtastic Node</h3>
-        <div class="flex items-center space-x-2 mt-1 mb-3">
-          <span class="text-xs text-wxm-mist font-mono font-medium" id="mesh-version">v2.8.1-wxm</span>
-          <span class="text-[11px] px-2 py-0.5 rounded bg-wxm-live/10 text-wxm-live border border-wxm-live/25 font-medium">Gateway becomes Meshtastic</span>
-        </div>
 
         <p class="text-xs text-wxm-mist leading-relaxed">
-          Turn the WG1200 hardware itself into a native Meshtastic device. This firmware uses the onboard SX1262 radio and WG1200 display and participates directly in Meshtastic routing, messaging and repeater operation. WeatherXM station/cloud services pause while this mode is active; your WeatherXM identity stays protected so you can switch back at any time.
+          Turns the WG1200 itself into a native Meshtastic device. WeatherXM station/cloud services pause while this mode is active; your WeatherXM identity stays protected so you can switch back at any time.
         </p>
 
-        <div class="mt-4 pt-3 border-t border-wxm-cloud/10">
+        <div class="mt-3 pt-3 border-t border-wxm-cloud/10">
           <span class="text-[10px] font-bold text-wxm-mist uppercase tracking-wider block mb-2 select-none">Included Capabilities</span>
-          <ul class="space-y-2 text-xs text-wxm-cloud select-none">
+          <ul class="space-y-1 text-xs text-wxm-cloud select-none">
             <li class="flex items-center space-x-2">
               <svg class="w-4 h-4 text-wxm-live flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
               <span>Native Meshtastic routing, messaging and repeater operation</span>
@@ -162,14 +166,14 @@ const defaultMesh = (meshEntries.find(([k]) => k === 'meshtastic')?.[1] ?? meshE
         </div>
 
         <!-- Meshtastic Hardware Variant Dropdown -->
-        <div class="mt-4 pt-3 border-t border-wxm-cloud/10">
+        <div class="mt-3 pt-3 border-t border-wxm-cloud/10">
           <label for="select-mesh-build" class="block text-[11px] font-bold text-emerald-400 uppercase tracking-wider mb-1.5 select-none">
             Choose Hardware Variant / Build:
           </label>
           <div class="relative">
             <select
               id="select-mesh-build"
-              class="w-full bg-wxm-midnight border border-emerald-500/40 rounded-control py-2.5 px-3 text-xs text-white font-mono focus:outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400 transition-colors appearance-none cursor-pointer pr-8 shadow-inner"
+              class="w-full bg-wxm-midnight border border-emerald-500/40 rounded-control py-2 px-3 text-xs text-white font-mono focus:outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400 transition-colors appearance-none cursor-pointer pr-8 shadow-inner"
             >
               {meshEntries.map(([key, fw]: [string, any], idx: number) => {
                 const mb = (fw.bytes / (1024 * 1024)).toFixed(2);
@@ -195,11 +199,11 @@ const defaultMesh = (meshEntries.find(([k]) => k === 'meshtastic')?.[1] ?? meshE
       </div>
 
       <!-- Action Button Area -->
-      <div class="mt-6 pt-5 border-t border-wxm-cloud/15">
+      <div class="mt-4 pt-4 border-t border-wxm-cloud/15">
         <button
           id="btn-flash-meshtastic"
           type="button"
-          class="w-full py-3.5 px-4 rounded-control font-black btn-primary-green flex items-center justify-center space-x-2 text-sm cursor-pointer active:scale-98 select-none"
+          class="w-full py-3 px-4 rounded-control font-black btn-primary-green flex items-center justify-center space-x-2 text-sm cursor-pointer active:scale-98 select-none"
         >
           <svg class="w-4 h-4 text-wxm-abyss" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0" />

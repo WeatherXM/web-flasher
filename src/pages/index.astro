@@ -39,17 +39,17 @@ import Footer from '../components/Footer.astro';
       <Header />
       <BrowserNotice />
 
-      <main class="flex-1 py-6">
+      <main class="flex-1 py-4 lg:py-6">
         <ConnectPanel />
         <DeviceStatus />
         <FirmwareCards />
-        <AdvancedTools />
         <FlashProgress />
         <PostFlashInstructions />
-        <TechnicalLog />
-        <SafetyProtections />
+        <AdvancedTools />
+        <div id="console-home"><TechnicalLog /></div>
       </main>
 
+      <SafetyProtections />
       <Footer />
     </div>
 
@@ -163,6 +163,42 @@ import Footer from '../components/Footer.astro';
       const logChevron = document.getElementById('log-chevron');
       const btnClearLog = document.getElementById('btn-clear-log');
       const btnDownloadLog = document.getElementById('btn-download-log');
+
+      // Layout B: compact device bar, console docking and sticky utility bar
+      const devStatusPill = document.getElementById('dev-status-pill');
+      const devStatusText = document.getElementById('dev-status-text');
+      const consoleHome = document.getElementById('console-home');
+      const progressLogSlot = document.getElementById('progress-log-slot');
+      const technicalLogSection = document.getElementById('technical-log-section');
+      const barLogCount = document.getElementById('bar-log-count');
+      const btnBarTools = document.getElementById('btn-bar-tools');
+      const btnBarConsole = document.getElementById('btn-bar-console');
+      const CONSOLE_HOME_CLASSES = ['max-w-7xl', 'mx-auto', 'px-4', 'sm:px-8', 'mb-8'];
+
+      // While flashing, dock the console next to the progress card so both fit on one screen.
+      function placeConsole(inProgress: boolean) {
+        if (!technicalLogSection) return;
+        const target = inProgress ? progressLogSlot : consoleHome;
+        if (target && technicalLogSection.parentElement !== target) target.appendChild(technicalLogSection);
+        CONSOLE_HOME_CLASSES.forEach((c) => technicalLogSection.classList.toggle(c, !inProgress));
+        technicalLogSection.classList.toggle('h-full', inProgress);
+        logTerminal?.classList.toggle('h-48', !inProgress);
+        logTerminal?.classList.toggle('h-[22rem]', inProgress);
+        if (inProgress && logContentWrapper?.classList.contains('hidden')) btnToggleLog?.click();
+        if (logTerminal) logTerminal.scrollTop = logTerminal.scrollHeight;
+      }
+
+      function setDeviceStatus(mode: 'ok' | 'flashing') {
+        const flashing = mode === 'flashing';
+        if (devStatusPill) {
+          devStatusPill.className = flashing
+            ? 'badge-status-warn inline-flex items-center space-x-1.5'
+            : 'badge-status-green inline-flex items-center space-x-1.5';
+        }
+        if (devStatusText) devStatusText.textContent = flashing ? 'Flashing — keep plugged in' : 'Connected & Verified';
+        if (flashing) btnDisconnect?.setAttribute('disabled', 'true');
+        else btnDisconnect?.removeAttribute('disabled');
+      }
 
       let pendingTargetFw: string | null = null;
       let totalLogEvents = 0;
@@ -448,6 +484,17 @@ import Footer from '../components/Footer.astro';
         if (logTerminal) logTerminal.innerHTML = '';
         totalLogEvents = 0;
         if (logCount) logCount.textContent = '0';
+        if (barLogCount) barLogCount.textContent = '0';
+      });
+
+      btnBarTools?.addEventListener('click', () => {
+        if (toolsContentWrapper?.classList.contains('hidden')) btnToggleTools?.click();
+        document.getElementById('advanced-tools-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+
+      btnBarConsole?.addEventListener('click', () => {
+        if (logContentWrapper?.classList.contains('hidden')) btnToggleLog?.click();
+        technicalLogSection?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       });
 
       btnDownloadLog?.addEventListener('click', () => {
@@ -463,6 +510,7 @@ import Footer from '../components/Footer.astro';
 
         if (ctx.state === 'idle') {
           hasStartedFlashing = false;
+          placeConsole(false);
           panelConnect?.classList.remove('hidden');
           deviceStatusCard?.classList.add('hidden');
           firmwareSelectionSection?.classList.add('hidden');
@@ -499,6 +547,8 @@ import Footer from '../components/Footer.astro';
           }
           if (btnConnectManual) btnConnectManual.setAttribute('disabled', 'true');
         } else if (ctx.state === 'ready') {
+          setDeviceStatus('ok');
+          placeConsole(false);
           connectErrorBanner?.classList.add('hidden');
           panelConnect?.classList.add('hidden');
           deviceStatusCard?.classList.remove('hidden');
@@ -512,6 +562,8 @@ import Footer from '../components/Footer.astro';
           }
           if (btnConnectManual) btnConnectManual.removeAttribute('disabled');
         } else if (ctx.state === 'recovery') {
+          setDeviceStatus('ok');
+          placeConsole(false);
           connectErrorBanner?.classList.add('hidden');
           panelConnect?.classList.add('hidden');
           deviceStatusCard?.classList.remove('hidden');
@@ -534,7 +586,9 @@ import Footer from '../components/Footer.astro';
           hasStartedFlashing = true;
           connectErrorBanner?.classList.add('hidden');
           panelConnect?.classList.add('hidden');
-          deviceStatusCard?.classList.add('hidden');
+          deviceStatusCard?.classList.remove('hidden');
+          setDeviceStatus('flashing');
+          placeConsole(true);
           firmwareSelectionSection?.classList.add('hidden');
           flashProgressSection?.classList.remove('hidden');
           postFlashSection?.classList.add('hidden');
@@ -549,6 +603,9 @@ import Footer from '../components/Footer.astro';
         } else if (ctx.state === 'success') {
           hasStartedFlashing = false;
           flashProgressSection?.classList.add('hidden');
+          deviceStatusCard?.classList.add('hidden');
+          setDeviceStatus('ok');
+          placeConsole(false);
           postFlashSection?.classList.remove('hidden');
           recoveryAlertCard?.classList.add('hidden');
 
@@ -567,7 +624,9 @@ import Footer from '../components/Footer.astro';
           }
           if (btnConnectManual) btnConnectManual.removeAttribute('disabled');
 
+          btnDisconnect?.removeAttribute('disabled');
           if (!hasStartedFlashing) {
+            placeConsole(false);
             panelConnect?.classList.remove('hidden');
             deviceStatusCard?.classList.add('hidden');
             firmwareSelectionSection?.classList.add('hidden');
@@ -604,6 +663,7 @@ import Footer from '../components/Footer.astro';
 
         totalLogEvents++;
         if (logCount) logCount.textContent = `${totalLogEvents}`;
+        if (barLogCount) barLogCount.textContent = `${totalLogEvents}`;
       }
 
       function handleInspection(data: Wg1200Inspection | null) {

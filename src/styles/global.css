@@ -144,3 +144,15 @@
   background-color: #10B981;
   box-shadow: 0 0 10px #10B981;
 }
+
+/* Amber status badge (e.g. "Flashing — keep plugged in") */
+.badge-status-warn {
+  background-color: rgba(220, 154, 14, 0.15);
+  border: 1px solid rgba(240, 178, 58, 0.5);
+  color: #F0B23A;
+  font-weight: 700;
+  padding: 0.25rem 0.625rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  line-height: 1rem;
+}
