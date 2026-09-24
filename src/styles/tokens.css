@@ -1,0 +1,44 @@
+/* WeatherXM design tokens v1.2 — see brand.md
+   Fonts: https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap */
+:root {
+  /* Core blues (from logo v1.1) */
+  --wxm-zenith: #317AE8;
+  --wxm-beacon: #2F74DC;   /* primary */
+  --wxm-horizon: #2761B7;  /* hover/pressed */
+  --wxm-deep-sky: #22549F;
+  --wxm-storm: #1A407A;
+  --wxm-midnight: #132C51; /* dark surfaces */
+
+  /* Neutrals */
+  --wxm-ink: #10151E;
+  --wxm-slate: #4B5668;
+  --wxm-mist: #9AA5B5;
+  --wxm-cloud: #E4E9F0;
+  --wxm-paper: #F7F9FC;
+  --wxm-white: #FFFFFF;
+
+  /* Tints */
+  --wxm-blue-tint: #EAF1FC;
+  --wxm-blue-wash: #C9DBF7;
+
+  /* Functional */
+  --wxm-success: #1E8E5A;
+  --wxm-warning: #DC9A0E;
+  --wxm-error: #CE4034;
+
+  /* Typography */
+  --wxm-font-sans: "Manrope", system-ui, sans-serif;
+  --wxm-font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  /* Shape & elevation */
+  --wxm-radius-control: 8px;
+  --wxm-radius-card: 12px;
+  --wxm-radius-modal: 16px;
+  --wxm-shadow-card: 0 1px 3px rgba(19,44,81,.08), 0 4px 12px rgba(19,44,81,.06);
+  --wxm-focus-ring: 0 0 0 2px var(--wxm-white), 0 0 0 4px var(--wxm-zenith);
+
+  /* Spacing (4px grid) */
+  --wxm-space-1: 4px;  --wxm-space-2: 8px;  --wxm-space-3: 12px;
+  --wxm-space-4: 16px; --wxm-space-6: 24px; --wxm-space-8: 32px;
+  --wxm-space-12: 48px; --wxm-space-16: 64px;
+}

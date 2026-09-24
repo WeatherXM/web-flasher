@@ -1,0 +1,34 @@
+---
+import GithubReposButton from './GithubReposButton.astro';
+---
+
+<header class="border-b border-wxm-cloud/15 bg-wxm-midnight/90 backdrop-blur-md sticky top-0 z-40">
+  <div class="max-w-7xl mx-auto px-4 sm:px-8 py-3 flex items-center justify-between gap-3">
+    <div class="flex items-center space-x-3.5 shrink-0">
+      <a
+        href="https://weatherxm.com"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="flex items-center group"
+        title="WeatherXM website"
+      >
+        <img
+          src="/brand/logo-dark-horizontal.svg"
+          alt="WeatherXM"
+          class="h-7 w-auto object-contain transition-opacity group-hover:opacity-90"
+        />
+      </a>
+      <div class="h-4 w-px bg-wxm-cloud/20 hidden sm:block"></div>
+      <a
+        href="/"
+        class="hidden sm:inline-block text-xs font-medium text-wxm-cloud hover:text-white transition-colors"
+      >
+        WG1200 firmware web flasher
+      </a>
+    </div>
+
+    <div class="flex items-center">
+      <GithubReposButton />
+    </div>
+  </div>
+</header>
