@@ -4,7 +4,8 @@ import manifest from '../../public/firmware/manifest.json';
 const wxmEntries = Object.entries(manifest.firmwares)
   .filter(([key, fw]) => (fw as any).category === 'weatherxm' || key.startsWith('weatherxm'));
 const meshEntries = Object.entries(manifest.firmwares)
-  .filter(([key, fw]) => (fw as any).category === 'meshtastic' || key.startsWith('meshtastic'));
+  .filter(([key, fw]) => (fw as any).category === 'meshtastic' || key.startsWith('meshtastic'))
+  .sort(([a], [b]) => (a === 'meshtastic' ? -1 : b === 'meshtastic' ? 1 : 0));
 
 const defaultWxm = wxmEntries[0]?.[1] as any;
 const defaultMesh = (meshEntries.find(([k]) => k === 'meshtastic')?.[1] ?? meshEntries[0]?.[1]) as any;
@@ -194,6 +195,20 @@ const defaultMesh = (meshEntries.find(([k]) => k === 'meshtastic')?.[1] ?? meshE
           <div class="flex items-center justify-between text-[11px] text-wxm-mist mt-1.5 px-0.5">
             <span id="mesh-selected-file" class="font-mono text-[10px] text-wxm-cloud truncate max-w-[200px]">{defaultMesh ? (defaultMesh.file.split('/').pop() ?? defaultMesh.file) : ''}</span>
             <span id="mesh-selected-size" class="font-mono text-[10px] text-emerald-400 font-semibold">{defaultMesh ? (defaultMesh.bytes / (1024 * 1024)).toFixed(2) + ' MB' : ''}</span>
+          </div>
+
+          <!-- Variant Navigation Description -->
+          <div class="mt-2.5 p-2.5 rounded bg-wxm-midnight/70 border border-emerald-500/20 text-[11px] leading-relaxed">
+            <div id="mesh-variant-tip-tft" class="text-wxm-mist">
+              <span class="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 mr-1.5 align-middle"></span>
+              <strong class="text-white">TFT Version (Default):</strong> Features interactive <span class="text-emerald-300 font-semibold">touchscreen navigation</span> directly on the display.
+              <span class="block text-wxm-mist/75 mt-0.5 text-[10px]">In the Standard version, navigation is operated from the single green button.</span>
+            </div>
+            <div id="mesh-variant-tip-standard" class="hidden text-wxm-mist">
+              <span class="inline-block w-1.5 h-1.5 rounded-full bg-amber-400 mr-1.5 align-middle"></span>
+              <strong class="text-white">Standard Version:</strong> Navigation is operated from the <span class="text-amber-300 font-semibold">single green button</span>.
+              <span class="block text-wxm-mist/75 mt-0.5 text-[10px]">The TFT version enables direct touchscreen navigation on the display.</span>
+            </div>
           </div>
         </div>
       </div>

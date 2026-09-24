@@ -739,15 +739,19 @@ import Footer from '../components/Footer.astro';
 
         if (selectMeshBuild) {
           selectMeshBuild.innerHTML = '';
-          for (const [key, fw] of Object.entries(manifest.firmwares)) {
-            if (fw.category === 'meshtastic' || key.startsWith('meshtastic')) {
-              const opt = document.createElement('option');
-              opt.value = key;
-              const mb = (fw.bytes / (1024 * 1024)).toFixed(2);
-              opt.textContent = `${fw.label ?? fw.name + ' v' + fw.version} (${mb} MB)`;
-              selectMeshBuild.appendChild(opt);
-            }
+          const sortedMesh = Object.entries(manifest.firmwares)
+            .filter(([key, fw]) => fw.category === 'meshtastic' || key.startsWith('meshtastic'))
+            .sort(([a], [b]) => (a === 'meshtastic' ? -1 : b === 'meshtastic' ? 1 : 0));
+
+          for (const [key, fw] of sortedMesh) {
+            const opt = document.createElement('option');
+            opt.value = key;
+            const mb = (fw.bytes / (1024 * 1024)).toFixed(2);
+            opt.textContent = `${fw.label ?? fw.name + ' v' + fw.version} (${mb} MB)`;
+            if (key === 'meshtastic') opt.selected = true;
+            selectMeshBuild.appendChild(opt);
           }
+          selectMeshBuild.value = 'meshtastic';
         }
 
         function updateWxmDetails() {
@@ -766,6 +770,19 @@ import Footer from '../components/Footer.astro';
           if (meshVersionText) meshVersionText.textContent = `v${fw.version}`;
           if (meshSelectedFile) meshSelectedFile.textContent = fw.file.split('/').pop() ?? fw.file;
           if (meshSelectedSize) meshSelectedSize.textContent = `${(fw.bytes / (1024 * 1024)).toFixed(2)} MB`;
+
+          const tipTft = document.getElementById('mesh-variant-tip-tft');
+          const tipStd = document.getElementById('mesh-variant-tip-standard');
+          const isTft = selectMeshBuild.value === 'meshtastic' || selectMeshBuild.value.includes('tft');
+          if (tipTft && tipStd) {
+            if (isTft) {
+              tipTft.classList.remove('hidden');
+              tipStd.classList.add('hidden');
+            } else {
+              tipTft.classList.add('hidden');
+              tipStd.classList.remove('hidden');
+            }
+          }
         }
 
         selectWxmBuild?.addEventListener('change', updateWxmDetails);

@@ -294,7 +294,13 @@ export function generateManifest() {
   // 2. Scan Meshtastic firmwares
   const meshDir = path.join(PUBLIC_FW_DIR, 'meshtastic');
   if (fs.existsSync(meshDir)) {
-    const meshFiles = fs.readdirSync(meshDir).filter((f) => f.endsWith('.bin')).sort();
+    const meshFiles = fs.readdirSync(meshDir).filter((f) => f.endsWith('.bin')).sort((a, b) => {
+      const aTft = a.includes('tft');
+      const bTft = b.includes('tft');
+      if (aTft && !bTft) return -1;
+      if (!aTft && bTft) return 1;
+      return a.localeCompare(b);
+    });
     const seenHashes = new Set();
 
     for (const f of meshFiles) {
@@ -317,8 +323,8 @@ export function generateManifest() {
       const version = isTft ? `${baseVer}-wxm` : `${baseVer}-standard`;
       const key = isTft ? 'meshtastic' : 'meshtastic_standard';
       const label = isTft
-        ? `Meshtastic v${baseVer} (TFT Display)`
-        : `Meshtastic v${baseVer} (Standard / No TFT)`;
+        ? `Meshtastic v${baseVer} (TFT Touchscreen — Default)`
+        : `Meshtastic v${baseVer} (Standard / Single Button Navigation)`;
 
       const git_commit = known?.git_commit || existing?.git_commit || (isTft ? 'caa2e99' : '6201f02');
       const source_repo = known?.source_repo || existing?.source_repo || 'WeatherXM/Meshtastic-firmware';
