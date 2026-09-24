@@ -1,5 +1,28 @@
 ---
 import GithubReposButton from './GithubReposButton.astro';
+import { execSync } from 'node:child_process';
+
+let commitHash = (
+  process.env.PUBLIC_GIT_COMMIT ||
+  process.env.GITHUB_SHA ||
+  process.env.CF_PAGES_COMMIT_SHA ||
+  process.env.VERCEL_GIT_COMMIT_SHA ||
+  process.env.COMMIT_REF ||
+  ''
+).slice(0, 7);
+
+if (!commitHash) {
+  try {
+    commitHash = execSync('git rev-parse --short HEAD', { encoding: 'utf8' }).trim();
+  } catch {
+    commitHash = 'dev';
+  }
+}
+
+const commitUrl =
+  commitHash && commitHash !== 'dev'
+    ? `https://github.com/WeatherXM/web-flasher/commit/${commitHash}`
+    : 'https://github.com/WeatherXM/web-flasher';
 ---
 
 <footer class="border-t border-wxm-cloud/15 py-8 bg-wxm-midnight text-xs text-wxm-mist">
@@ -16,7 +39,16 @@ import GithubReposButton from './GithubReposButton.astro';
         <span class="text-white font-medium group-hover:text-wxm-zenith transition-colors">WeatherXM</span>
       </a>
       <span class="text-wxm-slate">•</span>
-      <span class="text-wxm-zenith font-mono">flasher.weatherxm.com</span>
+      <a
+        href={commitUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        class="text-wxm-zenith font-mono hover:text-white transition-colors inline-flex items-center space-x-1"
+        title="View deployed commit on GitHub"
+      >
+        <span class="text-wxm-mist">commit:</span>
+        <span class="font-bold">{commitHash}</span>
+      </a>
     </div>
 
     <div class="flex flex-wrap items-center justify-center gap-4 sm:gap-5">
