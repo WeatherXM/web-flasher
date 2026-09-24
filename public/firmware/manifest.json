@@ -10,11 +10,11 @@
       "version": "0.8.27",
       "label": "WeatherXM v0.8.27 (Latest Release)",
       "category": "weatherxm",
-      "file": "/firmware/weatherxm/fw_release_0.8.27-gceee14f-signed.bin",
+      "file": "/firmware/weatherxm/fw_release_0.8.27-g1796d4b-signed.bin",
       "bytes": 3543040,
-      "sha256": "7a394f858ab9c4a04ed653d20ca1337be9eb4112d741b21c4eacad3e0fc953a6",
+      "sha256": "d73c71dc785befe28f76375a773a1b1d92ad8b0dd3f34e3e6a740f55a0a28a49",
       "source_repo": "WeatherXM/wg1200-firmware",
-      "git_commit": "ceee14f",
+      "git_commit": "1796d4b",
       "secure_boot_v2": true
     },
     "meshtastic_standard": {
@@ -36,7 +36,7 @@
       "category": "meshtastic",
       "file": "/firmware/meshtastic/firmware-weatherxm-wg1200-tft-2.8.1-signed.bin",
       "bytes": 3801088,
-      "sha256": "ca56cecdb93f917368741e59410101ec72d7efee465e1cc83723b09fac8ffb62",
+      "sha256": "dc8801fe683d8ff0135adc03316fc93d6a0d5529fed5d3d3bf3f14d54cde06ca",
       "source_repo": "WeatherXM/Meshtastic-firmware",
       "git_commit": "caa2e99",
       "secure_boot_v2": true

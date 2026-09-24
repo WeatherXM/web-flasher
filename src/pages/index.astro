@@ -670,16 +670,21 @@ import Footer from '../components/Footer.astro';
         if (!data) return;
         if (devChip) devChip.textContent = data.chipName;
         if (devFlash) devFlash.textContent = `${data.flashSizeMb} MB (Quad SPI)`;
+        const activePartition =
+          data.partitions?.[data.otadata.activeSlot] ??
+          (data.otadata.activeSlot === 'ota_0' ? data.partitions?.['app0'] : undefined) ??
+          (data.otadata.activeSlot === 'ota_1' ? data.partitions?.['app1'] : undefined);
         const activeOffset =
-          data.otadata.activeSlot === 'ota_0'
+          activePartition?.offset ??
+          (data.otadata.activeSlot === 'ota_0'
             ? WG1200_CONSTANTS.APP_OTA_0.offset
             : data.otadata.activeSlot === 'ota_1'
               ? WG1200_CONSTANTS.APP_OTA_1.offset
-              : WG1200_CONSTANTS.APP_FACTORY.offset;
+              : WG1200_CONSTANTS.APP_FACTORY.offset);
         if (devSlot) devSlot.textContent = `${data.otadata.activeSlot.toUpperCase()} (0x${activeOffset.toString(16)})`;
         if (devCert) devCert.textContent = data.secureCert.valid ? 'esp_secure_cert OK' : 'Cert Invalid';
         if (devRunningFw) {
-          devRunningFw.textContent = data.currentFirmware?.displayTitle ?? 'WeatherXM Gateway';
+          devRunningFw.textContent = data.currentFirmware?.displayTitle ?? 'Unrecognized Firmware';
         }
         if (devTargetSlot) {
           devTargetSlot.textContent = `${data.otadata.targetSlot.toUpperCase()} (0x${data.otadata.targetOffset.toString(16)})`;

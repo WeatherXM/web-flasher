@@ -424,5 +424,130 @@ describe('transport & serialLog', () => {
     expect(mockLoader.memBegin).not.toHaveBeenCalled();
     expect(mockLoader.applyUsbFlashWriteSize).toHaveBeenCalled();
   });
+
+  it('inspect() dynamically resolves active partition offset from partition table and reads 4096 bytes', async () => {
+    const transport = new Wg1200Transport({
+      log: () => {},
+      error: () => {},
+    });
+
+    const readCalls: Array<{ offset: number; size: number }> = [];
+
+    // Create a mock partition table with ota_0 at non-standard offset 0x300000
+    const ptBuf = new Uint8Array(4096);
+    const view = new DataView(ptBuf.buffer);
+    ptBuf[0] = 0xaa;
+    ptBuf[1] = 0x50; // magic 0x50AA in little endian
+    ptBuf[2] = 0x00; // type app
+    ptBuf[3] = 0x10; // subtype ota_0
+    view.setUint32(4, 0x300000, true); // offset
+    view.setUint32(8, 0x400000, true); // size
+    ptBuf.set(new TextEncoder().encode('ota_0'), 12);
+
+    // Mock otadata indicating slot 0 is active
+    const otaBuf = new Uint8Array(8192);
+    const otaView = new DataView(otaBuf.buffer);
+    otaView.setUint32(0, 1, true); // seq = 1 -> (1-1)%2 = 0 -> ota_0
+    otaView.setUint32(24, 0, true); // state valid
+    const { calculateOtaSeqCrc32 } = await import('../src/lib/flasher/otadata');
+    otaView.setUint32(28, calculateOtaSeqCrc32(1), true); // crc
+
+    // Mock app descriptor at 0x300000
+    const appBuf = new Uint8Array(4096);
+    const appView = new DataView(appBuf.buffer);
+    appView.setUint32(32, 0xabcd5432, true);
+    appBuf.set(new TextEncoder().encode('Meshtastic-firmware\0'), 32 + 48);
+    appBuf.set(new TextEncoder().encode('2.5.0\0'), 32 + 16);
+
+    const mockLoader = {
+      chip: { CHIP_NAME: 'ESP32-S3' },
+      detectFlashSize: vi.fn().mockResolvedValue('16MB'),
+      readFlash: vi.fn().mockImplementation((offset: number, size: number) => {
+        readCalls.push({ offset, size });
+        if (offset === 0xc000) return Promise.resolve(ptBuf);
+        if (offset === 0x13000) return Promise.resolve(otaBuf);
+        if (offset === 0x300000) return Promise.resolve(appBuf);
+        return Promise.resolve(new Uint8Array(size));
+      }),
+    };
+
+    (transport as any).loader = mockLoader;
+
+    const inspection = await transport.inspect();
+    expect(inspection.otadata.activeSlot).toBe('ota_0');
+    const appRead = readCalls.find((c) => c.offset === 0x300000);
+    expect(appRead).toBeDefined();
+    expect(appRead?.size).toBe(4096);
+    expect(inspection.currentFirmware?.displayTitle).toContain('Meshtastic');
+  });
+
+  it('inspect() identifies Empty / Unprogrammed Slot when active slot is all 0xFF', async () => {
+    const transport = new Wg1200Transport({
+      log: () => {},
+      error: () => {},
+    });
+
+    const erasedBuf = new Uint8Array(4096).fill(0xff);
+
+    const mockLoader = {
+      chip: { CHIP_NAME: 'ESP32-S3' },
+      detectFlashSize: vi.fn().mockResolvedValue('16MB'),
+      readFlash: vi.fn().mockImplementation((offset: number, size: number) => {
+        if (offset === 0xc000) {
+          const buf = new Uint8Array(size);
+          buf[0] = 0xaa;
+          buf[1] = 0x50;
+          return Promise.resolve(buf);
+        }
+        return Promise.resolve(erasedBuf);
+      }),
+    };
+
+    (transport as any).loader = mockLoader;
+
+    const inspection = await transport.inspect();
+    expect(inspection.currentFirmware?.displayTitle).toBe('Empty / Unprogrammed Slot');
+  });
+
+  it('inspect() probes ota_0 when factory slot is clean/erased and finds app descriptor', async () => {
+    const transport = new Wg1200Transport({
+      log: () => {},
+      error: () => {},
+    });
+
+    const erasedBuf = new Uint8Array(4096).fill(0xff);
+
+    const ota0Buf = new Uint8Array(4096);
+    const ota0View = new DataView(ota0Buf.buffer);
+    ota0View.setUint32(32, 0xabcd5432, true);
+    ota0Buf.set(new TextEncoder().encode('wg1010_port\0'), 32 + 48);
+    ota0Buf.set(new TextEncoder().encode('v0.8.27\0'), 32 + 16);
+
+    const mockLoader = {
+      chip: { CHIP_NAME: 'ESP32-S3' },
+      detectFlashSize: vi.fn().mockResolvedValue('16MB'),
+      readFlash: vi.fn().mockImplementation((offset: number, size: number) => {
+        if (offset === 0xc000) {
+          const buf = new Uint8Array(size);
+          buf[0] = 0xaa;
+          buf[1] = 0x50;
+          return Promise.resolve(buf);
+        }
+        if (offset === WG1200_CONSTANTS.APP_FACTORY.offset) {
+          return Promise.resolve(erasedBuf);
+        }
+        if (offset === WG1200_CONSTANTS.APP_OTA_0.offset) {
+          return Promise.resolve(ota0Buf);
+        }
+        return Promise.resolve(erasedBuf);
+      }),
+    };
+
+    (transport as any).loader = mockLoader;
+
+    const inspection = await transport.inspect();
+    expect(inspection.currentFirmware?.displayTitle).toBe('WeatherXM v0.8.27');
+    expect(inspection.otadata.activeSlot).toBe('ota_0');
+  });
 });
 

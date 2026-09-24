@@ -18,7 +18,7 @@ export interface AppDescriptor {
  * Searches for and parses the ESP-IDF esp_app_desc_t structure from the beginning of an application partition.
  */
 export function parseAppDescriptor(bytes: Uint8Array): AppDescriptor | null {
-  const maxSearch = Math.min(bytes.byteLength - 144, 2048);
+  const maxSearch = Math.min(bytes.byteLength - 144, 4096);
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
 
   for (let i = 0; i <= maxSearch; i += 4) {

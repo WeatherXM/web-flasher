@@ -409,18 +409,105 @@ export class Wg1200Transport {
     );
     const otadata = determineActiveBootSlot(otaBytes);
 
-    // 6. Detect currently installed application
-    let currentFirmware: AppDescriptor | null = null;
-    let activeAppOffset: number = WG1200_CONSTANTS.APP_FACTORY.offset;
-    if (otadata.activeSlot === 'ota_0') {
-      activeAppOffset = WG1200_CONSTANTS.APP_OTA_0.offset;
-    } else if (otadata.activeSlot === 'ota_1') {
-      activeAppOffset = WG1200_CONSTANTS.APP_OTA_1.offset;
+    // 6. Resolve active and target partitions using the device's actual partition table
+    const findPartition = (slot: 'factory' | 'ota_0' | 'ota_1'): PartitionRecord | undefined => {
+      if (parsedPt.partitions[slot]) return parsedPt.partitions[slot];
+      if (slot === 'ota_0' && parsedPt.partitions['app0']) return parsedPt.partitions['app0'];
+      if (slot === 'ota_1' && parsedPt.partitions['app1']) return parsedPt.partitions['app1'];
+      const targetSubtype = slot === 'factory' ? 0x00 : slot === 'ota_0' ? 0x10 : 0x11;
+      return Object.values(parsedPt.partitions).find(
+        (p) => p.type === 0x00 && p.subtype === targetSubtype
+      );
+    };
+
+    let activePart = findPartition(otadata.activeSlot);
+
+    // If otadata is clean/erased (activeSlot = factory) but device partition table has NO factory partition,
+    // the ESP-IDF bootloader automatically falls back to ota_0 (or app0).
+    if (!activePart && otadata.activeSlot === 'factory') {
+      activePart = findPartition('ota_0');
+      if (activePart) {
+        otadata.activeSlot = 'ota_0';
+        otadata.targetSlot = 'ota_1';
+      }
     }
 
+    let activeAppOffset: number;
+    if (activePart) {
+      activeAppOffset = activePart.offset;
+    } else {
+      activeAppOffset =
+        otadata.activeSlot === 'ota_0'
+          ? WG1200_CONSTANTS.APP_OTA_0.offset
+          : otadata.activeSlot === 'ota_1'
+            ? WG1200_CONSTANTS.APP_OTA_1.offset
+            : WG1200_CONSTANTS.APP_FACTORY.offset;
+    }
+
+    // Keep otadata.targetOffset synchronized with actual partition table if present
+    const targetPart = findPartition(otadata.targetSlot);
+    if (targetPart) {
+      otadata.targetOffset = targetPart.offset;
+    }
+
+    // 7. Detect currently installed application
+    let currentFirmware: AppDescriptor | null = null;
     try {
-      const headerBytes = await this.readRegion(activeAppOffset, 512);
+      this.logger.log(`Scanning application descriptor at offset 0x${activeAppOffset.toString(16)}…`);
+      const headerBytes = await this.readRegion(activeAppOffset, 4096);
       currentFirmware = parseAppDescriptor(headerBytes);
+
+      // If no valid descriptor found, check if slot is erased or if factory is empty while ota_0 is programmed
+      if (!currentFirmware) {
+        const isErased = headerBytes.slice(0, 32).every((b) => b === 0xff);
+
+        // If factory slot is blank/erased, check if ota_0 contains a valid application
+        if (isErased && otadata.activeSlot === 'factory') {
+          const ota0Part = findPartition('ota_0');
+          const ota0Offset = ota0Part?.offset ?? WG1200_CONSTANTS.APP_OTA_0.offset;
+          try {
+            const ota0Header = await this.readRegion(ota0Offset, 4096);
+            const ota0Desc = parseAppDescriptor(ota0Header);
+            if (ota0Desc) {
+              currentFirmware = ota0Desc;
+              otadata.activeSlot = 'ota_0';
+              otadata.targetSlot = 'ota_1';
+              const targetP = findPartition('ota_1');
+              otadata.targetOffset = targetP?.offset ?? WG1200_CONSTANTS.APP_OTA_1.offset;
+            }
+          } catch {
+            // ignore secondary probe failure
+          }
+        }
+
+        if (!currentFirmware) {
+          if (isErased) {
+            currentFirmware = {
+              magic: 0,
+              secureVersion: 0,
+              version: '',
+              projectName: '',
+              compileTime: '',
+              compileDate: '',
+              idfVersion: '',
+              firmwareType: 'unknown',
+              displayTitle: 'Empty / Unprogrammed Slot',
+            };
+          } else if (headerBytes[0] === 0xe9) {
+            currentFirmware = {
+              magic: 0,
+              secureVersion: 0,
+              version: '',
+              projectName: '',
+              compileTime: '',
+              compileDate: '',
+              idfVersion: '',
+              firmwareType: 'unknown',
+              displayTitle: 'Custom / Unrecognized Firmware',
+            };
+          }
+        }
+      }
     } catch (e) {
       this.logger.log(`Could not read application descriptor from offset 0x${activeAppOffset.toString(16)}`);
     }
