@@ -54,4 +54,12 @@ describe('CI safety guard - absolute invariant check', () => {
       ).toBe(false);
     }
   });
+
+  it('verifies Footer.astro renders deployed commit reference instead of flasher.weatherxm.com', () => {
+    const footerPath = path.resolve(srcDir, 'components/Footer.astro');
+    const content = fs.readFileSync(footerPath, 'utf8');
+    expect(content).not.toContain('flasher.weatherxm.com');
+    expect(content).toContain('commit:');
+    expect(content).toContain('commitHash');
+  });
 });
