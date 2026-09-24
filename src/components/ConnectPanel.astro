@@ -51,13 +51,13 @@
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
           <span class="flex-1">
-            <strong class="text-white">Select USB-Serial (CH340)</strong> when two ports appear. If it's busy or silent, try USB JTAG / Serial.
+            <strong class="text-white">Select USB Serial</strong> (cu.usbserial / CH340) when two ports appear. If it's busy or silent, try USB JTAG/serial debug unit.
             <span class="text-wxm-zenith underline underline-offset-2 group-open:hidden">Why?</span>
           </span>
         </summary>
         <ul class="mt-2.5 space-y-1 text-[11px] text-wxm-cloud pl-6">
-          <li><strong class="text-white">USB-Serial (CH340)</strong> <span class="text-emerald-400 font-semibold">(Recommended)</span> — Hardware UART bridge for flashing &amp; console logs.</li>
-          <li><strong class="text-white">USB JTAG / Serial (ESP32-S3)</strong> — Native on-chip USB peripheral.</li>
+          <li><strong class="text-white">USB Serial</strong> (e.g. <span class="text-wxm-wash font-mono text-[10px]">cu.usbserial</span> on Mac / <span class="text-wxm-wash font-mono text-[10px]">CH340</span>) <span class="text-emerald-400 font-semibold">(Recommended)</span> — Hardware UART bridge for flashing &amp; console logs.</li>
+          <li><strong class="text-white">USB JTAG/serial debug unit</strong> (e.g. <span class="text-wxm-wash font-mono text-[10px]">cu.usbmodem</span> on Mac) — Native on-chip USB peripheral.</li>
         </ul>
       </details>
 
@@ -96,7 +96,7 @@
         <div class="text-[11px] text-wxm-mist bg-wxm-abyss/80 p-3 rounded-control border border-wxm-cloud/10 space-y-1.5">
           <p class="font-semibold text-wxm-cloud">Troubleshooting tips:</p>
           <ul class="list-disc list-inside space-y-1">
-            <li><strong>Two USB devices appear:</strong> Select <strong>USB-Serial (CH340)</strong>. If it fails or is busy, try <strong>USB JTAG / Serial</strong>.</li>
+            <li><strong>Two USB devices appear:</strong> Select <strong>USB Serial</strong> (<code>cu.usbserial</code> / <code>CH340</code>). If it fails or is busy, try <strong>USB JTAG/serial debug unit</strong>.</li>
             <li>Ensure no other application (PlatformIO, Arduino IDE, serial monitor) is holding the serial port open.</li>
             <li><strong>Manual Bootloader Mode:</strong> Hold down the <span class="text-white font-semibold">BOOT</span> button on the WG1200 while connecting the USB cable (or while pressing RESET), then release BOOT and click Connect.</li>
           </ul>
