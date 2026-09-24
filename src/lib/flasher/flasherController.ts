@@ -26,6 +26,7 @@ export class FlasherController {
   private serialPort: any = null;
   private logLines: string[] = [];
   private callbacks: FlasherUICallbacks;
+  private isOperating = false;
 
   constructor(callbacks: FlasherUICallbacks) {
     this.callbacks = callbacks;
@@ -58,6 +59,10 @@ export class FlasherController {
 
   public get manifestData(): FirmwareManifest | null {
     return this.manifest;
+  }
+
+  public get isBusy(): boolean {
+    return this.isOperating;
   }
 
   public get logs(): readonly string[] {
@@ -167,9 +172,14 @@ export class FlasherController {
    * Executes the full staged flashing pipeline.
    */
   public async flashFirmware(targetFirmwareKey: string): Promise<void> {
+    if (this.isOperating) {
+      throw new Error('Another hardware operation is already in progress.');
+    }
     if (!this.manifest || !this.inspection || !this.transport.isConnected) {
       throw new Error('Device is not ready for flashing.');
     }
+
+    this.isOperating = true;
 
     const fwEntry: FirmwareEntry = this.manifest.firmwares[targetFirmwareKey];
     if (!fwEntry) {
@@ -301,6 +311,8 @@ export class FlasherController {
       this.addLog(`\n[FATAL ERROR] Installation aborted: ${err.message ?? err}`);
       await this.disconnect();
       this.stateMachine.setError(err.message ?? 'Flash failed', true);
+    } finally {
+      this.isOperating = false;
     }
   }
 
@@ -321,39 +333,51 @@ export class FlasherController {
    * Rolls back gateway to factory stock firmware by clearing otadata to 0xFF.
    */
   public async executeFactoryRollback(): Promise<void> {
+    if (this.isOperating) throw new Error('Another hardware operation is already in progress.');
     if (!this.transport.isConnected) throw new Error('Not connected');
-    this.addLog('\n========================================');
-    this.addLog('EXECUTING FACTORY ROLLBACK (WeatherXM Stock)');
-    this.addLog('Clearing otadata to 0xFF (pointing bootloader to 0x20000 factory partition)…');
-    this.addLog('========================================\n');
-    await this.transport.rollbackToFactory();
-    this.addLog('Hard resetting device into Factory firmware…');
-    await this.transport.hardReset();
-    await this.disconnect();
-    this.addLog('Factory rollback complete! Gateway will reboot into stock WeatherXM firmware.');
+    this.isOperating = true;
+    try {
+      this.addLog('\n========================================');
+      this.addLog('EXECUTING FACTORY ROLLBACK (WeatherXM Stock)');
+      this.addLog('Clearing otadata to 0xFF (pointing bootloader to 0x20000 factory partition)…');
+      this.addLog('========================================\n');
+      await this.transport.rollbackToFactory();
+      this.addLog('Hard resetting device into Factory firmware…');
+      await this.transport.hardReset();
+      await this.disconnect();
+      this.addLog('Factory rollback complete! Gateway will reboot into stock WeatherXM firmware.');
+    } finally {
+      this.isOperating = false;
+    }
   }
 
   /**
    * Backs up full 16 MB flash and triggers browser download.
    */
   public async executeFullFlashBackup(onProgress?: (pct: number) => void): Promise<void> {
+    if (this.isOperating) throw new Error('Another hardware operation is already in progress.');
     if (!this.transport.isConnected) throw new Error('Not connected');
-    this.addLog('\nStarting full 16 MB flash backup. This may take 1-2 minutes over Web Serial…');
-    const fullData = await this.transport.readFullFlashWithValidation((pct, current, total) => {
-      this.addLog(`Backup progress: ${pct}% (${Math.round(current / 1024)} KB / ${Math.round(total / 1024)} KB)`);
-      if (onProgress) onProgress(pct);
-    });
+    this.isOperating = true;
+    try {
+      this.addLog('\nStarting full 16 MB flash backup. This may take 1-2 minutes over Web Serial…');
+      const fullData = await this.transport.readFullFlashWithValidation((pct, current, total) => {
+        this.addLog(`Backup progress: ${pct}% (${Math.round(current / 1024)} KB / ${Math.round(total / 1024)} KB)`);
+        if (onProgress) onProgress(pct);
+      });
 
-    const blob = new Blob([fullData.buffer as ArrayBuffer], { type: 'application/octet-stream' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `wg1200_16mb_backup_${Date.now()}.bin`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    this.addLog('Full 16 MB backup downloaded successfully.');
+      const blob = new Blob([fullData.buffer as ArrayBuffer], { type: 'application/octet-stream' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `wg1200_16mb_backup_${Date.now()}.bin`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      this.addLog('Full 16 MB backup downloaded successfully.');
+    } finally {
+      this.isOperating = false;
+    }
   }
 
   /**
@@ -363,13 +387,19 @@ export class FlasherController {
     backupData: Uint8Array,
     onProgress?: (pct: number) => void
   ): Promise<void> {
+    if (this.isOperating) throw new Error('Another hardware operation is already in progress.');
     if (!this.transport.isConnected) throw new Error('Not connected');
-    this.addLog('\nStarting full 16 MB flash restore. This may take 1-3 minutes over Web Serial…');
-    await this.transport.restoreFullFlash(backupData, (pct) => {
-      this.addLog(`Restore progress: ${pct}%`);
-      if (onProgress) onProgress(pct);
-    });
-    this.addLog('Full 16 MB backup restored and verified successfully.');
+    this.isOperating = true;
+    try {
+      this.addLog('\nStarting full 16 MB flash restore. This may take 1-3 minutes over Web Serial…');
+      await this.transport.restoreFullFlash(backupData, (pct) => {
+        this.addLog(`Restore progress: ${pct}%`);
+        if (onProgress) onProgress(pct);
+      });
+      this.addLog('Full 16 MB backup restored and verified successfully.');
+    } finally {
+      this.isOperating = false;
+    }
   }
 
   public downloadLog(): void {

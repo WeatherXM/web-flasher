@@ -16,3 +16,14 @@ npm-debug.log*
 Thumbs.db
 .vscode/
 .idea/
+
+# Secrets and cryptographic keys
+secrets/
+**/secrets/
+*.pem
+*.key
+*.p12
+*.pfx
+*secure_boot_key*
+*.cert
+*.crt

@@ -1,4 +1,4 @@
-# flasher.weatherxm.com — WG1200 Firmware Web Flasher
+# flash.weatherxm.com — WG1200 Firmware Web Flasher
 
 Web-based firmware switcher for the **WeatherXM WG1200 / D1 Gateway**, with two deliberately different operating modes:
 
@@ -15,9 +15,9 @@ The entire operation happens in the browser over USB using the **Web Serial API*
 
 This is **not** a generic ESP32 flasher. It is purpose-built with strict hardware write guards:
 
-1. **Zero Cloud Credential Risk**: The factory partition holding WeatherXM identity (`esp_secure_cert` at `0x00D000`) is never erased or written.
+1. **Zero Cloud Credential Risk**: The device credentials partition (`esp_secure_cert` at `0x00D000`) is never erased or written.
 2. **Factory Fallback Preserved**: The `factory` partition (`0x020000`) remains protected as the immutable stock recovery image.
-3. **Write Guard**: Every flash operation strictly validates that writes are confined to `ota_0` (`0x420000`) or `ota_1` (`0x820000`).
+3. **Strict Write Guard**: Firmware application payload writes are strictly confined to `ota_0` (`0x420000`) or `ota_1` (`0x820000`). Slot activation uses guarded, CRC-verified atomic updates to `otadata` (`0x013000`). All other partitions are hardware/logic write-protected.
 4. **Chip Erase Disabled**: `eraseAll: false` is permanently enforced. Full flash erase APIs are stripped out.
 5. **Pre/Post Verification**: Cryptographic SHA-256 snapshots verify that protected partitions remain byte-for-byte identical before and after flashing.
 6. **Hardware MD5 Check**: Uses on-chip ESP32-S3 SPI flash MD5 calculation to guarantee image integrity.

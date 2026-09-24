@@ -1,0 +1,9 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "weatherxm-web-flasher",
+  "compatibility_date": "2026-09-24",
+  "assets": {
+    "directory": "./dist"
+  },
+  "workers_dev": false
+}
