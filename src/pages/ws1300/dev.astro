@@ -1,0 +1,480 @@
+---
+import SiteLayout from '../../layouts/SiteLayout.astro';
+import BleBrowserNotice from '../../components/ws1300/BleBrowserNotice.astro';
+import StaleBondHelp from '../../components/ws1300/StaleBondHelp.astro';
+import DfuProgress from '../../components/ws1300/DfuProgress.astro';
+import SlotTable from '../../components/ws1300/SlotTable.astro';
+import EventLog from '../../components/ws1300/EventLog.astro';
+import manifest from '../../../public/firmware/ws1300/manifest.json';
+
+const palette: { group: string; cmds: [label: string, cmd: string][] }[] = [
+  { group: 'System', cmds: [['sn', 'sn'], ['pubkey', 'pubkey'], ['fw_version', 'fw_version'], ['hw_version', 'hw_version'], ['uptime', 'uptime'], ['help', 'help'], ['reboot', 'reboot'], ['factory_reset', 'factory_reset']] },
+  { group: 'Power', cmds: [['battery', 'battery'], ['batt', 'batt']] },
+  { group: 'Sensors & Flight-O', cmds: [['read_weather', 'read_weather'], ['fo_probe', 'fo_probe'], ['fo_power_cycle', 'fo_power_cycle'], ['fo_wake status', 'fo_keep_awake status'], ['fo_cycle', 'fo_cycle']] },
+  { group: 'GNSS', cmds: [['gnss_status', 'gnss_status'], ['gnss_pos', 'gnss_pos'], ['gnss_fix', 'gnss_fix'], ['gnss_pubkey', 'gnss_pubkey']] },
+  { group: 'LoRa', cmds: [['region get', 'region get'], ['p2p_adaptive', 'p2p_adaptive'], ['p2p on', 'p2p_adaptive on'], ['p2p off', 'p2p_adaptive off']] },
+  { group: 'Meshtastic', cmds: [['meshtastic get', 'meshtastic get'], ['hops get', 'meshtastic hops get'], ['preset get', 'meshtastic preset get'], ['send all', 'meshtastic send'], ['send telemetry', 'meshtastic send telemetry']] },
+  { group: 'MeshCore & gateway', cmds: [['meshcore get', 'meshcore get'], ['gw_status', 'gw_status'], ['gw_unpair', 'gw_unpair'], ['dev_eui', 'lw_dev_eui get']] },
+];
+const DANGEROUS = ['factory_reset', 'gw_unpair'];
+---
+
+<SiteLayout
+  title="WS1300 Developer Tools — WeatherXM"
+  description="Bluetooth shell console, MCUboot slot inspection and firmware installs for WeatherXM WS1300 stations."
+  device="ws1300"
+  noindex
+>
+  <BleBrowserNotice />
+
+  <section class="max-w-7xl mx-auto px-4 sm:px-8 space-y-5">
+    <!-- Connection bar -->
+    <div class="rounded-card border border-wxm-cloud/15 bg-wxm-midnight/80 backdrop-blur-md shadow-card p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div class="flex items-center gap-4 min-w-0">
+        <span id="conn-dot" class="w-3 h-3 flex-shrink-0 rounded-full bg-wxm-slate"></span>
+        <div class="min-w-0">
+          <div class="flex items-center gap-2 flex-wrap">
+            <h1 class="text-lg font-bold">WS1300 developer tools</h1>
+            <span class="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-amber-400/15 text-amber-300 border border-amber-400/40">For WeatherXM staff</span>
+          </div>
+          <p class="text-xs text-wxm-mist font-mono truncate">
+            <span id="conn-text">Not connected</span>
+            <span class="text-wxm-cloud/30 mx-1">|</span> shell: <span id="shell-state">–</span>
+            <span class="text-wxm-cloud/30 mx-1">|</span> fw: <span id="fw-state">–</span>
+            <span class="text-wxm-cloud/30 mx-1">|</span> battery: <span id="batt-state">–</span>
+          </p>
+        </div>
+      </div>
+      <div class="flex gap-2 flex-shrink-0">
+        <button id="btn-connect" type="button" class="px-5 py-2.5 rounded-control text-sm btn-primary-beacon cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">Connect</button>
+        <button id="btn-disconnect" type="button" disabled class="px-4 py-2.5 rounded-control text-sm font-bold text-white border border-wxm-cloud/20 bg-wxm-storm/50 hover:bg-wxm-storm cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">Disconnect</button>
+      </div>
+    </div>
+    <p id="connect-error" class="hidden text-xs text-red-300" role="alert"></p>
+    <StaleBondHelp />
+
+    <!-- Tabs -->
+    <div class="flex gap-1 p-1 rounded-control bg-wxm-midnight/70 border border-wxm-cloud/15 w-max max-w-full overflow-x-auto" role="tablist">
+      <button type="button" role="tab" data-tab="shell" class="tab px-4 py-2 rounded-md text-sm font-bold cursor-pointer" aria-selected="true">Shell</button>
+      <button type="button" role="tab" data-tab="firmware" class="tab px-4 py-2 rounded-md text-sm font-bold cursor-pointer" aria-selected="false">Firmware</button>
+    </div>
+
+    <!-- Shell -->
+    <div id="tab-shell" class="tab-panel grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-5">
+      <div class="rounded-card border border-wxm-cloud/15 bg-wxm-storm/25 backdrop-blur-md p-4 space-y-4 lg:max-h-[560px] lg:overflow-y-auto">
+        {palette.map((p) => (
+          <div class="space-y-2">
+            <h3 class="text-[10px] font-bold uppercase tracking-wider text-wxm-mist">{p.group}</h3>
+            <div class="flex flex-wrap gap-1.5">
+              {p.cmds.map(([label, cmd]) => (
+                <button
+                  type="button"
+                  data-cmd={cmd}
+                  disabled
+                  class:list={[
+                    'cmd-chip px-2 py-1 rounded font-mono text-[11px] border cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed',
+                    DANGEROUS.includes(cmd)
+                      ? 'border-wxm-error/50 text-red-300 hover:bg-wxm-error/20'
+                      : 'border-wxm-cloud/20 text-wxm-cloud hover:bg-wxm-beacon/20 hover:border-wxm-zenith',
+                  ]}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div class="rounded-card border border-wxm-cloud/15 bg-wxm-abyss/90 flex flex-col overflow-hidden min-h-[420px] lg:h-[560px]">
+        <div class="px-4 py-2.5 bg-wxm-midnight/70 border-b border-wxm-cloud/15 flex items-center justify-between gap-3">
+          <span class="text-xs font-bold">Terminal <span class="font-normal text-wxm-mist">· Nordic UART shell, needs pairing</span></span>
+          <span class="flex gap-2">
+            <button id="btn-term-copy" type="button" class="px-2.5 py-1 rounded-control text-[11px] font-bold text-wxm-mist hover:text-white border border-wxm-cloud/20 cursor-pointer">Copy</button>
+            <button id="btn-term-clear" type="button" class="px-2.5 py-1 rounded-control text-[11px] font-bold text-wxm-mist hover:text-white border border-wxm-cloud/20 cursor-pointer">Clear</button>
+          </span>
+        </div>
+        <div id="terminal" class="flex-1 overflow-y-auto p-4 font-mono text-[12px] leading-relaxed whitespace-pre-wrap break-words text-wxm-cloud">
+          <div class="text-wxm-mist">Connect to a station. The shell answers once the Bluetooth link is paired and encrypted.</div>
+        </div>
+        <div id="danger-confirm" class="hidden px-4 py-3 bg-wxm-error/15 border-t border-wxm-error/40 flex flex-col sm:flex-row sm:items-center gap-3">
+          <p class="flex-1 text-xs text-white"><strong id="danger-cmd" class="font-mono"></strong> <span id="danger-text"></span></p>
+          <span class="flex gap-2">
+            <button id="btn-danger-run" type="button" class="px-3 py-1.5 rounded-control text-xs font-bold text-white bg-wxm-error hover:bg-red-700 cursor-pointer">Run it</button>
+            <button id="btn-danger-cancel" type="button" class="px-3 py-1.5 rounded-control text-xs font-bold text-white border border-wxm-cloud/20 cursor-pointer">Cancel</button>
+          </span>
+        </div>
+        <form id="term-form" class="flex gap-2 p-3 border-t border-wxm-cloud/15 bg-wxm-midnight/50">
+          <label for="term-input" class="sr-only">Shell command</label>
+          <input id="term-input" type="text" autocomplete="off" spellcheck="false" disabled placeholder="Type a command, e.g. read_weather" class="flex-1 min-w-0 bg-wxm-abyss border border-wxm-cloud/20 rounded-control px-3 py-2 font-mono text-sm text-white placeholder:text-wxm-mist/60 focus:outline-none focus:border-wxm-zenith disabled:opacity-50" />
+          <button id="term-send" type="submit" disabled class="px-4 py-2 rounded-control text-sm btn-primary-beacon cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">Send</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Firmware -->
+    <div id="tab-firmware" class="tab-panel hidden space-y-5">
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <div class="rounded-card border border-wxm-cloud/15 bg-wxm-storm/25 backdrop-blur-md p-5 space-y-5">
+          <div class="space-y-2">
+            <h3 class="text-sm font-bold">Published release</h3>
+            <div class="flex gap-2">
+              <label for="release-select" class="sr-only">Release</label>
+              <select id="release-select" class="flex-1 min-w-0 bg-wxm-abyss border border-wxm-cloud/20 rounded-control px-3 py-2 text-sm text-white">
+                {manifest.releases.map((r) => (
+                  <option value={r.version}>{r.label}{r.version === manifest.latest ? ' (latest)' : ''} · {Math.round(r.bytes / 1024)} KB · {r.git_commit ?? ''}</option>
+                ))}
+              </select>
+              <button id="btn-install-release" type="button" disabled class="px-4 py-2 rounded-control text-sm font-bold btn-primary-beacon cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap">Install</button>
+            </div>
+          </div>
+
+          <div class="space-y-2 pt-4 border-t border-wxm-cloud/10">
+            <h3 class="text-sm font-bold">File from this computer</h3>
+            <label id="custom-drop" for="custom-file" class="flex flex-col items-center justify-center gap-1 p-5 rounded-control border-2 border-dashed border-wxm-cloud/20 hover:border-wxm-zenith bg-wxm-abyss/50 text-center cursor-pointer transition-colors">
+              <span class="text-xs font-semibold">Drop a <code class="font-mono">-dfu.zip</code> or signed <code class="font-mono">.bin</code>, or click to choose</span>
+              <input id="custom-file" type="file" accept=".zip,.bin" class="sr-only" />
+            </label>
+            <ul id="custom-images" class="space-y-1.5 text-xs font-mono"></ul>
+            <p id="custom-error" class="hidden text-xs text-red-300" role="alert"></p>
+            <button id="btn-install-custom" type="button" disabled class="w-full py-2 rounded-control text-sm font-bold text-white border border-wxm-beacon/50 bg-wxm-beacon/20 hover:bg-wxm-beacon/35 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">Install file</button>
+          </div>
+
+          <div id="confirm-panel" class="hidden rounded-card border border-wxm-beacon/40 bg-wxm-beacon/10 p-4 space-y-3">
+            <p id="confirm-summary" class="text-xs text-white"></p>
+            <div class="flex gap-2">
+              <button id="btn-confirm-start" type="button" class="flex-1 py-2 rounded-control text-sm btn-primary-beacon cursor-pointer">Upload, schedule and restart</button>
+              <button id="btn-confirm-cancel" type="button" class="px-4 py-2 rounded-control text-sm font-bold text-wxm-cloud border border-wxm-cloud/20 cursor-pointer">Cancel</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="rounded-card border border-wxm-cloud/15 bg-wxm-storm/25 backdrop-blur-md p-5">
+          <SlotTable />
+        </div>
+      </div>
+
+      <DfuProgress />
+    </div>
+
+    <EventLog title="Event log" open height="h-64" />
+  </section>
+</SiteLayout>
+
+<style>
+  .tab[aria-selected='true'] {
+    background: #2f74dc;
+    color: #fff;
+  }
+  .tab[aria-selected='false'] {
+    color: #9aa5b5;
+  }
+</style>
+
+<script>
+  import { Ws1300Session, isChooserCancelled, isWebBluetoothAvailable, errMsg } from '../../lib/ble/ws1300Session';
+  import { loadWs1300Manifest, type Ws1300Manifest } from '../../lib/ble/ws1300Manifest';
+  import { parseDfuPackage, type DfuImage } from '../../lib/ble/dfuPackage';
+  import { runningAppVersion } from '../../lib/ble/dfu';
+  import { runUpdateFlow, type UpdateSource } from '../../lib/ble/updateFlow';
+  import { cleanShellReply } from '../../lib/ble/nus';
+  import type { ImageSlotState } from '../../lib/ble/smp';
+  import { $, ProgressView, coreName, createEventLog, kb, renderSlots } from '../../lib/ble/ui';
+
+  const DANGEROUS: Record<string, string> = {
+    factory_reset: 'erases the station settings and Bluetooth pairings, then restarts it.',
+    gw_unpair: 'removes the station pairing with its gateway.',
+  };
+
+  const { log } = createEventLog('ws1300_dev_log');
+  const progress = new ProgressView();
+  const term = $('terminal');
+  const input = $<HTMLInputElement>('term-input');
+  const history: string[] = [];
+  let histIdx = 0;
+  let manifest: Ws1300Manifest | null = null;
+  let customFile: { name: string; images: DfuImage[] } | null = null;
+  let pending: UpdateSource | null = null;
+  let dangerCmd: string | null = null;
+  let busy = false;
+  let shellBusy = false;
+
+  const show = (el: HTMLElement, on: boolean) => el.classList.toggle('hidden', !on);
+
+  const termLine = (text: string, kind: 'rx' | 'tx' | 'err' | 'info' = 'rx') => {
+    const div = document.createElement('div');
+    div.className = { rx: 'text-wxm-cloud', tx: 'text-wxm-zenith font-semibold mt-2', err: 'text-red-400', info: 'text-wxm-mist italic' }[kind];
+    div.textContent = text;
+    term.appendChild(div);
+    term.scrollTop = term.scrollHeight;
+  };
+
+  const session = new Ws1300Session({
+    log,
+    onState: () => render(),
+    onShellOutput: (text) => termLine(text.replace(/\r/g, '').trimEnd()),
+    onHint: () => show($('stale-bond-help'), true),
+  });
+
+  function setShellState(text: string) {
+    $('shell-state').textContent = text;
+  }
+
+  function render() {
+    const s = session.state;
+    const connected = s === 'connected' || s === 'updating';
+    const idle = s === 'connected' && !busy;
+    const dot = $('conn-dot');
+    dot.className = `w-3 h-3 flex-shrink-0 rounded-full ${s === 'connected' ? 'bg-wxm-live' : s === 'updating' ? 'bg-amber-400 animate-pulse' : s === 'connecting' ? 'bg-wxm-zenith animate-pulse' : 'bg-wxm-slate'}`;
+    $('conn-text').textContent = connected ? session.deviceName : s === 'connecting' ? 'Connecting…' : 'Not connected';
+    if (!connected) {
+      setShellState('–');
+      $('fw-state').textContent = '–';
+    }
+
+    $<HTMLButtonElement>('btn-connect').disabled = connected || s === 'connecting' || !isWebBluetoothAvailable();
+    $<HTMLButtonElement>('btn-disconnect').disabled = !connected || busy;
+    const shellOk = idle && session.shellReady && !shellBusy;
+    input.disabled = !shellOk;
+    $<HTMLButtonElement>('term-send').disabled = !shellOk;
+    document.querySelectorAll<HTMLButtonElement>('.cmd-chip').forEach((b) => (b.disabled = !shellOk));
+    $<HTMLButtonElement>('btn-install-release').disabled = !idle || !manifest;
+    $<HTMLButtonElement>('btn-install-custom').disabled = !idle || !customFile;
+    $<HTMLButtonElement>('btn-read-slots').disabled = !idle;
+  }
+
+  async function refreshSlots() {
+    const states: ImageSlotState[] = await session.smp!.readImageStates();
+    renderSlots(states);
+    $('fw-state').textContent = `v${runningAppVersion(states) ?? '?'}`;
+    return states;
+  }
+
+  // --- Connection -------------------------------------------------------------
+
+  $('btn-connect').addEventListener('click', async () => {
+    show($('connect-error'), false);
+    show($('stale-bond-help'), false);
+    try {
+      await session.connect();
+      termLine(`Connected to ${session.deviceName}.`, 'info');
+      await refreshSlots().catch((err) => log(`Slot read failed: ${errMsg(err)}`, 'WARN'));
+      if (!session.nus) {
+        setShellState('unavailable');
+        return;
+      }
+      setShellState('waiting for pairing…');
+      const ready = await session.waitForShell(32000, () => {
+        termLine('Waiting for the encrypted link. First time on this computer? Accept the Bluetooth pairing prompt (macOS: it may be in Notification Center). Stay connected.', 'info');
+        log('Waiting for BLE encryption / pairing.', 'WARN');
+      });
+      setShellState(ready ? 'ready' : 'not paired');
+      render();
+      if (ready) {
+        await runCommand('fw_version');
+        await runCommand('battery');
+      } else if (session.connected) {
+        termLine('The shell did not answer within 32 s, so the link is not paired. Firmware tools still work.', 'err');
+      }
+    } catch (err) {
+      if (isChooserCancelled(err)) return;
+      $('connect-error').textContent = `Couldn't connect: ${errMsg(err)}`;
+      show($('connect-error'), true);
+      log(`Connect failed: ${errMsg(err)}`, 'ERROR');
+    } finally {
+      render();
+    }
+  });
+
+  $('btn-disconnect').addEventListener('click', () => {
+    session.disconnect();
+    termLine('Disconnected.', 'info');
+  });
+
+  // --- Shell ------------------------------------------------------------------
+
+  async function runCommand(cmd: string) {
+    const clean = cmd.trim();
+    if (!clean || !session.nus) return;
+    termLine(`> ${clean}`, 'tx');
+    log(`TX "${clean}"`, 'NUS');
+    shellBusy = true;
+    render();
+    try {
+      const reply = cleanShellReply(await session.nus.sendCommand(clean), clean);
+      if (reply) termLine(reply);
+      if (clean === 'fw_version' && reply) $('fw-state').textContent = reply.split('\n')[0].slice(0, 40);
+      if (clean.startsWith('batt')) {
+        const m = reply.match(/(\d+)\s*%/);
+        if (m) $('batt-state').textContent = `${m[1]}%`;
+      }
+    } catch (err) {
+      termLine(`Command failed: ${errMsg(err)}`, 'err');
+      log(`Command failed: ${errMsg(err)}`, 'ERROR');
+    } finally {
+      shellBusy = false;
+      render();
+      input.focus();
+    }
+  }
+
+  function requestCommand(cmd: string) {
+    const name = cmd.trim().split(/\s+/)[0];
+    if (DANGEROUS[name]) {
+      dangerCmd = cmd.trim();
+      $('danger-cmd').textContent = dangerCmd;
+      $('danger-text').textContent = DANGEROUS[name];
+      show($('danger-confirm'), true);
+      $('btn-danger-cancel').focus();
+      return;
+    }
+    void runCommand(cmd);
+  }
+
+  $('btn-danger-run').addEventListener('click', () => {
+    show($('danger-confirm'), false);
+    if (dangerCmd) void runCommand(dangerCmd);
+    dangerCmd = null;
+  });
+  $('btn-danger-cancel').addEventListener('click', () => {
+    show($('danger-confirm'), false);
+    if (dangerCmd) termLine(`Cancelled ${dangerCmd}.`, 'info');
+    dangerCmd = null;
+  });
+
+  document.querySelectorAll<HTMLButtonElement>('.cmd-chip').forEach((b) =>
+    b.addEventListener('click', () => requestCommand(b.dataset.cmd ?? '')),
+  );
+
+  $('term-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const cmd = input.value.trim();
+    if (!cmd) return;
+    history.push(cmd);
+    histIdx = history.length;
+    input.value = '';
+    requestCommand(cmd);
+  });
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowUp' && histIdx > 0) {
+      input.value = history[--histIdx];
+      e.preventDefault();
+    } else if (e.key === 'ArrowDown') {
+      histIdx = Math.min(history.length, histIdx + 1);
+      input.value = history[histIdx] ?? '';
+      e.preventDefault();
+    }
+  });
+  $('btn-term-clear').addEventListener('click', () => term.replaceChildren());
+  $('btn-term-copy').addEventListener('click', () => {
+    navigator.clipboard.writeText(term.innerText).then(
+      () => log('Terminal copied to clipboard.', 'INFO'),
+      () => log('Clipboard access was refused.', 'WARN'),
+    );
+  });
+
+  // --- Tabs -------------------------------------------------------------------
+
+  document.querySelectorAll<HTMLButtonElement>('.tab').forEach((t) =>
+    t.addEventListener('click', () => {
+      document.querySelectorAll<HTMLButtonElement>('.tab').forEach((x) => x.setAttribute('aria-selected', String(x === t)));
+      document.querySelectorAll<HTMLElement>('.tab-panel').forEach((p) => show(p, p.id === `tab-${t.dataset.tab}`));
+    }),
+  );
+
+  // --- Firmware ---------------------------------------------------------------
+
+  function askConfirm(source: UpdateSource) {
+    pending = source;
+    const what =
+      source.kind === 'release'
+        ? `${source.release.label} (${source.release.version}, ${kb(source.release.bytes)}, commit ${source.release.git_commit ?? '?'})`
+        : `${source.name}: ${source.images.map((i) => `${i.core} v${i.version}`).join(', ')}`;
+    $('confirm-summary').textContent = `Install ${what}? The station restarts at the end.`;
+    show($('confirm-panel'), true);
+  }
+
+  $('btn-install-release').addEventListener('click', () => {
+    const v = $<HTMLSelectElement>('release-select').value;
+    const release = manifest?.releases.find((r) => r.version === v);
+    if (release) askConfirm({ kind: 'release', release });
+  });
+  $('btn-install-custom').addEventListener('click', () => {
+    if (customFile) askConfirm({ kind: 'file', name: customFile.name, images: customFile.images });
+  });
+  $('btn-confirm-cancel').addEventListener('click', () => {
+    pending = null;
+    show($('confirm-panel'), false);
+  });
+  $('btn-confirm-start').addEventListener('click', async () => {
+    if (!pending) return;
+    const source = pending;
+    pending = null;
+    show($('confirm-panel'), false);
+    busy = true;
+    render();
+    await runUpdateFlow(source, {
+      session,
+      progress,
+      log,
+      onStates: (states) => {
+        renderSlots(states);
+        $('fw-state').textContent = `v${runningAppVersion(states) ?? '?'}`;
+      },
+      onFinished: () => {
+        busy = false;
+        render();
+      },
+    });
+  });
+
+  $('btn-read-slots').addEventListener('click', () => {
+    refreshSlots().catch((err) => log(`Slot read failed: ${errMsg(err)}`, 'ERROR'));
+  });
+
+  async function takeFile(file: File) {
+    show($('custom-error'), false);
+    const list = $('custom-images');
+    list.replaceChildren();
+    customFile = null;
+    try {
+      const images = await parseDfuPackage(new Uint8Array(await file.arrayBuffer()), file.name);
+      customFile = { name: file.name, images };
+      for (const img of images) {
+        const li = document.createElement('li');
+        li.className = 'p-2 rounded-control bg-wxm-abyss/70 border border-wxm-cloud/10 text-wxm-cloud';
+        li.textContent = `${coreName(img.imageIndex)} · v${img.version} · ${kb(img.size)} · ${img.sha256.slice(0, 16)}…`;
+        list.appendChild(li);
+      }
+      log(`Loaded ${file.name}`, 'DFU');
+    } catch (err) {
+      $('custom-error').textContent = errMsg(err);
+      show($('custom-error'), true);
+    }
+    render();
+  }
+
+  const drop = $('custom-drop');
+  $<HTMLInputElement>('custom-file').addEventListener('change', (e) => {
+    const f = (e.target as HTMLInputElement).files?.[0];
+    if (f) void takeFile(f);
+  });
+  drop.addEventListener('dragover', (e) => e.preventDefault());
+  drop.addEventListener('drop', (e) => {
+    e.preventDefault();
+    const f = e.dataTransfer?.files?.[0];
+    if (f) void takeFile(f);
+  });
+
+  // --- Boot -------------------------------------------------------------------
+
+  if (!isWebBluetoothAvailable()) show($('ble-browser-warning'), true);
+  loadWs1300Manifest()
+    .then((m) => {
+      manifest = m;
+      render();
+    })
+    .catch((err) => log(`Could not load release list: ${errMsg(err)}`, 'ERROR'));
+  log('WS1300 developer tools ready.', 'INFO');
+  render();
+</script>

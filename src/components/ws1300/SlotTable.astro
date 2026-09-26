@@ -1,0 +1,28 @@
+---
+---
+
+<div class="space-y-3">
+  <div class="flex items-center justify-between gap-3">
+    <div>
+      <h4 class="text-sm font-bold text-white">Firmware slots on the station</h4>
+      <p class="text-[11px] text-wxm-mist">What MCUboot reports for each core. Slot 0 runs, slot 1 holds an update.</p>
+    </div>
+    <button id="btn-read-slots" type="button" disabled class="px-3 py-1.5 rounded-control text-xs font-bold text-white border border-wxm-cloud/20 bg-wxm-storm/50 hover:bg-wxm-storm disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer whitespace-nowrap">Read slots</button>
+  </div>
+  <div class="overflow-x-auto rounded-control border border-wxm-cloud/15">
+    <table class="w-full text-xs min-w-[520px]">
+      <thead class="bg-wxm-midnight/70 text-wxm-mist text-[10px] uppercase tracking-wider">
+        <tr>
+          <th class="text-left px-3 py-2 font-semibold">Core</th>
+          <th class="text-left px-3 py-2 font-semibold">Slot</th>
+          <th class="text-left px-3 py-2 font-semibold">Version</th>
+          <th class="text-left px-3 py-2 font-semibold">State</th>
+          <th class="text-left px-3 py-2 font-semibold">Hash</th>
+        </tr>
+      </thead>
+      <tbody id="slots-body" class="divide-y divide-wxm-cloud/10 font-mono">
+        <tr><td colspan="5" class="px-3 py-3 text-center text-wxm-mist font-sans">Connect to the station to read its slots.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
