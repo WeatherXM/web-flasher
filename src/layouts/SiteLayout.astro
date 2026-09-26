@@ -1,0 +1,44 @@
+---
+import '../styles/global.css';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+
+interface Props {
+  title: string;
+  description: string;
+  device?: 'wg1200' | 'ws1300';
+  noindex?: boolean;
+}
+
+const { title, description, device, noindex = false } = Astro.props;
+---
+
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/brand/logomark-color.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <meta name="generator" content={Astro.generator} />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    {noindex && <meta name="robots" content="noindex, nofollow" />}
+  </head>
+
+  <body class="min-h-screen bg-dark-atmospheric bg-dot-grid text-white font-sans antialiased flex flex-col justify-between selection:bg-wxm-beacon selection:text-white">
+    <div class="relative z-10 flex-1 flex flex-col">
+      <Header device={device} />
+      <main class="flex-1 py-6 lg:py-10">
+        <slot />
+      </main>
+      <Footer />
+    </div>
+    <slot name="after" />
+  </body>
+</html>

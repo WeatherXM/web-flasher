@@ -62,4 +62,13 @@ describe('CI safety guard - absolute invariant check', () => {
     expect(content).toContain('commit:');
     expect(content).toContain('commitHash');
   });
+
+  it('verifies GithubReposButton.astro includes ws1300-firmware repository link', () => {
+    const githubBtnPath = path.resolve(srcDir, 'components/GithubReposButton.astro');
+    const content = fs.readFileSync(githubBtnPath, 'utf8');
+    expect(content).toContain('https://github.com/WeatherXM/web-flasher');
+    expect(content).toContain('https://github.com/WeatherXM/wg1200-firmware');
+    expect(content).toContain('https://github.com/WeatherXM/ws1300-firmware');
+    expect(content).toContain('https://github.com/WeatherXM/Meshtastic-firmware');
+  });
 });

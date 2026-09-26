@@ -1,0 +1,33 @@
+---
+interface Props {
+  title?: string;
+  height?: string;
+  open?: boolean;
+}
+const { title = 'Technical log', height = 'h-56', open = false } = Astro.props;
+---
+
+<details id="ws-log-panel" class="rounded-card border border-wxm-cloud/15 bg-wxm-storm/25 backdrop-blur-md overflow-hidden shadow-card group" open={open}>
+  <summary class="px-5 py-3 bg-wxm-midnight/60 flex items-center justify-between gap-3 cursor-pointer list-none select-none">
+    <span class="flex items-center gap-2 text-xs font-bold text-white">
+      <svg class="w-4 h-4 transition-transform group-open:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
+      {title}
+      <span class="font-mono font-normal text-wxm-mist">(<span id="ws-log-count">0</span>)</span>
+    </span>
+  </summary>
+  <div class="p-4 bg-wxm-abyss/90 border-t border-wxm-cloud/15">
+    <div class="flex items-center justify-end gap-2 mb-3">
+      <select id="ws-log-filter" class="bg-wxm-abyss border border-wxm-cloud/20 rounded-control text-[11px] text-wxm-cloud px-2 py-1" aria-label="Filter log">
+        <option value="ALL">All</option>
+        <option value="BLE">BLE</option>
+        <option value="NUS">Shell</option>
+        <option value="DFU">Update</option>
+        <option value="WARN">Warnings</option>
+        <option value="ERROR">Errors</option>
+      </select>
+      <button id="ws-log-clear" type="button" class="px-2.5 py-1 rounded-control text-[11px] font-bold text-wxm-mist hover:text-white border border-wxm-cloud/20 cursor-pointer">Clear</button>
+      <button id="ws-log-download" type="button" class="px-2.5 py-1 rounded-control text-[11px] font-bold text-white bg-wxm-beacon hover:bg-wxm-horizon cursor-pointer">Download</button>
+    </div>
+    <div id="ws-log" class={`${height} overflow-y-auto font-mono text-[11px] leading-relaxed text-wxm-cloud space-y-0.5`}></div>
+  </div>
+</details>

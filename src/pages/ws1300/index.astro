@@ -1,0 +1,432 @@
+---
+import SiteLayout from '../../layouts/SiteLayout.astro';
+import BleBrowserNotice from '../../components/ws1300/BleBrowserNotice.astro';
+import StaleBondHelp from '../../components/ws1300/StaleBondHelp.astro';
+import DfuProgress from '../../components/ws1300/DfuProgress.astro';
+import SlotTable from '../../components/ws1300/SlotTable.astro';
+import EventLog from '../../components/ws1300/EventLog.astro';
+import manifest from '../../../public/firmware/ws1300/manifest.json';
+
+const latest = manifest.releases.find((r) => r.version === manifest.latest) ?? manifest.releases[0];
+---
+
+<SiteLayout
+  title="WS1300 Firmware Update over Bluetooth — WeatherXM"
+  description="Update your WeatherXM WS1300 weather station to the latest firmware over Bluetooth, from Chrome or Edge on a computer or Android phone."
+  device="ws1300"
+>
+  <BleBrowserNotice />
+
+  <section class="max-w-6xl mx-auto px-4 sm:px-8">
+    <div class="grid grid-cols-1 lg:grid-cols-[1.1fr_1fr] gap-8 lg:gap-12 items-start">
+      <!-- Left: what this is and how to get ready -->
+      <div class="space-y-6">
+        <div class="space-y-3">
+          <span class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-wxm-storm/40 border border-wxm-cloud/20 text-xs font-semibold text-white">
+            <span class="w-2 h-2 rounded-full bg-wxm-zenith"></span>
+            Latest firmware: {latest.label}
+          </span>
+          <h1 class="text-3xl sm:text-4xl font-extrabold tracking-tight leading-tight text-balance">
+            Update your WS1300 over Bluetooth
+          </h1>
+          <p class="text-sm sm:text-base text-wxm-mist leading-relaxed max-w-xl">
+            No cables and no app. Your browser talks to the station directly, sends the new firmware and checks that it started. If anything goes wrong, the station keeps or returns to the firmware it had.
+          </p>
+        </div>
+
+        <ol class="space-y-3">
+          <li class="flex gap-3.5 p-4 rounded-card bg-wxm-midnight/60 border border-wxm-cloud/10">
+            <span class="w-7 h-7 flex-shrink-0 rounded-full bg-wxm-beacon/20 border border-wxm-beacon/40 text-wxm-zenith text-xs font-bold flex items-center justify-center">1</span>
+            <div class="space-y-1">
+              <h3 class="text-sm font-bold">Stand next to the station</h3>
+              <p class="text-xs text-wxm-mist leading-relaxed">Stay within a few metres for the whole update. A laptop or an Android phone both work.</p>
+            </div>
+          </li>
+          <li class="flex gap-3.5 p-4 rounded-card bg-wxm-midnight/60 border border-wxm-cloud/10">
+            <span class="w-7 h-7 flex-shrink-0 rounded-full bg-wxm-beacon/20 border border-wxm-beacon/40 text-wxm-zenith text-xs font-bold flex items-center justify-center">2</span>
+            <div class="space-y-1">
+              <h3 class="text-sm font-bold">Press the station button once</h3>
+              <p class="text-xs text-wxm-mist leading-relaxed">
+                A short press restarts the station, and it stays visible over Bluetooth for 15 minutes.
+                <strong class="text-amber-300 font-semibold">Don't hold it down:</strong> holding it for 15 seconds resets the station's settings.
+              </p>
+            </div>
+          </li>
+          <li class="flex gap-3.5 p-4 rounded-card bg-wxm-midnight/60 border border-wxm-cloud/10">
+            <span class="w-7 h-7 flex-shrink-0 rounded-full bg-wxm-beacon/20 border border-wxm-beacon/40 text-wxm-zenith text-xs font-bold flex items-center justify-center">3</span>
+            <div class="space-y-1">
+              <h3 class="text-sm font-bold">Connect and pick "WeatherXM WS1300"</h3>
+              <p class="text-xs text-wxm-mist leading-relaxed">Your computer may also ask to pair with the station. Accepting is fine; the update works either way. Don't close the pairing prompt halfway.</p>
+            </div>
+          </li>
+        </ol>
+      </div>
+
+      <!-- Right: action card -->
+      <div class="lg:sticky lg:top-20 space-y-4">
+        <!-- Not connected -->
+        <div id="view-connect" class="p-6 rounded-card bg-wxm-midnight/90 border-2 border-wxm-beacon/40 backdrop-blur-md shadow-card space-y-5">
+          <div class="flex items-center gap-5">
+            <img src="/ws1300-angle.webp" alt="WeatherXM WS1300 weather station" width="400" height="184" class="w-28 sm:w-32 h-auto flex-shrink-0 drop-shadow-[0_8px_16px_rgba(0,0,0,0.5)]" />
+            <div class="space-y-1">
+              <span class="text-[11px] font-extrabold text-wxm-zenith uppercase tracking-widest block">Bluetooth connection</span>
+              <h2 class="text-lg font-bold">Connect to your station</h2>
+              <p class="text-xs text-wxm-mist">We'll check which firmware it runs before changing anything.</p>
+            </div>
+          </div>
+          <button
+            id="btn-connect"
+            type="button"
+            class="w-full py-4 px-6 rounded-control text-base btn-primary-beacon flex items-center justify-center gap-3 cursor-pointer disabled:opacity-50 disabled:cursor-wait focus:outline-none focus-visible:ring-2 focus-visible:ring-wxm-zenith focus-visible:ring-offset-2 focus-visible:ring-offset-wxm-midnight"
+          >
+            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M7 7l10 10-5 5V2l5 5L7 17" /></svg>
+            <span id="btn-connect-label">Connect to WS1300</span>
+          </button>
+          <p id="connect-error" class="hidden text-xs text-red-300 leading-relaxed" role="alert"></p>
+          <StaleBondHelp />
+        </div>
+
+        <!-- Connected -->
+        <div id="view-station" class="hidden p-6 rounded-card bg-wxm-midnight/90 border-2 border-wxm-cloud/20 backdrop-blur-md shadow-card space-y-5">
+          <div class="flex items-start justify-between gap-3">
+            <div class="min-w-0">
+              <span class="text-[11px] font-extrabold text-wxm-live uppercase tracking-widest flex items-center gap-1.5">
+                <span class="indicator-dot-green"></span> Connected
+              </span>
+              <h2 id="station-name" class="text-lg font-bold mt-1 truncate">WeatherXM WS1300</h2>
+            </div>
+            <span id="station-badge" class="px-2.5 py-1 text-xs font-bold rounded-full border whitespace-nowrap"></span>
+          </div>
+
+          <dl class="grid grid-cols-2 gap-3 text-sm">
+            <div class="p-3 rounded-control bg-wxm-abyss/70 border border-wxm-cloud/10">
+              <dt class="text-[10px] uppercase tracking-wider text-wxm-mist font-semibold">Installed</dt>
+              <dd id="station-version" class="font-mono font-semibold mt-0.5">–</dd>
+            </div>
+            <div class="p-3 rounded-control bg-wxm-abyss/70 border border-wxm-cloud/10">
+              <dt class="text-[10px] uppercase tracking-wider text-wxm-mist font-semibold">Latest</dt>
+              <dd id="station-latest" class="font-mono font-semibold mt-0.5">{latest.label}</dd>
+            </div>
+          </dl>
+
+          <p id="station-note" class="text-xs text-wxm-mist leading-relaxed"></p>
+
+          <!-- Inline confirmation before anything is written -->
+          <div id="confirm-panel" class="hidden rounded-card border border-wxm-beacon/40 bg-wxm-beacon/10 p-4 space-y-3">
+            <h3 id="confirm-title" class="text-sm font-bold">Ready to update</h3>
+            <ul class="text-xs text-wxm-cloud space-y-1.5 list-disc pl-4">
+              <li id="confirm-summary"></li>
+              <li>It usually takes a few minutes. Keep this tab open and stay close to the station.</li>
+              <li>At the end the station restarts and is offline for about a minute while it installs.</li>
+            </ul>
+            <div class="flex gap-2">
+              <button id="btn-confirm-start" type="button" class="flex-1 py-2.5 rounded-control text-sm btn-primary-beacon cursor-pointer">Start update</button>
+              <button id="btn-confirm-cancel" type="button" class="px-4 py-2.5 rounded-control text-sm font-bold text-wxm-cloud border border-wxm-cloud/20 hover:bg-wxm-storm/50 cursor-pointer">Cancel</button>
+            </div>
+          </div>
+
+          <div class="flex flex-col gap-2">
+            <button id="btn-update" type="button" class="hidden w-full py-3.5 rounded-control text-base btn-primary-beacon cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
+              Update to {latest.label}
+            </button>
+            <button id="btn-disconnect" type="button" class="text-xs text-wxm-mist hover:text-white underline underline-offset-4 decoration-wxm-cloud/30 cursor-pointer self-center disabled:opacity-40 disabled:no-underline disabled:cursor-not-allowed">
+              Disconnect
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="max-w-6xl mx-auto px-4 sm:px-8 mt-8">
+    <DfuProgress />
+  </section>
+
+  <section class="max-w-6xl mx-auto px-4 sm:px-8 mt-8 space-y-4">
+    <details id="advanced" class="rounded-card border border-wxm-cloud/15 bg-wxm-storm/25 backdrop-blur-md shadow-card group">
+      <summary class="px-5 py-3.5 flex items-center gap-2 cursor-pointer list-none select-none text-sm font-bold">
+        <svg class="w-4 h-4 transition-transform group-open:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
+        Advanced
+        <span class="text-xs font-normal text-wxm-mist">Install a file from your computer, firmware slots</span>
+      </summary>
+      <div class="px-5 pb-5 pt-2 grid grid-cols-1 lg:grid-cols-2 gap-6 border-t border-wxm-cloud/10">
+        <div class="space-y-3 pt-3">
+          <div>
+            <h4 class="text-sm font-bold">Install a firmware file</h4>
+            <p class="text-[11px] text-wxm-mist leading-relaxed">For beta builds or when WeatherXM support sends you a file. Use a WS1300 <code class="font-mono">-dfu.zip</code> package or a signed MCUboot <code class="font-mono">.bin</code>.</p>
+          </div>
+          <label
+            id="custom-drop"
+            for="custom-file"
+            class="flex flex-col items-center justify-center gap-1 p-6 rounded-control border-2 border-dashed border-wxm-cloud/20 hover:border-wxm-zenith bg-wxm-abyss/50 text-center cursor-pointer transition-colors"
+          >
+            <svg class="w-6 h-6 text-wxm-mist" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+            <span class="text-xs font-semibold">Drop a file here or click to choose</span>
+            <span class="text-[11px] text-wxm-mist">.zip or .bin</span>
+            <input id="custom-file" type="file" accept=".zip,.bin" class="sr-only" />
+          </label>
+          <div id="custom-summary" class="hidden space-y-2">
+            <ul id="custom-images" class="space-y-1.5 text-xs"></ul>
+            <p id="custom-warning" class="hidden text-[11px] text-amber-300"></p>
+            <button id="btn-install-custom" type="button" disabled class="w-full py-2.5 rounded-control text-sm font-bold text-white border border-wxm-beacon/50 bg-wxm-beacon/20 hover:bg-wxm-beacon/35 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">
+              Install this file
+            </button>
+          </div>
+          <p id="custom-error" class="hidden text-xs text-red-300" role="alert"></p>
+        </div>
+        <div class="pt-3">
+          <SlotTable />
+        </div>
+      </div>
+    </details>
+
+    <EventLog title="Technical log" />
+  </section>
+</SiteLayout>
+
+<script>
+  import { Ws1300Session, isChooserCancelled, isWebBluetoothAvailable, errMsg } from '../../lib/ble/ws1300Session';
+  import { compareVersions, latestRelease, loadWs1300Manifest, type Ws1300Manifest, type Ws1300Release } from '../../lib/ble/ws1300Manifest';
+  import { parseDfuPackage, type DfuImage } from '../../lib/ble/dfuPackage';
+  import { runningAppVersion } from '../../lib/ble/dfu';
+  import { runUpdateFlow, type UpdateSource } from '../../lib/ble/updateFlow';
+  import type { ImageSlotState } from '../../lib/ble/smp';
+  import { $, ProgressView, coreName, createEventLog, kb, renderSlots } from '../../lib/ble/ui';
+
+  const { log } = createEventLog('ws1300_update_log');
+  const progress = new ProgressView();
+
+  let manifest: Ws1300Manifest | null = null;
+  let release: Ws1300Release | null = null;
+  let installed: string | null = null;
+  let lastStates: ImageSlotState[] = [];
+  let customFile: { name: string; images: DfuImage[] } | null = null;
+  let pending: UpdateSource | null = null;
+  let busy = false;
+
+  const btnConnect = $<HTMLButtonElement>('btn-connect');
+  const btnUpdate = $<HTMLButtonElement>('btn-update');
+  const btnDisconnect = $<HTMLButtonElement>('btn-disconnect');
+  const btnInstallCustom = $<HTMLButtonElement>('btn-install-custom');
+  const btnReadSlots = $<HTMLButtonElement>('btn-read-slots');
+  const connectError = $('connect-error');
+  const staleBond = $('stale-bond-help');
+
+  const show = (el: HTMLElement, on: boolean) => el.classList.toggle('hidden', !on);
+
+  const session = new Ws1300Session({
+    log,
+    onState: () => render(),
+    onHint: () => show(staleBond, true),
+  });
+
+  function render() {
+    const connected = session.state === 'connected' || session.state === 'updating';
+    show($('view-connect'), !connected);
+    show($('view-station'), connected);
+    btnConnect.disabled = session.state === 'connecting' || busy;
+    $('btn-connect-label').textContent = session.state === 'connecting' ? 'Connecting…' : 'Connect to WS1300';
+
+    const idle = session.state === 'connected' && !busy;
+    btnUpdate.disabled = !idle;
+    btnDisconnect.disabled = !idle;
+    btnInstallCustom.disabled = !idle || !customFile;
+    btnReadSlots.disabled = !idle;
+    if (!connected) show($('confirm-panel'), false);
+  }
+
+  function renderStation(states: ImageSlotState[]) {
+    lastStates = states;
+    installed = runningAppVersion(states);
+    $('station-name').textContent = session.deviceName;
+    $('station-version').textContent = installed ? `v${installed}` : 'unknown';
+    renderSlots(states);
+
+    const badge = $('station-badge');
+    const note = $('station-note');
+    const setBadge = (text: string, cls: string) => {
+      badge.textContent = text;
+      badge.className = `px-2.5 py-1 text-xs font-bold rounded-full border whitespace-nowrap ${cls}`;
+    };
+
+    if (!release) {
+      setBadge('Release list unavailable', 'border-wxm-cloud/20 text-wxm-mist');
+      note.textContent = "We couldn't load the list of firmware releases. Check your connection and reload the page.";
+      show(btnUpdate, false);
+    } else if (!installed || compareVersions(installed, release.version) < 0) {
+      setBadge('Update available', 'border-amber-400/50 bg-amber-400/10 text-amber-300');
+      note.textContent = `${release.label} is ready to install (${kb(release.bytes)}).`;
+      show(btnUpdate, true);
+    } else if (compareVersions(installed, release.version) === 0) {
+      setBadge('Up to date', 'border-emerald-400/50 bg-emerald-400/10 text-emerald-300');
+      note.textContent = 'Your station already runs the latest firmware. There is nothing to do.';
+      show(btnUpdate, false);
+    } else {
+      setBadge('Newer than latest', 'border-wxm-zenith/50 bg-wxm-beacon/15 text-wxm-wash');
+      note.textContent = `This station runs a build newer than the latest release (${release.label}). To install a specific file, open Advanced below.`;
+      show(btnUpdate, false);
+    }
+  }
+
+  async function readStates() {
+    const states = await session.smp!.readImageStates();
+    renderStation(states);
+    log(`Installed: v${installed ?? 'unknown'}`, 'DFU');
+    return states;
+  }
+
+  function askConfirm(source: UpdateSource) {
+    pending = source;
+    const from = installed ? `v${installed}` : 'the current firmware';
+    if (source.kind === 'release') {
+      $('confirm-title').textContent = `Update to ${source.release.label}`;
+      $('confirm-summary').textContent = `Replaces ${from} with ${source.release.label} (${kb(source.release.bytes)} download).`;
+    } else {
+      const app = source.images.find((i) => i.imageIndex === 0);
+      $('confirm-title').textContent = `Install ${source.name}`;
+      $('confirm-summary').textContent = `Replaces ${from} with ${app ? `v${app.version}` : 'the radio firmware in this file'} from your file.`;
+    }
+    show($('confirm-panel'), true);
+    show(btnUpdate, false);
+    $('confirm-panel').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  async function startPending() {
+    if (!pending) return;
+    const source = pending;
+    pending = null;
+    show($('confirm-panel'), false);
+    busy = true;
+    render();
+    await runUpdateFlow(source, {
+      session,
+      progress,
+      log,
+      onStates: renderStation,
+      onFinished: () => {
+        busy = false;
+        render();
+      },
+    });
+  }
+
+  // --- Connect ---------------------------------------------------------------
+
+  btnConnect.addEventListener('click', async () => {
+    show(connectError, false);
+    show(staleBond, false);
+    progress.hide();
+    try {
+      await session.connect();
+      await readStates();
+    } catch (err) {
+      if (isChooserCancelled(err)) {
+        log('Device chooser closed without picking a station.', 'BLE');
+        return;
+      }
+      log(`Connect failed: ${errMsg(err)}`, 'ERROR');
+      connectError.textContent = `Couldn't connect: ${errMsg(err)} Make sure the station was restarted less than 15 minutes ago, then try again.`;
+      show(connectError, true);
+      if (session.connected) session.disconnect();
+    } finally {
+      render();
+    }
+  });
+
+  btnDisconnect.addEventListener('click', () => session.disconnect());
+
+  btnUpdate.addEventListener('click', () => {
+    if (release) askConfirm({ kind: 'release', release });
+  });
+  $('btn-confirm-cancel').addEventListener('click', () => {
+    pending = null;
+    show($('confirm-panel'), false);
+    renderStation(lastStates); // brings the update button back
+  });
+  $('btn-confirm-start').addEventListener('click', () => void startPending());
+
+  btnReadSlots.addEventListener('click', async () => {
+    try {
+      await readStates();
+    } catch (err) {
+      log(`Reading slots failed: ${errMsg(err)}`, 'ERROR');
+    }
+  });
+
+  // --- Custom file -------------------------------------------------------------
+
+  async function takeFile(file: File) {
+    show($('custom-error'), false);
+    show($('custom-summary'), false);
+    customFile = null;
+    try {
+      const images = await parseDfuPackage(new Uint8Array(await file.arrayBuffer()), file.name);
+      customFile = { name: file.name, images };
+      const list = $('custom-images');
+      list.replaceChildren();
+      for (const img of images) {
+        const li = document.createElement('li');
+        li.className = 'flex items-center justify-between gap-3 p-2.5 rounded-control bg-wxm-abyss/70 border border-wxm-cloud/10';
+        li.innerHTML = `<span><span class="font-semibold text-white"></span><span class="block text-[11px] font-mono text-wxm-mist"></span></span><span class="font-mono text-wxm-cloud"></span>`;
+        const [title, sub] = li.querySelectorAll('span span');
+        title.textContent = coreName(img.imageIndex);
+        sub.textContent = `${img.name} · sha256 ${img.sha256.slice(0, 12)}…`;
+        (li.lastElementChild as HTMLElement).textContent = `v${img.version} · ${kb(img.size)}`;
+        list.appendChild(li);
+      }
+      const app = images.find((i) => i.imageIndex === 0);
+      const warn = $('custom-warning');
+      const older = app && installed && compareVersions(app.version, installed) < 0;
+      warn.textContent = older ? `This file (v${app!.version}) is older than what the station runs (v${installed}).` : '';
+      show(warn, !!older);
+      show($('custom-summary'), true);
+      log(`Loaded ${file.name}: ${images.map((i) => `${i.core} v${i.version}`).join(', ')}`, 'DFU');
+    } catch (err) {
+      $('custom-error').textContent = errMsg(err);
+      show($('custom-error'), true);
+      log(`Rejected ${file.name}: ${errMsg(err)}`, 'WARN');
+    }
+    render();
+  }
+
+  const drop = $('custom-drop');
+  $<HTMLInputElement>('custom-file').addEventListener('change', (e) => {
+    const f = (e.target as HTMLInputElement).files?.[0];
+    if (f) void takeFile(f);
+  });
+  drop.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    drop.classList.add('border-wxm-zenith');
+  });
+  drop.addEventListener('dragleave', () => drop.classList.remove('border-wxm-zenith'));
+  drop.addEventListener('drop', (e) => {
+    e.preventDefault();
+    drop.classList.remove('border-wxm-zenith');
+    const f = e.dataTransfer?.files?.[0];
+    if (f) void takeFile(f);
+  });
+  btnInstallCustom.addEventListener('click', () => {
+    if (!customFile) return;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    askConfirm({ kind: 'file', images: customFile.images, name: customFile.name });
+  });
+
+  // --- Boot --------------------------------------------------------------------
+
+  if (!isWebBluetoothAvailable()) {
+    show($('ble-browser-warning'), true);
+    btnConnect.disabled = true;
+    log('Web Bluetooth is not available in this browser.', 'WARN');
+  }
+
+  loadWs1300Manifest()
+    .then((m) => {
+      manifest = m;
+      release = latestRelease(m);
+      log(`Latest WS1300 release: ${release.label} (${manifest.releases.length} published).`, 'INFO');
+      if (session.connected && lastStates.length) renderStation(lastStates);
+    })
+    .catch((err) => log(`Could not load release list: ${errMsg(err)}`, 'ERROR'));
+
+  render();
+</script>

@@ -1,0 +1,36 @@
+{
+  "schema": 1,
+  "hardware": "WS1300",
+  "soc": "nRF5340",
+  "latest": "22.6.0",
+  "releases": [
+    {
+      "version": "22.6.0",
+      "label": "v22.6",
+      "file": "/firmware/ws1300/ws1300_release_v22.6-dfu.zip",
+      "bytes": 745012,
+      "sha256": "2b1b9410f4eb45ae5397e1134b2f6a69a1905f264c823543530fc1e0fdcb2cd2",
+      "source_repo": "WeatherXM/ws1300-firmware-legacy",
+      "git_commit": "29f55fd",
+      "built_at": "2026-09-26T22:45:47.000Z",
+      "images": [
+        {
+          "file": "app_update.bin",
+          "image_index": 0,
+          "core": "app",
+          "version": "22.6.0",
+          "bytes": 572022,
+          "sha256": "d3481dddbf9ab598d0b515b6cf43e7b9001c15c03f83f69f3a595b23d0b5477a"
+        },
+        {
+          "file": "net_core_app_update.bin",
+          "image_index": 1,
+          "core": "net",
+          "version": "22.6.0",
+          "bytes": 171351,
+          "sha256": "34c17d2bf0e5c4f4092559bb6aae2b510ebc3da77d0ea98a8c5875a7fcaa6e60"
+        }
+      ]
+    }
+  ]
+}

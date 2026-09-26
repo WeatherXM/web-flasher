@@ -1,0 +1,85 @@
+---
+interface Props {
+  /** Show the "download and check" step (published releases only) */
+  showDownload?: boolean;
+}
+const { showDownload = true } = Astro.props;
+
+const steps = [
+  ...(showDownload ? [{ id: 'download', label: 'Download and check the firmware' }] : []),
+  { id: 'app', label: 'Send the main firmware' },
+  { id: 'net', label: 'Send the radio firmware' },
+  { id: 'schedule', label: 'Schedule the install' },
+  { id: 'restart', label: 'Restart the station' },
+  { id: 'verify', label: 'Check the new version' },
+];
+---
+
+<div id="dfu-progress" class="hidden rounded-card border border-wxm-cloud/15 bg-wxm-storm/30 backdrop-blur-md p-5 sm:p-6 shadow-card space-y-5">
+  <div class="flex items-center gap-3">
+    <div id="dfu-spinner" class="w-8 h-8 flex-shrink-0 rounded-full border-2 border-wxm-beacon border-t-transparent animate-spin"></div>
+    <div class="min-w-0">
+      <h3 id="dfu-title" class="text-lg font-bold text-white">Updating your station</h3>
+      <p id="dfu-status" class="text-xs text-wxm-mist">Keep this tab open and stay close to the station.</p>
+    </div>
+  </div>
+
+  <div>
+    <div class="relative w-full h-3 rounded-full bg-wxm-midnight/80 border border-wxm-cloud/10 overflow-hidden">
+      <div id="dfu-bar" class="h-full bg-wxm-beacon transition-all duration-300 rounded-full" style="width: 0%"></div>
+    </div>
+    <div class="mt-2 flex flex-wrap justify-between gap-x-4 gap-y-1 text-[11px] font-mono text-wxm-mist tabular-nums">
+      <span><span id="dfu-pct" class="text-white font-semibold">0%</span> · <span id="dfu-bytes">0 / 0 KB</span></span>
+      <span><span id="dfu-speed">–</span> · <span id="dfu-eta">–</span> left</span>
+    </div>
+  </div>
+
+  <ol class="flex flex-col gap-3 text-sm" id="dfu-steps">
+    {steps.map((s, i) => (
+      <li data-step={s.id} class="dfu-step flex items-center gap-2.5 text-wxm-mist" data-state="idle">
+        <span class="step-dot w-5 h-5 flex-shrink-0 rounded-full border border-wxm-cloud/20 flex items-center justify-center text-[10px] font-mono">{i + 1}</span>
+        <span class="step-label">{s.label}</span>
+        <span class="step-detail text-[11px] font-mono text-wxm-mist/80"></span>
+      </li>
+    ))}
+  </ol>
+
+  <div id="dfu-result" class="hidden rounded-card border p-4 text-sm space-y-3">
+    <div class="flex items-start gap-3">
+      <span id="dfu-result-icon" class="flex-shrink-0 mt-0.5"></span>
+      <div class="space-y-1 min-w-0">
+        <h4 id="dfu-result-title" class="font-bold text-white"></h4>
+        <p id="dfu-result-msg" class="text-xs text-wxm-cloud leading-relaxed"></p>
+      </div>
+    </div>
+    <div id="dfu-result-actions" class="flex flex-wrap gap-2"></div>
+  </div>
+</div>
+
+<style>
+  .dfu-step[data-state='active'] {
+    color: #fff;
+  }
+  .dfu-step[data-state='active'] .step-dot {
+    border-color: #317ae8;
+    background: rgba(47, 116, 220, 0.25);
+  }
+  .dfu-step[data-state='done'] {
+    color: #e4e9f0;
+  }
+  .dfu-step[data-state='done'] .step-dot {
+    border-color: #10b981;
+    background: #10b981;
+    color: #0c1d38;
+  }
+  .dfu-step[data-state='error'] {
+    color: #fff;
+  }
+  .dfu-step[data-state='error'] .step-dot {
+    border-color: #ce4034;
+    background: #ce4034;
+  }
+  .dfu-step[data-state='skipped'] {
+    opacity: 0.45;
+  }
+</style>

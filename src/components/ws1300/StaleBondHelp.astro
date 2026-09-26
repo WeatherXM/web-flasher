@@ -1,0 +1,24 @@
+---
+// Shown when the link drops seconds after connecting: this computer still holds a
+// Bluetooth pairing the station no longer has (failed pairing or factory reset).
+---
+
+<div id="stale-bond-help" class="hidden rounded-card border border-warning/50 bg-warning/10 p-4 text-left space-y-2">
+  <div class="flex items-start gap-2.5">
+    <svg class="w-5 h-5 text-warning flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+    <div class="space-y-1.5">
+      <h4 class="text-sm font-bold text-white">The station dropped the connection right away</h4>
+      <p class="text-xs text-wxm-cloud leading-relaxed">
+        Your computer remembers an old Bluetooth pairing with this station that the station no longer has. Remove it, then connect again.
+      </p>
+      <ul class="text-xs text-wxm-mist space-y-1 list-disc pl-4">
+        <li><strong class="text-white">macOS:</strong> System Settings › Bluetooth › click ⓘ next to WeatherXM WS1300 › Forget This Device.</li>
+        <li><strong class="text-white">Windows:</strong> Settings › Bluetooth &amp; devices › WeatherXM WS1300 › Remove device.</li>
+        <li><strong class="text-white">Android:</strong> Settings › Connected devices › WeatherXM WS1300 › Forget.</li>
+      </ul>
+      <p class="text-xs text-wxm-mist">If it isn't listed, turn Bluetooth off and on, press the station button once, and try again.</p>
+    </div>
+  </div>
+</div>
