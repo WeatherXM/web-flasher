@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "type": "module",
   "license": "Apache-2.0",
-  "description": "WeatherXM WG1200 / D1 Firmware Switcher between WeatherXM and Meshtastic",
+  "description": "WeatherXM firmware web flasher: WG1200 gateway over USB (WeatherXM / Meshtastic) and WS1300 station over Bluetooth",
   "scripts": {
     "dev": "astro dev",
     "build": "astro build",
@@ -12,17 +12,21 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "manifest": "node scripts/update-manifest.mjs",
+    "manifest": "node scripts/update-manifests.mjs",
+    "manifest:wg1200": "node scripts/update-manifest.mjs",
+    "manifest:ws1300": "node scripts/update-ws1300-manifest.mjs",
     "deploy": "npm run build && wrangler deploy"
   },
   "dependencies": {
-    "esptool-js": "^0.7.0"
+    "esptool-js": "^0.7.0",
+    "fflate": "^0.8.3"
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.4",
     "@astrojs/tailwind": "^5.1.5",
     "@types/node": "^22.13.9",
     "@types/spark-md5": "3.0.4",
+    "@types/web-bluetooth": "^0.0.21",
     "astro": "^5.4.1",
     "lucide": "^0.477.0",
     "lucide-static": "^0.477.0",

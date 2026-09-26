@@ -1,4 +1,15 @@
-# flash.weatherxm.com — WG1200 Firmware Web Flasher
+# flash.weatherxm.com — WeatherXM Firmware Web Flasher
+
+The site opens on a device picker:
+
+| Route | Device | Transport | What it does |
+|---|---|---|---|
+| `/` | — | — | Pick WG1200 or WS1300; shows whether this browser supports each |
+| `/wg1200` | WG1200 / D1 gateway | USB (Web Serial) | Switch between WeatherXM and Meshtastic firmware (below) |
+| `/ws1300` | WS1300 weather station | Bluetooth (Web Bluetooth) | Update to the latest published firmware, or install a `-dfu.zip` / signed `.bin` |
+| `/ws1300/dev` | WS1300 | Bluetooth | Staff tools: Zephyr shell console, any published release, file installs, MCUboot slots. Not linked, `noindex` |
+
+## WG1200 Firmware Web Flasher
 
 Web-based firmware switcher for the **WeatherXM WG1200 / D1 Gateway**, with two deliberately different operating modes:
 
@@ -43,6 +54,8 @@ This is **not** a generic ESP32 flasher. It is purpose-built with strict hardwar
 
 ## Adding New Firmware & Updating Manifest
 
+`npm run manifest` refreshes the manifests of **both** devices (WG1200 and WS1300). A file argument is routed by name: `*.bin` to WG1200, `*-dfu.zip` to WS1300. Use `npm run manifest:wg1200` or `npm run manifest:ws1300` to run just one.
+
 To add a new firmware release:
 
 ```bash
@@ -60,6 +73,28 @@ The script will automatically:
 4. Update `public/firmware/manifest.json` and sync with `dist/firmware/manifest.json`.
 
 ---
+
+## WS1300 Bluetooth Updates
+
+The WS1300 (nRF5340) is updated over the air with MCUmgr/SMP, ported from `ws1300-firmware-internal/tools/web-flasher-ble` into `src/lib/ble/`:
+
+* `cbor.ts`, `smp.ts`: SMP framing (writes split into 180-byte ATT fragments for macOS), image state, upload, test mark, reset
+* `nus.ts`: Nordic UART shell client (needs a paired, encrypted link; SMP does not)
+* `dfuPackage.ts`: reads nRF Connect SDK `-dfu.zip` packages (app core image 0, network core image 1) with `fflate`, and checks the MCUboot header of every image
+* `ws1300Manifest.ts`: release list, download with size + SHA-256 checks against the manifest
+* `dfu.ts`, `updateFlow.ts`: upload all images, mark them for test, reset, then reconnect and compare the running version
+
+The station application confirms its own image at boot (`imgswap_confirm()` in `app/src/main.cpp`), so an image that fails to start is reverted by MCUboot.
+
+### Publishing a WS1300 release
+
+```bash
+npm run manifest -- path/to/ws1300_release_v22.4-dfu.zip
+```
+
+This copies the package into `public/firmware/ws1300/`, validates every image (board must be WS1300, MCUboot magic `0x96f3b83d`, not truncated), records SHA-256 of the package and each image, and rewrites `public/firmware/ws1300/manifest.json` with the newest version as `latest`. It warns when the package was built from a working tree with uncommitted changes.
+
+The manifest is rebuilt from whatever `*-dfu.zip` files are in `public/firmware/ws1300/` on every run, so you can also drop packages there (or delete them) and run `npm run manifest` with no argument.
 
 ## Local Development
 
@@ -89,4 +124,4 @@ This site is 100% static and deploys to Cloudflare Pages:
 * **Build output directory**: `dist`
 * **Node version**: `20` or `22`
 * **Custom domain**: `flasher.weatherxm.com`
-* Permissions policy header in `public/_headers`: `Permissions-Policy: serial=(self)` ensures Web Serial is active.
+* Permissions policy header in `public/_headers`: `Permissions-Policy: serial=(self), bluetooth=(self)` allows Web Serial and Web Bluetooth.
