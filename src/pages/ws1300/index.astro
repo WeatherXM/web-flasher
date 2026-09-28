@@ -32,6 +32,11 @@ const latest = manifest.releases.find((r) => r.version === manifest.latest) ?? m
           <p class="text-sm sm:text-base text-wxm-mist leading-relaxed max-w-xl">
             No cables and no app. Your browser talks to the station directly, sends the new firmware and checks that it started. If anything goes wrong, the station keeps or returns to the firmware it had.
           </p>
+          <p class="text-sm">
+            <a href="https://weatherxm.com/stations/" class="inline-flex items-center gap-1.5 font-semibold text-wxm-zenith hover:text-white underline underline-offset-4 decoration-wxm-cloud/30">
+              Explore WeatherXM stations <span aria-hidden="true">→</span>
+            </a>
+          </p>
         </div>
 
         <ol class="space-y-3">
@@ -45,9 +50,9 @@ const latest = manifest.releases.find((r) => r.version === manifest.latest) ?? m
           <li class="flex gap-3.5 p-4 rounded-card bg-wxm-midnight/60 border border-wxm-cloud/10">
             <span class="w-7 h-7 flex-shrink-0 rounded-full bg-wxm-beacon/20 border border-wxm-beacon/40 text-wxm-zenith text-xs font-bold flex items-center justify-center">2</span>
             <div class="space-y-1">
-              <h3 class="text-sm font-bold">Press the station button once</h3>
+              <h3 class="text-sm font-bold">Press the station button once <span class="text-xs font-medium text-wxm-mist">(first-time pairing only)</span></h3>
               <p class="text-xs text-wxm-mist leading-relaxed">
-                A short press restarts the station, and it stays visible over Bluetooth for 15 minutes.
+                If you have never paired this computer or phone with the station before, press the button once. This is only needed for the initial pairing. A short press restarts the station, and it stays visible over Bluetooth for 15 minutes.
                 <strong class="text-amber-300 font-semibold">Don't hold it down:</strong> holding it for 15 seconds resets the station's settings.
               </p>
             </div>
