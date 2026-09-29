@@ -11,6 +11,21 @@ interface Props {
 }
 
 const { title, description, device, noindex = false } = Astro.props;
+const canonicalUrl = new URL(Astro.url.pathname, 'https://flasher.weatherxm.com').href;
+const schema = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  name: title,
+  description,
+  url: canonicalUrl,
+  applicationCategory: 'UtilitiesApplication',
+  operatingSystem: 'Any',
+  publisher: {
+    '@type': 'Organization',
+    name: 'WeatherXM',
+    url: 'https://weatherxm.com'
+  }
+};
 ---
 
 <!doctype html>
@@ -28,6 +43,14 @@ const { title, description, device, noindex = false } = Astro.props;
     <meta name="generator" content={Astro.generator} />
     <title>{title}</title>
     <meta name="description" content={description} />
+    <link rel="canonical" href={canonicalUrl} />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="WeatherXM Firmware Flasher" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonicalUrl} />
+    <meta name="twitter:card" content="summary" />
+    <script is:inline type="application/ld+json" set:html={JSON.stringify(schema)} />
     {noindex && <meta name="robots" content="noindex, nofollow" />}
   </head>
 
