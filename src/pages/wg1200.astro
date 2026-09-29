@@ -30,8 +30,24 @@ import Footer from '../components/Footer.astro';
     <title>WG1200 Firmware Web Flasher — WeatherXM Tri-Protocol & Meshtastic</title>
     <meta
       name="description"
-      content="Convert your WeatherXM WG1200 gateway in to a LoRa Mesh tri-protocol or a full Meshtastic node over USB. Protected device credentials remain intact."
+      content="Convert your WeatherXM WG1200 gateway into a LoRa Mesh tri-protocol or full Meshtastic node over USB while keeping protected device credentials intact."
     />
+    <link rel="canonical" href="https://flasher.weatherxm.com/wg1200" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="WeatherXM Firmware Flasher" />
+    <meta property="og:title" content="WG1200 Firmware Web Flasher — WeatherXM Tri-Protocol & Meshtastic" />
+    <meta property="og:description" content="Switch WeatherXM WG1200 firmware between WeatherXM tri-protocol and full Meshtastic over USB." />
+    <meta property="og:url" content="https://flasher.weatherxm.com/wg1200" />
+    <script is:inline type="application/ld+json" set:html={JSON.stringify({
+      '@context': 'https://schema.org',
+      '@type': 'WebApplication',
+      name: 'WeatherXM WG1200 Firmware Web Flasher',
+      description: 'Browser-based USB firmware flasher for the WeatherXM WG1200 gateway.',
+      url: 'https://flasher.weatherxm.com/wg1200',
+      applicationCategory: 'UtilitiesApplication',
+      operatingSystem: 'Any',
+      publisher: { '@type': 'Organization', name: 'WeatherXM', url: 'https://weatherxm.com' }
+    })} />
   </head>
 
   <body class="min-h-screen bg-dark-atmospheric bg-dot-grid text-white font-sans antialiased flex flex-col justify-between selection:bg-wxm-beacon selection:text-white">
