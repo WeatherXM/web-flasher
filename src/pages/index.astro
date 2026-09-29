@@ -8,19 +8,19 @@ const ws1300Latest = ws1300Manifest.releases.find((r) => r.version === ws1300Man
 ---
 
 <SiteLayout
-  title="WeatherXM Firmware Flasher — WG1200 & WS1300"
-  description="Update or switch the firmware on your WeatherXM WG1200 gateway over USB, or your WS1300 weather station over Bluetooth, right from the browser."
+  title="WeatherXM Firmware & Device Flasher — WG1200, WS1300 & WS2001"
+  description="Update or switch firmware on your WG1200 gateway, WS1300 station, or configure WS2001 stations for open LoRaWAN networks, right from your browser."
 >
-  <section class="max-w-5xl mx-auto px-4 sm:px-8">
+  <section class="max-w-6xl mx-auto px-4 sm:px-8">
     <div class="max-w-2xl space-y-3 mb-8 lg:mb-10">
-      <span class="text-[11px] font-bold text-wxm-zenith uppercase tracking-wider">WeatherXM firmware flasher</span>
+      <span class="text-[11px] font-bold text-wxm-zenith uppercase tracking-wider">WeatherXM firmware & device tools</span>
       <h1 class="text-3xl sm:text-4xl font-extrabold tracking-tight leading-tight text-balance">Which device are you updating?</h1>
       <p class="text-sm sm:text-base text-wxm-mist leading-relaxed">
         Everything runs in your browser. Pick the device and we'll walk you through connecting it. The model name is on the label on the back.
       </p>
     </div>
 
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
       <a
         href="/wg1200"
         data-device="wg1200"
@@ -70,14 +70,14 @@ const ws1300Latest = ws1300Manifest.releases.find((r) => r.version === ws1300Man
         </div>
         <div class="space-y-2 flex-1">
           <div class="flex items-center justify-between gap-3 flex-wrap">
-            <h2 class="text-xl font-bold">WS1300 Weather Station</h2>
+            <h2 class="text-xl font-bold">WS1300 Station</h2>
             <span class="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-full bg-wxm-beacon/15 border border-wxm-beacon/40 text-wxm-wash">
               <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7l10 10-5 5V2l5 5L7 17" /></svg>
               Bluetooth
             </span>
           </div>
           <p class="text-sm text-wxm-mist leading-relaxed">
-            The outdoor station with the weather sensors. Update it to the latest firmware ({ws1300Latest.label}) wirelessly, from a laptop or an Android phone next to it.
+            The outdoor station with weather sensors. Update it to the latest firmware ({ws1300Latest.label}) wirelessly, from a laptop or an Android phone next to it.
           </p>
         </div>
         <div class="flex items-center justify-between gap-3 pt-4 border-t border-wxm-cloud/10">
@@ -88,10 +88,45 @@ const ws1300Latest = ws1300Manifest.releases.find((r) => r.version === ws1300Man
           </span>
         </div>
       </a>
+
+      <a
+        href="/ws2001"
+        data-device="ws2001"
+        class="device-card group rounded-card border-2 border-wxm-cloud/15 bg-wxm-storm/30 backdrop-blur-md shadow-card p-6 flex flex-col gap-5 transition-all hover:border-emerald-400/60 hover:bg-wxm-storm/50 focus-visible:outline-none focus-visible:border-emerald-400 focus-visible:ring-2 focus-visible:ring-emerald-400/60"
+      >
+        <div class="h-40 rounded-control bg-wxm-abyss/60 border border-wxm-cloud/10 flex items-center justify-center overflow-hidden">
+          <img
+            src="/ws1300-angle.webp"
+            alt="WeatherXM WS2001 weather station"
+            width="400"
+            height="184"
+            class="w-[85%] max-w-[300px] h-auto drop-shadow-[0_12px_24px_rgba(0,0,0,0.6)] transition-transform group-hover:scale-105"
+          />
+        </div>
+        <div class="space-y-2 flex-1">
+          <div class="flex items-center justify-between gap-3 flex-wrap">
+            <h2 class="text-xl font-bold">WS2001 Station</h2>
+            <span class="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/40 text-emerald-300">
+              <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7l10 10-5 5V2l5 5L7 17" /></svg>
+              Bluetooth
+            </span>
+          </div>
+          <p class="text-sm text-wxm-mist leading-relaxed">
+            Outdoor station (WS2001 / H2). Configure Open LoRaWAN mode to send standard SenseCAP 8-in-1 sensor data to TTN or ChirpStack.
+          </p>
+        </div>
+        <div class="flex items-center justify-between gap-3 pt-4 border-t border-wxm-cloud/10">
+          <span class="support text-xs text-wxm-mist" data-needs="bluetooth">Needs Chrome or Edge (Android works too)</span>
+          <span class="text-sm font-bold text-emerald-400 group-hover:text-white inline-flex items-center gap-1 whitespace-nowrap">
+            Configure
+            <svg class="w-4 h-4 transition-transform group-hover:translate-x-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg>
+          </span>
+        </div>
+      </a>
     </div>
 
     <p class="mt-8 text-xs text-wxm-mist max-w-2xl leading-relaxed">
-      Neither flow touches device identity or WeatherXM credentials. The WG1200 keeps its factory recovery image, and the WS1300 falls back to its previous firmware if a new one fails to start.
+      None of these flows touch hardware encryption keys or erase factory identities. Settings are saved safely to configuration flash.
     </p>
   </section>
 </SiteLayout>

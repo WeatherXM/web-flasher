@@ -2,11 +2,12 @@
 import GithubReposButton from './GithubReposButton.astro';
 
 interface Props {
-  device?: 'wg1200' | 'ws1300';
+  device?: 'wg1200' | 'ws1300' | 'ws2001' | 'h1-h2';
 }
 
 const { device } = Astro.props;
-const deviceLabel = device === 'wg1200' ? 'WG1200 gateway' : device === 'ws1300' ? 'WS1300 station' : null;
+const deviceLabel =
+  device === 'wg1200' ? 'WG1200 gateway' : device === 'ws1300' ? 'WS1300 station' : (device === 'ws2001' || device === 'h1-h2') ? 'WS2001 station' : null;
 ---
 
 <header class="border-b border-wxm-cloud/15 bg-wxm-midnight/90 backdrop-blur-md sticky top-0 z-40">
