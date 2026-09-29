@@ -19,56 +19,27 @@ const latest = manifest.releases.find((r) => r.version === manifest.latest) ?? m
 
   <section class="max-w-6xl mx-auto px-4 sm:px-8">
     <div class="grid grid-cols-1 lg:grid-cols-[1.1fr_1fr] gap-8 lg:gap-12 items-start">
-      <!-- Left: what this is and how to get ready -->
-      <div class="space-y-6">
-        <div class="space-y-3">
-          <span class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-wxm-storm/40 border border-wxm-cloud/20 text-xs font-semibold text-white">
-            <span class="w-2 h-2 rounded-full bg-wxm-zenith"></span>
-            Latest firmware: {latest.label}
-          </span>
-          <h1 class="text-3xl sm:text-4xl font-extrabold tracking-tight leading-tight text-balance">
-            Update your WS1300 over Bluetooth
-          </h1>
-          <p class="text-sm sm:text-base text-wxm-mist leading-relaxed max-w-xl">
-            No cables and no app. Your browser talks to the station directly, sends the new firmware and checks that it started. If anything goes wrong, the station keeps or returns to the firmware it had.
-          </p>
-          <p class="text-sm">
-            <a href="https://weatherxm.com/stations/" class="inline-flex items-center gap-1.5 font-semibold text-wxm-zenith hover:text-white underline underline-offset-4 decoration-wxm-cloud/30">
-              Explore WeatherXM stations <span aria-hidden="true">→</span>
-            </a>
-          </p>
-        </div>
-
-        <ol class="space-y-3">
-          <li class="flex gap-3.5 p-4 rounded-card bg-wxm-midnight/60 border border-wxm-cloud/10">
-            <span class="w-7 h-7 flex-shrink-0 rounded-full bg-wxm-beacon/20 border border-wxm-beacon/40 text-wxm-zenith text-xs font-bold flex items-center justify-center">1</span>
-            <div class="space-y-1">
-              <h3 class="text-sm font-bold">Stand next to the station</h3>
-              <p class="text-xs text-wxm-mist leading-relaxed">Stay within a few metres for the whole update. A laptop or an Android phone both work.</p>
-            </div>
-          </li>
-          <li class="flex gap-3.5 p-4 rounded-card bg-wxm-midnight/60 border border-wxm-cloud/10">
-            <span class="w-7 h-7 flex-shrink-0 rounded-full bg-wxm-beacon/20 border border-wxm-beacon/40 text-wxm-zenith text-xs font-bold flex items-center justify-center">2</span>
-            <div class="space-y-1">
-              <h3 class="text-sm font-bold">Press the station button once <span class="text-xs font-medium text-wxm-mist">(first-time pairing only)</span></h3>
-              <p class="text-xs text-wxm-mist leading-relaxed">
-                If you have never paired this computer or phone with the station before, press the button once. This is only needed for the initial pairing. A short press restarts the station, and it stays visible over Bluetooth for 15 minutes.
-                <strong class="text-amber-300 font-semibold">Don't hold it down:</strong> holding it for 15 seconds resets the station's settings.
-              </p>
-            </div>
-          </li>
-          <li class="flex gap-3.5 p-4 rounded-card bg-wxm-midnight/60 border border-wxm-cloud/10">
-            <span class="w-7 h-7 flex-shrink-0 rounded-full bg-wxm-beacon/20 border border-wxm-beacon/40 text-wxm-zenith text-xs font-bold flex items-center justify-center">3</span>
-            <div class="space-y-1">
-              <h3 class="text-sm font-bold">Connect and pick "WeatherXM WS1300"</h3>
-              <p class="text-xs text-wxm-mist leading-relaxed">Your computer may also ask to pair with the station. Accepting is fine; the update works either way. Don't close the pairing prompt halfway.</p>
-            </div>
-          </li>
-        </ol>
+      <!-- Left: introduction -->
+      <div class="space-y-3">
+        <span class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-wxm-storm/40 border border-wxm-cloud/20 text-xs font-semibold text-white">
+          <span class="w-2 h-2 rounded-full bg-wxm-zenith"></span>
+          Latest firmware: {latest.label}
+        </span>
+        <h1 class="text-3xl sm:text-4xl font-extrabold tracking-tight leading-tight text-balance">
+          Update your WS1300 over Bluetooth
+        </h1>
+        <p class="text-sm sm:text-base text-wxm-mist leading-relaxed max-w-xl">
+          No cables and no app. Your browser talks to the station directly, sends the new firmware and checks that it started. If anything goes wrong, the station keeps or returns to the firmware it had.
+        </p>
+        <p class="text-sm">
+          <a href="https://weatherxm.com/stations/" class="inline-flex items-center gap-1.5 font-semibold text-wxm-zenith hover:text-white underline underline-offset-4 decoration-wxm-cloud/30">
+            Explore WeatherXM stations <span aria-hidden="true">→</span>
+          </a>
+        </p>
       </div>
 
       <!-- Right: action card -->
-      <div class="lg:sticky lg:top-20 space-y-4">
+      <div class="space-y-4">
         <!-- Not connected -->
         <div id="view-connect" class="p-6 rounded-card bg-wxm-midnight/90 border-2 border-wxm-beacon/40 backdrop-blur-md shadow-card space-y-5">
           <div class="flex items-center gap-5">
@@ -141,9 +112,36 @@ const latest = manifest.releases.find((r) => r.version === manifest.latest) ?? m
         </div>
       </div>
     </div>
+
+    <ol class="mt-6 grid grid-cols-1 md:grid-cols-3 gap-3">
+      <li class="flex gap-3.5 p-4 rounded-card bg-wxm-midnight/60 border border-wxm-cloud/10">
+        <span class="w-7 h-7 flex-shrink-0 rounded-full bg-wxm-beacon/20 border border-wxm-beacon/40 text-wxm-zenith text-xs font-bold flex items-center justify-center">1</span>
+        <div class="space-y-1">
+          <h3 class="text-sm font-bold">Stand next to the station</h3>
+          <p class="text-xs text-wxm-mist leading-relaxed">Stay within a few metres during the update. A laptop or an Android phone both work.</p>
+        </div>
+      </li>
+      <li class="flex gap-3.5 p-4 rounded-card bg-wxm-midnight/60 border border-wxm-cloud/10">
+        <span class="w-7 h-7 flex-shrink-0 rounded-full bg-wxm-beacon/20 border border-wxm-beacon/40 text-wxm-zenith text-xs font-bold flex items-center justify-center">2</span>
+        <div class="space-y-1">
+          <h3 class="text-sm font-bold">Press the station RESET button once <span class="block sm:inline text-xs font-medium text-wxm-mist">(first-time pairing only)</span></h3>
+          <p class="text-xs text-wxm-mist leading-relaxed">
+            If the station has never been paired before, press <strong class="text-white font-semibold">RESET</strong> once. You only need this for the initial pairing; the station then stays visible over Bluetooth for 15 minutes.
+            <strong class="text-amber-300 font-semibold">Don't hold RESET:</strong> holding it for 15 seconds resets the station's settings.
+          </p>
+        </div>
+      </li>
+      <li class="flex gap-3.5 p-4 rounded-card bg-wxm-midnight/60 border border-wxm-cloud/10">
+        <span class="w-7 h-7 flex-shrink-0 rounded-full bg-wxm-beacon/20 border border-wxm-beacon/40 text-wxm-zenith text-xs font-bold flex items-center justify-center">3</span>
+        <div class="space-y-1">
+          <h3 class="text-sm font-bold">Connect and pick "WeatherXM WS1300"</h3>
+          <p class="text-xs text-wxm-mist leading-relaxed">Click Connect to WS1300 and select the station. If your computer asks to pair, accept it and let the pairing prompt finish.</p>
+        </div>
+      </li>
+    </ol>
   </section>
 
-  <section class="max-w-6xl mx-auto px-4 sm:px-8 mt-8">
+  <section class="max-w-6xl mx-auto px-4 sm:px-8 mt-6">
     <DfuProgress />
   </section>
 
