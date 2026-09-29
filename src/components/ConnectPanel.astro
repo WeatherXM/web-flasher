@@ -11,12 +11,29 @@
       </div>
 
       <h1 class="text-3xl sm:text-4xl xl:text-[2.6rem] font-extrabold text-white tracking-tight leading-tight">
-        Convert your WeatherXM WG1200 gateway in to a <span class="text-wxm-zenith">LoRa Mesh tri-protocol</span> or a <span class="text-emerald-400">full Meshtastic node</span>
+        Convert your WeatherXM WG1200 gateway into a <span class="text-wxm-zenith">LoRa Mesh tri-protocol</span> or a <span class="text-emerald-400">full Meshtastic node</span>
       </h1>
 
       <p class="text-sm sm:text-base text-wxm-mist leading-relaxed max-w-2xl mx-auto lg:mx-0">
-        In WeatherXM mode, your paired weather station can publish to WeatherXM, Meshtastic and MeshCore at the same time. In Full Meshtastic mode, the WG1200 itself becomes a native Meshtastic client/router. Switch safely over USB; WeatherXM identity, cloud credentials and the factory recovery slot remain intact.
+        Connect once over USB, then choose how the gateway should operate. Switching modes never touches the WeatherXM identity, cloud credentials or factory recovery image.
       </p>
+
+      <div class="max-w-2xl mx-auto lg:mx-0 space-y-2.5 text-left">
+        <div class="flex gap-3 p-3 rounded-control bg-wxm-storm/30 border border-wxm-beacon/20">
+          <div class="w-2 h-2 mt-1.5 rounded-full bg-wxm-zenith flex-shrink-0"></div>
+          <p class="text-xs sm:text-[13px] text-wxm-cloud leading-relaxed">
+            <strong class="text-white">WeatherXM Tri-Protocol:</strong>
+            WeatherXM cloud, app, rewards and OTA stay active while the paired station also publishes weather telemetry to Meshtastic and MeshCore. Local REST / Home Assistant access remains available.
+          </p>
+        </div>
+        <div class="flex gap-3 p-3 rounded-control bg-wxm-storm/30 border border-emerald-500/20">
+          <div class="w-2 h-2 mt-1.5 rounded-full bg-emerald-400 flex-shrink-0"></div>
+          <p class="text-xs sm:text-[13px] text-wxm-cloud leading-relaxed">
+            <strong class="text-white">Full Meshtastic:</strong>
+            The WG1200 becomes a native Meshtastic client/router using its SX1262 radio and TFT display, compatible with standard Meshtastic apps. WeatherXM station/cloud operation pauses until you switch back.
+          </p>
+        </div>
+      </div>
 
       <div class="flex items-center justify-center lg:justify-start space-x-2 text-xs">
         <span class="indicator-dot-green animate-pulse"></span>
