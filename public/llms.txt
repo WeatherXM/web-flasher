@@ -1,0 +1,21 @@
+# WeatherXM Firmware Flasher
+
+> Browser-based firmware tools for WeatherXM WG1200 gateways and WS1300 weather stations.
+
+## Canonical site
+- https://flasher.weatherxm.com/
+
+## Device flows
+- WG1200 USB firmware flasher: https://flasher.weatherxm.com/wg1200
+- WS1300 Bluetooth firmware updater: https://flasher.weatherxm.com/ws1300/
+
+## Related resources
+- WeatherXM stations: https://weatherxm.com/stations/
+- WeatherXM Open Technology: https://weatherxm.com/open/
+- WeatherXM documentation: https://docs.weatherxm.com/
+- WeatherXM GitHub: https://github.com/WeatherXM
+
+## Notes
+- WG1200 firmware can be switched between supported WeatherXM and Meshtastic modes using the browser tool.
+- WS1300 firmware can be updated over Bluetooth from a compatible browser.
+- The development-only WS1300 route is intentionally excluded from indexing.
