@@ -4,8 +4,8 @@ import BleBrowserNotice from '../components/ws1300/BleBrowserNotice.astro';
 ---
 
 <SiteLayout
-  title="WS2001 Open LoRaWAN Configurator — WeatherXM"
-  description="Configure your WeatherXM WS2001 weather station for The Things Network, ChirpStack, or generic LoRaWAN networks over Bluetooth."
+  title="WS2001 (H2) Open LoRaWAN Configurator — WeatherXM"
+  description="Configure your WeatherXM WS2001 (H2) weather station for The Things Network, ChirpStack, or generic LoRaWAN networks over Bluetooth."
   device="ws2001"
 >
   <BleBrowserNotice />
@@ -19,7 +19,7 @@ import BleBrowserNotice from '../components/ws1300/BleBrowserNotice.astro';
           Open LoRaWAN Mode (SenseCAP 8-in-1)
         </span>
         <h1 class="text-3xl sm:text-4xl font-extrabold tracking-tight leading-tight text-balance">
-          Configure WS2001 for Any LoRaWAN Network
+          Configure WS2001 (H2) for Any LoRaWAN Network
         </h1>
         <p class="text-sm sm:text-base text-wxm-mist leading-relaxed">
           Unlock your <strong>WS2001 (H2)</strong> outdoor weather station to transmit directly to <strong>The Things Network (TTN)</strong>, <strong>ChirpStack</strong>, or any private LoRaWAN Network Server.
@@ -77,11 +77,11 @@ import BleBrowserNotice from '../components/ws1300/BleBrowserNotice.astro';
         <div id="view-connect" class="p-6 rounded-card bg-wxm-midnight/90 border-2 border-wxm-beacon/40 backdrop-blur-md shadow-card space-y-5">
           <div class="flex items-center gap-5">
             <img
-              src="/ws1300-angle.webp"
-              alt="WeatherXM WS2001 Weather Station"
+              src="/h2.webp"
+              alt="WeatherXM WS2001 (H2) Weather Station"
               width="400"
-              height="184"
-              class="w-24 sm:w-28 h-auto flex-shrink-0 drop-shadow-[0_8px_16px_rgba(0,0,0,0.5)]"
+              height="400"
+              class="w-24 sm:w-28 h-auto flex-shrink-0 drop-shadow-[0_8px_16px_rgba(0,0,0,0.5)] object-contain"
             />
             <div class="space-y-1">
               <span class="text-[11px] font-extrabold text-wxm-zenith uppercase tracking-widest block">Bluetooth NUS</span>
@@ -98,7 +98,7 @@ import BleBrowserNotice from '../components/ws1300/BleBrowserNotice.astro';
             <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M7 7l10 10-5 5V2l5 5L7 17" />
             </svg>
-            <span id="btn-connect-label">Connect to Station</span>
+            <span id="btn-connect-label">Connect to WS2001 (H2)</span>
           </button>
           <p id="connect-error" class="hidden text-xs text-red-300 leading-relaxed" role="alert"></p>
         </div>
@@ -110,7 +110,7 @@ import BleBrowserNotice from '../components/ws1300/BleBrowserNotice.astro';
               <span class="text-[11px] font-extrabold text-wxm-live uppercase tracking-widest flex items-center gap-1.5">
                 <span class="indicator-dot-green"></span> Connected
               </span>
-              <h2 id="dev-name" class="text-lg font-bold mt-0.5 truncate">WeatherXM WS2001</h2>
+              <h2 id="dev-name" class="text-lg font-bold mt-0.5 truncate">WeatherXM WS2001 (H2)</h2>
             </div>
             <button
               id="btn-disconnect"
@@ -494,7 +494,7 @@ import BleBrowserNotice from '../components/ws1300/BleBrowserNotice.astro';
       connectError.classList.remove('hidden');
     } finally {
       btnConnect.disabled = false;
-      $('btn-connect-label').textContent = 'Connect to Station';
+      $('btn-connect-label').textContent = 'Connect to WS2001 (H2)';
     }
   });
 

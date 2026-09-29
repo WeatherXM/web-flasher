@@ -11,8 +11,8 @@ const latest = manifest.releases.find((r) => r.version === manifest.latest) ?? m
 ---
 
 <SiteLayout
-  title="WS1300 Firmware Update over Bluetooth — WeatherXM"
-  description="Update your WeatherXM WS1300 weather station to the latest firmware over Bluetooth, from Chrome or Edge on a computer or Android phone."
+  title="WS1300 (D2) Firmware Update over Bluetooth — WeatherXM"
+  description="Update your WeatherXM WS1300 (D2) weather station to the latest firmware over Bluetooth, from Chrome or Edge on a computer or Android phone."
   device="ws1300"
 >
   <BleBrowserNotice />
@@ -26,7 +26,7 @@ const latest = manifest.releases.find((r) => r.version === manifest.latest) ?? m
           Latest firmware: {latest.label}
         </span>
         <h1 class="text-3xl sm:text-4xl font-extrabold tracking-tight leading-tight text-balance">
-          Update your WS1300 over Bluetooth
+          Update your WS1300 (D2) over Bluetooth
         </h1>
         <p class="text-sm sm:text-base text-wxm-mist leading-relaxed max-w-xl">
           No cables and no app. Your browser talks to the station directly, sends the new firmware and checks that it started. If anything goes wrong, the station keeps or returns to the firmware it had.
@@ -43,10 +43,10 @@ const latest = manifest.releases.find((r) => r.version === manifest.latest) ?? m
         <!-- Not connected -->
         <div id="view-connect" class="p-6 rounded-card bg-wxm-midnight/90 border-2 border-wxm-beacon/40 backdrop-blur-md shadow-card space-y-5">
           <div class="flex items-center gap-5">
-            <img src="/ws1300-angle.webp" alt="WeatherXM WS1300 weather station" width="400" height="184" class="w-28 sm:w-32 h-auto flex-shrink-0 drop-shadow-[0_8px_16px_rgba(0,0,0,0.5)]" />
+            <img src="/ws1300-angle.webp" alt="WeatherXM WS1300 (D2) weather station" width="400" height="184" class="w-28 sm:w-32 h-auto flex-shrink-0 drop-shadow-[0_8px_16px_rgba(0,0,0,0.5)]" />
             <div class="space-y-1">
               <span class="text-[11px] font-extrabold text-wxm-zenith uppercase tracking-widest block">Bluetooth connection</span>
-              <h2 class="text-lg font-bold">Connect to your station</h2>
+              <h2 class="text-lg font-bold">Connect to WS1300 (D2)</h2>
               <p class="text-xs text-wxm-mist">We'll check which firmware it runs before changing anything.</p>
             </div>
           </div>
@@ -56,7 +56,7 @@ const latest = manifest.releases.find((r) => r.version === manifest.latest) ?? m
             class="w-full py-4 px-6 rounded-control text-base btn-primary-beacon flex items-center justify-center gap-3 cursor-pointer disabled:opacity-50 disabled:cursor-wait focus:outline-none focus-visible:ring-2 focus-visible:ring-wxm-zenith focus-visible:ring-offset-2 focus-visible:ring-offset-wxm-midnight"
           >
             <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M7 7l10 10-5 5V2l5 5L7 17" /></svg>
-            <span id="btn-connect-label">Connect to WS1300</span>
+            <span id="btn-connect-label">Connect to WS1300 (D2)</span>
           </button>
           <p id="connect-error" class="hidden text-xs text-red-300 leading-relaxed" role="alert"></p>
           <StaleBondHelp />
@@ -228,7 +228,7 @@ const latest = manifest.releases.find((r) => r.version === manifest.latest) ?? m
     show($('view-connect'), !connected);
     show($('view-station'), connected);
     btnConnect.disabled = session.state === 'connecting' || busy;
-    $('btn-connect-label').textContent = session.state === 'connecting' ? 'Connecting…' : 'Connect to WS1300';
+    $('btn-connect-label').textContent = session.state === 'connecting' ? 'Connecting…' : 'Connect to WS1300 (D2)';
 
     const idle = session.state === 'connected' && !busy;
     btnUpdate.disabled = !idle;
