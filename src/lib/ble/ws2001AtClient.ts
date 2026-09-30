@@ -486,7 +486,7 @@ export class Ws2001AtClient {
     params: ConfigureOpenLoRaWanParams,
     onProgress?: (step: string, current: number, total: number) => void,
   ): Promise<void> {
-    const totalSteps = 6;
+    const totalSteps = 7;
     let step = 1;
 
     // Step 1: Set Frequency Band
@@ -538,6 +538,30 @@ export class Ws2001AtClient {
     if (modeResp.includes('ERROR')) {
       throw new Error(`Failed to set testmode type: ${modeResp}`);
     }
+
+    // Step 7: Verify Open LoRaWAN mode persisted to flash & finalize
+    onProgress?.('Verifying Open LoRaWAN mode in flash...', step, totalSteps);
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    let verifyResp = await this.sendCommand('AT+TESTMODE_TYPE=?');
+    const checkMode1 = (resp: string) => {
+      const m = resp.match(/(\d+)/);
+      return m !== null && m[1] === '1' && resp.includes('OK');
+    };
+
+    if (!checkMode1(verifyResp)) {
+      this.log(`Verification returned ${verifyResp.trim()}, retrying AT+TESTMODE_TYPE=1...`, 'WARN');
+      await this.sendCommand('AT+TESTMODE_TYPE=1');
+      await new Promise((resolve) => setTimeout(resolve, 800));
+      verifyResp = await this.sendCommand('AT+TESTMODE_TYPE=?');
+      if (!checkMode1(verifyResp)) {
+        throw new Error(`Station failed to persist Open LoRaWAN mode (status: ${verifyResp.trim()})`);
+      }
+    }
+    this.log('Open LoRaWAN mode verified: active (1)', 'INFO');
+
+    // Allow Nordic FDS flash operations and repetitive config cleanup to finalize before rebooting
+    onProgress?.('Committing settings to flash...', step, totalSteps);
+    await new Promise((resolve) => setTimeout(resolve, 1500));
 
     // Reboot MCU to commit and start LoRaWAN join
     this.log('Rebooting MCU to apply settings and trigger LoRaWAN join (ATZ)...', 'INFO');
