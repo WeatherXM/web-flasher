@@ -99,11 +99,11 @@ export interface Ws2001DeviceConfig {
   appEui: string;
   version: string;
   battery: string;
-  uploadInterval: number;
-  frequencyBand: number;
+  uploadInterval: number | null;
+  frequencyBand: number | null;
   frequencyName: string;
-  subBand: number;
-  testModeType: number; // 0 = WeatherXM, 1 = Open LoRaWAN
+  subBand: number | null;
+  testModeType: number | null; // 0 = WeatherXM, 1 = Open LoRaWAN, null = unknown/unconfirmed
   rawConfig: string;
 }
 
@@ -240,7 +240,7 @@ export class Ws2001AtClient {
     });
 
     this.device.addEventListener('gattserverdisconnected', () => {
-      this.log('Bluetooth device disconnected.', 'WARN');
+      this.log('Bluetooth disconnected. Station reboots automatically and will send a fresh LoRaWAN Join-Request.', 'INFO');
       this.cleanup();
     });
 
@@ -451,29 +451,39 @@ export class Ws2001AtClient {
     const configResp = await this.sendCommand('AT+CONFIG=?');
     const parsed = parseAtConfig(configResp);
 
+    // Allow Nordic BLE buffer to settle after large AT+CONFIG=? JSON response
+    await new Promise((resolve) => setTimeout(resolve, 300));
+
     this.log('Reading testmode status (AT+TESTMODE_TYPE=?)...', 'INFO');
-    let testMode = 0;
-    try {
-      const modeResp = await this.sendCommand('AT+TESTMODE_TYPE=?');
-      const match = modeResp.match(/(\d+)/);
-      if (match) {
-        testMode = parseInt(match[1], 10);
+    let testMode: number | null = null;
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        const modeResp = await this.sendCommand('AT+TESTMODE_TYPE=?', 3000);
+        const match = modeResp.match(/(\d+)/);
+        if (match) {
+          testMode = parseInt(match[1], 10);
+          break;
+        }
+      } catch (e) {
+        if (attempt < 2) {
+          await new Promise((resolve) => setTimeout(resolve, 500));
+        } else {
+          this.log(`Could not read testmode type: ${(e as Error).message}`, 'WARN');
+        }
       }
-    } catch (e) {
-      this.log(`Could not read testmode type: ${(e as Error).message}`, 'WARN');
     }
 
     return {
-      deviceModel: parsed.deviceModel || 'WS2001',
-      deviceEui: parsed.deviceEui || 'UNKNOWN',
-      formattedDevEui: parsed.formattedDevEui || parsed.deviceEui || 'UNKNOWN',
+      deviceModel: parsed.deviceModel || 'Unknown',
+      deviceEui: parsed.deviceEui || 'Unknown',
+      formattedDevEui: parsed.formattedDevEui || parsed.deviceEui || 'Unknown',
       appEui: parsed.appEui || '',
-      version: parsed.version || '1.0.0',
-      battery: parsed.battery || 'OK',
-      uploadInterval: parsed.uploadInterval ?? 3,
-      frequencyBand: parsed.frequencyBand ?? 5,
-      frequencyName: parsed.frequencyName ?? 'EU868',
-      subBand: parsed.subBand ?? 0,
+      version: parsed.version || 'Unknown',
+      battery: parsed.battery || 'Unknown',
+      uploadInterval: parsed.uploadInterval ?? null,
+      frequencyBand: parsed.frequencyBand ?? null,
+      frequencyName: parsed.frequencyName ?? 'Unknown',
+      subBand: parsed.subBand ?? null,
       testModeType: testMode,
       rawConfig: configResp,
     };
