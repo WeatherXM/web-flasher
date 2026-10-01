@@ -22,7 +22,7 @@ import BleBrowserNotice from '../components/ws1300/BleBrowserNotice.astro';
           Configure WS2001 (H2) for Any LoRaWAN Network
         </h1>
         <p class="text-sm sm:text-base text-wxm-mist leading-relaxed">
-          Unlock your <strong>WS2001 (H2)</strong> outdoor weather station to transmit directly to <strong>The Things Network (TTN)</strong>, <strong>ChirpStack</strong>, or any private LoRaWAN Network Server.
+          Unlock your <strong>WS2001 (H2)</strong> weather station to transmit directly to <strong>The Things Network (TTN)</strong>, <strong>ChirpStack</strong>, or any private LoRaWAN Network Server.
         </p>
 
         <div class="p-4 rounded-card bg-wxm-storm/20 border border-wxm-cloud/15 space-y-2 text-xs text-wxm-mist leading-relaxed">
@@ -33,38 +33,40 @@ import BleBrowserNotice from '../components/ws1300/BleBrowserNotice.astro';
             How it works
           </div>
           <p>
-            When set to Open LoRaWAN mode, the station transmits discrete weather packets on <strong>FPort 3</strong> using the standard Seeed SenseCAP 8-in-1 format (temperature, humidity, barometric pressure, wind speed, wind direction, rain intensity, light intensity, and UV index).
-          </p>
-          <p>
-            The original factory credentials remain safely backed up in the station's internal memory.
+            When set to Open LoRaWAN mode, the station transmits weather data using the standard Seeed SenseCAP 8-in-1 format (temperature, humidity, barometric pressure, wind speed, wind direction, rain intensity, light intensity, and UV index).
           </p>
         </div>
 
         <!-- Payload decoders drawer -->
-        <div class="rounded-card border border-wxm-cloud/20 bg-wxm-abyss/60 p-4 space-y-3">
-          <div class="flex items-center justify-between">
-            <h3 class="text-xs font-bold text-white uppercase tracking-wider">LNS Payload Decoders</h3>
-            <span class="text-[11px] text-wxm-zenith font-mono">FPort 3</span>
-          </div>
-          <p class="text-xs text-wxm-mist">
-            Copy the official payload decoder into your TTN or ChirpStack device profile:
-          </p>
-          <div class="flex gap-2">
+        <div class="rounded-card border border-wxm-cloud/20 bg-wxm-abyss/60 p-4 space-y-2.5">
+          <h3 class="text-xs font-bold text-white uppercase tracking-wider">Payload Decoders</h3>
+          <div class="flex flex-wrap gap-2">
             <button
               id="btn-copy-ttn-decoder"
               type="button"
+              title="Copy TTN v3 payload decoder"
               class="px-3 py-1.5 rounded-control text-xs font-bold bg-wxm-storm/60 border border-wxm-cloud/20 text-white hover:bg-wxm-storm hover:border-wxm-zenith transition-all cursor-pointer inline-flex items-center gap-1.5"
             >
               <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" /></svg>
-              Copy TTN v3 Decoder
+              TTN v3
             </button>
             <button
               id="btn-copy-chirpstack-decoder"
               type="button"
+              title="Copy ChirpStack v4 payload decoder"
               class="px-3 py-1.5 rounded-control text-xs font-bold bg-wxm-storm/60 border border-wxm-cloud/20 text-white hover:bg-wxm-storm hover:border-wxm-zenith transition-all cursor-pointer inline-flex items-center gap-1.5"
             >
               <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" /></svg>
-              Copy ChirpStack v4 Decoder
+              ChirpStack v4
+            </button>
+            <button
+              id="btn-copy-chirpstack-v3-decoder"
+              type="button"
+              title="Copy ChirpStack v3 payload decoder"
+              class="px-3 py-1.5 rounded-control text-xs font-bold bg-wxm-storm/60 border border-wxm-cloud/20 text-white hover:bg-wxm-storm hover:border-wxm-zenith transition-all cursor-pointer inline-flex items-center gap-1.5"
+            >
+              <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" /></svg>
+              ChirpStack v3
             </button>
           </div>
           <span id="decoder-copy-toast" class="hidden text-[11px] font-semibold text-emerald-300 block"></span>
@@ -84,9 +86,9 @@ import BleBrowserNotice from '../components/ws1300/BleBrowserNotice.astro';
               class="w-24 sm:w-28 h-auto flex-shrink-0 drop-shadow-[0_8px_16px_rgba(0,0,0,0.5)]"
             />
             <div class="space-y-1">
-              <span class="text-[11px] font-extrabold text-wxm-zenith uppercase tracking-widest block">Bluetooth NUS</span>
+              <span class="text-[11px] font-extrabold text-wxm-zenith uppercase tracking-widest block">Bluetooth connection</span>
               <h2 class="text-lg font-bold">Connect to WS2001 (H2)</h2>
-              <p class="text-xs text-wxm-mist">Power on your station. Chrome will discover its Bluetooth interface.</p>
+              <p class="text-xs text-wxm-mist">Make sure your station is powered on and within Bluetooth range.</p>
             </div>
           </div>
 
@@ -112,30 +114,56 @@ import BleBrowserNotice from '../components/ws1300/BleBrowserNotice.astro';
               </span>
               <h2 id="dev-name" class="text-lg font-bold mt-0.5 truncate">WeatherXM WS2001 (H2)</h2>
             </div>
+            <div class="flex items-center gap-2 shrink-0">
+              <button
+                id="btn-refresh"
+                type="button"
+                title="Refresh station configuration and status"
+                class="px-2.5 py-1 rounded-control text-xs font-semibold text-wxm-mist hover:text-white border border-wxm-cloud/20 hover:bg-wxm-storm/40 transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <svg id="icon-refresh" class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                <span id="label-refresh">Refresh</span>
+              </button>
+              <button
+                id="btn-disconnect"
+                type="button"
+                title="Disconnect from station"
+                class="px-2.5 py-1 rounded-control text-xs font-semibold text-wxm-mist hover:text-red-300 hover:border-red-500/40 hover:bg-red-500/10 border border-wxm-cloud/20 transition-colors flex items-center gap-1.5 cursor-pointer"
+              >
+                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
+                <span>Disconnect</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- DevEUI full-width banner (guarantees full 23-char DevEUI is always visible) -->
+          <div class="p-2.5 rounded-control bg-wxm-abyss/70 border border-wxm-cloud/10 flex items-center justify-between gap-3">
+            <div class="min-w-0">
+              <span class="text-[10px] uppercase tracking-wider text-wxm-mist block font-semibold">DevEUI</span>
+              <span id="stat-deveui" class="font-mono font-bold text-white text-xs sm:text-sm tracking-wide select-all block mt-0.5">–</span>
+            </div>
             <button
-              id="btn-disconnect"
+              id="btn-copy-deveui"
               type="button"
-              class="px-3 py-1 rounded-control text-xs font-semibold text-wxm-mist hover:text-white border border-wxm-cloud/20 hover:bg-wxm-storm/40 transition-colors cursor-pointer"
+              title="Copy DevEUI"
+              class="px-2.5 py-1 rounded-control text-xs font-semibold text-wxm-mist hover:text-white border border-wxm-cloud/20 hover:bg-wxm-storm/40 transition-colors flex items-center gap-1.5 shrink-0 cursor-pointer"
             >
-              Disconnect
+              <svg id="icon-copy-deveui" class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+              </svg>
+              <span id="label-copy-deveui">Copy</span>
             </button>
           </div>
 
           <!-- Device stats grid -->
           <div class="grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-xs">
-            <div class="p-2.5 rounded-control bg-wxm-abyss/70 border border-wxm-cloud/10">
-              <span class="text-[10px] uppercase tracking-wider text-wxm-mist block font-semibold">DevEUI</span>
-              <div class="flex items-center justify-between gap-1 mt-0.5">
-                <span id="stat-deveui" class="font-mono font-bold text-white truncate text-[11px]">–</span>
-                <button id="btn-copy-deveui" type="button" title="Copy DevEUI" class="text-wxm-mist hover:text-wxm-zenith p-0.5">
-                  <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
-                </button>
-              </div>
-            </div>
-
-            <div class="p-2.5 rounded-control bg-wxm-abyss/70 border border-wxm-cloud/10">
+            <div class="p-2.5 rounded-control bg-wxm-abyss/70 border border-wxm-cloud/10 col-span-2 sm:col-span-2">
               <span class="text-[10px] uppercase tracking-wider text-wxm-mist block font-semibold">Current Mode</span>
-              <span id="stat-mode" class="font-semibold mt-0.5 inline-block text-[11px]">–</span>
+              <span id="stat-mode" class="font-semibold text-white mt-0.5 block truncate text-[11px]">–</span>
             </div>
 
             <div class="p-2.5 rounded-control bg-wxm-abyss/70 border border-wxm-cloud/10">
@@ -159,28 +187,27 @@ import BleBrowserNotice from '../components/ws1300/BleBrowserNotice.astro';
             </div>
           </div>
 
+          <!-- Disconnect / Reboot notice -->
+          <div class="p-3 rounded-control bg-wxm-abyss/60 border border-wxm-cloud/15 text-xs text-wxm-mist space-y-1.5 leading-relaxed">
+            <div class="flex items-center gap-2 font-bold text-white text-xs">
+              <svg class="w-3.5 h-3.5 text-wxm-zenith shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span>Note</span>
+            </div>
+            <ul class="list-disc list-inside text-[11px] text-wxm-mist space-y-1 ml-0.5">
+              <li>Disconnecting reboots the station and triggers a LoRaWAN <code class="text-wxm-zenith bg-wxm-abyss px-1 py-0.5 rounded">Join-Request</code>.</li>
+              <li>Click <code class="text-wxm-zenith bg-wxm-abyss px-1 py-0.5 rounded">Refresh</code> to reload any <strong class="text-white">Unknown</strong> values.</li>
+            </ul>
+          </div>
+
           <!-- Configuration Form -->
           <div class="border-t border-wxm-cloud/15 pt-5 space-y-4">
-            <div class="flex items-center justify-between">
+            <div>
               <h3 class="text-sm font-bold text-white">LoRaWAN Network Configuration</h3>
-              <!-- Presets -->
-              <div class="flex items-center gap-1.5 text-xs">
-                <span class="text-wxm-mist text-[11px]">Preset:</span>
-                <button
-                  id="preset-ttn"
-                  type="button"
-                  class="px-2 py-0.5 rounded text-[11px] font-semibold bg-wxm-storm/50 border border-wxm-cloud/20 text-white hover:border-wxm-zenith cursor-pointer"
-                >
-                  TTN
-                </button>
-                <button
-                  id="preset-chirpstack"
-                  type="button"
-                  class="px-2 py-0.5 rounded text-[11px] font-semibold bg-wxm-storm/50 border border-wxm-cloud/20 text-white hover:border-wxm-zenith cursor-pointer"
-                >
-                  ChirpStack
-                </button>
-              </div>
+              <p class="text-xs text-wxm-mist mt-1">
+                LoRaWAN 1.0.3 · OTAA · Class A · FPort 3
+              </p>
             </div>
 
             <div class="space-y-3">
@@ -259,18 +286,31 @@ import BleBrowserNotice from '../components/ws1300/BleBrowserNotice.astro';
 
               <!-- Upload Interval -->
               <div>
-                <label for="cfg-interval" class="block text-xs font-semibold text-wxm-cloud mb-1">Upload Cadence</label>
+                <label for="cfg-interval" class="block text-xs font-semibold text-wxm-cloud mb-1">Upload Interval</label>
                 <select
                   id="cfg-interval"
                   class="w-full px-3 py-2 rounded-control bg-wxm-abyss border border-wxm-cloud/20 text-white text-xs font-semibold focus:outline-none focus:border-wxm-zenith"
                 >
-                  <option value="1">Every 1 minute (high duty cycle / testing)</option>
-                  <option value="3" selected>Every 3 minutes (recommended standard)</option>
-                  <option value="5">Every 5 minutes</option>
-                  <option value="10">Every 10 minutes</option>
-                  <option value="15">Every 15 minutes (battery saving)</option>
+                  <option value="3" selected>3 minutes (recommended)</option>
+                  <option value="5">5 minutes</option>
+                  <option value="10">10 minutes</option>
+                  <option value="15">15 minutes (battery saving)</option>
                 </select>
               </div>
+            </div>
+
+            <!-- Warning Banner -->
+            <div class="p-3.5 rounded-control bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs space-y-2 leading-relaxed">
+              <div class="flex items-center gap-2 font-bold text-amber-400">
+                <svg class="w-4 h-4 text-amber-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                <span>Warning</span>
+              </div>
+              <ul class="list-disc list-inside text-[11px] text-amber-300 space-y-1.5 ml-0.5">
+                <li>Switching to Open LoRaWAN mode removes the station from the WeatherXM network. It will no longer earn $WXM token rewards.</li>
+                <li>Switching back to WeatherXM mode may affect proofs, QoD, and $WXM token rewards.</li>
+              </ul>
             </div>
 
             <!-- Validation alert -->
@@ -348,11 +388,66 @@ import BleBrowserNotice from '../components/ws1300/BleBrowserNotice.astro';
       </div>
     </div>
   </section>
+
+  <!-- Final Confirmation Modal -->
+  <div id="modal-ws2001-confirm" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-wxm-ink/80 backdrop-blur-sm">
+    <div class="max-w-md w-full rounded-modal border border-amber-500/40 bg-wxm-midnight p-6 shadow-2xl relative text-left space-y-4">
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-control bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+          </svg>
+        </div>
+        <div>
+          <h3 class="text-base font-bold text-white">Confirm Network Migration</h3>
+          <p class="text-xs text-amber-400 font-medium">WeatherXM network removal</p>
+        </div>
+      </div>
+
+      <div class="space-y-3 py-3 border-y border-wxm-cloud/15 text-xs text-wxm-cloud">
+        <p class="text-[12px] text-white leading-relaxed">
+          You are about to switch <strong id="modal-confirm-deveui" class="font-mono text-wxm-zenith"></strong> from WeatherXM mode to standard Open LoRaWAN mode.
+        </p>
+        <div class="p-3 rounded-control bg-wxm-abyss/80 border border-amber-500/25 text-amber-200/90 text-[11.5px] space-y-1.5">
+          <p class="font-bold text-amber-400">Please acknowledge before proceeding:</p>
+          <ul class="list-disc list-inside space-y-1 text-amber-200/80">
+            <li>Switching to Open LoRaWAN mode removes the station from the WeatherXM network. It will no longer earn $WXM token rewards.</li>
+            <li>Switching back to WeatherXM mode may affect proofs, QoD, and $WXM token rewards.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="flex items-start gap-2.5 pt-1">
+        <input type="checkbox" id="chk-confirm-irreversible" class="w-4 h-4 mt-0.5 rounded border-wxm-cloud/30 bg-wxm-abyss text-wxm-beacon focus:ring-0 cursor-pointer" />
+        <label for="chk-confirm-irreversible" class="text-xs text-wxm-cloud cursor-pointer select-none leading-tight">
+          I understand.
+        </label>
+      </div>
+
+      <div class="pt-2 flex space-x-3 justify-end">
+        <button
+          id="btn-confirm-cancel"
+          type="button"
+          class="px-4 py-2.5 rounded-control text-xs font-semibold text-wxm-cloud hover:text-white border border-wxm-cloud/20 bg-wxm-storm/50 hover:bg-wxm-storm transition-colors cursor-pointer"
+        >
+          Cancel
+        </button>
+        <button
+          id="btn-confirm-proceed"
+          type="button"
+          disabled
+          class="px-5 py-2.5 rounded-control text-xs font-bold text-white bg-amber-600 hover:bg-amber-500 disabled:opacity-30 disabled:cursor-not-allowed shadow-card transition-all cursor-pointer"
+        >
+          Confirm & Switch
+        </button>
+      </div>
+    </div>
+  </div>
 </SiteLayout>
 
 <script>
   import { Ws2001AtClient, formatHexWithColons, type Ws2001DeviceConfig } from '../lib/ble/ws2001AtClient';
-  import { TTN_PAYLOAD_DECODER, CHIRPSTACK_PAYLOAD_DECODER } from '../lib/ble/ws2001Decoder';
+  import { TTN_PAYLOAD_DECODER, CHIRPSTACK_PAYLOAD_DECODER, CHIRPSTACK_V3_PAYLOAD_DECODER } from '../lib/ble/ws2001Decoder';
 
   const $ = <T extends HTMLElement = HTMLElement>(id: string): T => {
     const el = document.getElementById(id);
@@ -381,21 +476,26 @@ import BleBrowserNotice from '../components/ws1300/BleBrowserNotice.astro';
   };
 
   // Setup decoders copy buttons
-  const toast = $('decoder-copy-toast');
-  const showToast = (text: string) => {
-    toast.textContent = text;
-    toast.classList.remove('hidden');
-    setTimeout(() => toast.classList.add('hidden'), 3500);
+  const decoderToast = $('decoder-copy-toast');
+  const showDecoderToast = (text: string) => {
+    decoderToast.textContent = text;
+    decoderToast.classList.remove('hidden');
+    setTimeout(() => decoderToast.classList.add('hidden'), 3500);
   };
 
   $('btn-copy-ttn-decoder').addEventListener('click', async () => {
     await navigator.clipboard.writeText(TTN_PAYLOAD_DECODER);
-    showToast('Copied TTN v3 payload decoder to clipboard!');
+    showDecoderToast('Copied TTN v3 payload decoder to clipboard!');
   });
 
   $('btn-copy-chirpstack-decoder').addEventListener('click', async () => {
     await navigator.clipboard.writeText(CHIRPSTACK_PAYLOAD_DECODER);
-    showToast('Copied ChirpStack v4 payload decoder to clipboard!');
+    showDecoderToast('Copied ChirpStack v4 payload decoder to clipboard!');
+  });
+
+  $('btn-copy-chirpstack-v3-decoder').addEventListener('click', async () => {
+    await navigator.clipboard.writeText(CHIRPSTACK_V3_PAYLOAD_DECODER);
+    showDecoderToast('Copied ChirpStack v3 payload decoder to clipboard!');
   });
 
   $('btn-clear-log').addEventListener('click', () => {
@@ -422,20 +522,64 @@ import BleBrowserNotice from '../components/ws1300/BleBrowserNotice.astro';
     $<HTMLInputElement>('cfg-appkey').value = hex;
   });
 
-  // Presets
-  $('preset-ttn').addEventListener('click', () => {
-    $<HTMLInputElement>('cfg-joineui').value = '0000000000000000';
-    $<HTMLSelectElement>('cfg-subband').value = '1'; // FSB 2
-    $<HTMLSelectElement>('cfg-interval').value = '3';
-    addLog('Preset applied: The Things Network (TTN). Default JoinEUI set to 0000000000000000, Sub-Band 2.');
-  });
 
-  $('preset-chirpstack').addEventListener('click', () => {
-    $<HTMLInputElement>('cfg-joineui').value = '0000000000000000';
-    $<HTMLSelectElement>('cfg-subband').value = '1'; // FSB 2
-    $<HTMLSelectElement>('cfg-interval').value = '3';
-    addLog('Preset applied: ChirpStack. Sub-Band 2.');
-  });
+
+  function updateModeDisplay(modeType: number | null) {
+    const modeEl = $('stat-mode');
+    if (modeType === 1) {
+      modeEl.textContent = 'Open LoRaWAN (1)';
+      modeEl.className = 'font-bold text-emerald-400 inline-block text-[11px]';
+    } else if (modeType === 0) {
+      modeEl.textContent = 'WeatherXM (0)';
+      modeEl.className = 'font-bold text-amber-400 inline-block text-[11px]';
+    } else {
+      modeEl.textContent = 'Unknown';
+      modeEl.className = 'font-bold text-zinc-400 inline-block text-[11px]';
+    }
+  }
+
+  function populateDeviceView(cfg: Ws2001DeviceConfig) {
+    currentConfig = cfg;
+
+    // Populate Device Status Card
+    const devLabel = client?.deviceName || 'Station';
+    $('dev-name').textContent = cfg.deviceModel !== 'Unknown' ? `${cfg.deviceModel} (${devLabel})` : devLabel;
+    $('stat-deveui').textContent = cfg.formattedDevEui;
+    $('stat-band').textContent = cfg.frequencyName;
+    $('stat-ver').textContent = cfg.version;
+    $('stat-bat').textContent = cfg.battery;
+    $('stat-interval').textContent = cfg.uploadInterval !== null ? `${cfg.uploadInterval} min` : 'Unknown';
+
+    updateModeDisplay(cfg.testModeType);
+
+    // Prepopulate form with device current band
+    if (cfg.frequencyBand !== null) {
+      bandSelect.value = String(cfg.frequencyBand);
+    }
+    if (cfg.subBand !== null) {
+      $<HTMLSelectElement>('cfg-subband').value = String(cfg.subBand);
+    }
+    updateSubbandVisibility();
+
+    if (cfg.uploadInterval !== null) {
+      const intervalSelect = $<HTMLSelectElement>('cfg-interval');
+      const val = String(cfg.uploadInterval);
+      const hasOption = Array.from(intervalSelect.options).some((opt) => opt.value === val);
+      if (!hasOption) {
+        const customOpt = document.createElement('option');
+        customOpt.value = val;
+        customOpt.textContent = `${cfg.uploadInterval} minutes (current)`;
+        intervalSelect.appendChild(customOpt);
+      }
+      intervalSelect.value = val;
+    }
+
+    if (cfg.appEui && cfg.appEui.length === 16) {
+      $<HTMLInputElement>('cfg-joineui').value = cfg.appEui;
+    } else {
+      $<HTMLInputElement>('cfg-joineui').value = '0000000000000000';
+    }
+  }
 
   // Connect button handler
   const btnConnect = $<HTMLButtonElement>('btn-connect');
@@ -453,37 +597,7 @@ import BleBrowserNotice from '../components/ws1300/BleBrowserNotice.astro';
       addLog('Connection established. Querying station info...');
 
       const cfg = await client.readFullConfig();
-      currentConfig = cfg;
-
-      // Populate Device Status Card
-      $('dev-name').textContent = `${cfg.deviceModel} (${client.deviceName})`;
-      $('stat-deveui').textContent = cfg.formattedDevEui;
-      $('stat-band').textContent = cfg.frequencyName;
-      $('stat-ver').textContent = cfg.version;
-      $('stat-bat').textContent = cfg.battery;
-      $('stat-interval').textContent = `${cfg.uploadInterval} min`;
-
-      const modeEl = $('stat-mode');
-      if (cfg.testModeType === 1) {
-        modeEl.textContent = 'Open LoRaWAN (1)';
-        modeEl.className = 'font-bold text-emerald-400 mt-0.5 inline-block text-[11px]';
-      } else {
-        modeEl.textContent = 'WeatherXM (0)';
-        modeEl.className = 'font-bold text-amber-400 mt-0.5 inline-block text-[11px]';
-      }
-
-      // Prepopulate form with device current band
-      bandSelect.value = String(cfg.frequencyBand);
-      if (cfg.subBand !== undefined) {
-        $<HTMLSelectElement>('cfg-subband').value = String(cfg.subBand);
-      }
-      updateSubbandVisibility();
-
-      if (cfg.appEui && cfg.appEui.length === 16) {
-        $<HTMLInputElement>('cfg-joineui').value = cfg.appEui;
-      } else {
-        $<HTMLInputElement>('cfg-joineui').value = '0000000000000000';
-      }
+      populateDeviceView(cfg);
 
       // Show device view
       $('view-connect').classList.add('hidden');
@@ -498,16 +612,58 @@ import BleBrowserNotice from '../components/ws1300/BleBrowserNotice.astro';
     }
   });
 
-  // Copy DevEUI button
+  // Copy DevEUI button with local inline feedback
+  let copyDevEuiTimer: ReturnType<typeof setTimeout> | null = null;
   $('btn-copy-deveui').addEventListener('click', async () => {
-    if (currentConfig?.deviceEui) {
+    if (currentConfig?.deviceEui && currentConfig.deviceEui !== 'Unknown') {
       await navigator.clipboard.writeText(currentConfig.deviceEui);
-      showToast('Copied DevEUI to clipboard!');
+      const btn = $<HTMLButtonElement>('btn-copy-deveui');
+      const label = $('label-copy-deveui');
+      const icon = $('icon-copy-deveui');
+
+      label.textContent = 'Copied!';
+      btn.classList.add('text-emerald-400', 'border-emerald-500/40');
+      btn.classList.remove('text-wxm-mist');
+      icon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />';
+
+      if (copyDevEuiTimer) clearTimeout(copyDevEuiTimer);
+      copyDevEuiTimer = setTimeout(() => {
+        label.textContent = 'Copy';
+        btn.classList.remove('text-emerald-400', 'border-emerald-500/40');
+        btn.classList.add('text-wxm-mist');
+        icon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />';
+      }, 2000);
+    }
+  });
+
+  // Refresh button handler
+  $('btn-refresh').addEventListener('click', async () => {
+    if (!client || !client.isConnected) return;
+    const btnRefresh = $<HTMLButtonElement>('btn-refresh');
+    const iconRefresh = $('icon-refresh');
+    const labelRefresh = $('label-refresh');
+
+    btnRefresh.disabled = true;
+    iconRefresh.classList.add('animate-spin');
+    labelRefresh.textContent = 'Refreshing...';
+
+    try {
+      addLog('Refreshing station configuration (AT+CONFIG=?, AT+TESTMODE_TYPE=?)...', 'INFO');
+      const cfg = await client.readFullConfig();
+      populateDeviceView(cfg);
+      addLog('Station info refreshed successfully.', 'SUCCESS');
+    } catch (err) {
+      addLog(`Failed to refresh station info: ${(err as Error).message}`, 'WARN');
+    } finally {
+      btnRefresh.disabled = false;
+      iconRefresh.classList.remove('animate-spin');
+      labelRefresh.textContent = 'Refresh';
     }
   });
 
   // Disconnect button handler
   $('btn-disconnect').addEventListener('click', async () => {
+    addLog('Disconnecting Bluetooth... Station will reboot and send a fresh LoRaWAN Join-Request.', 'INFO');
     if (client) {
       await client.disconnect();
       client = null;
@@ -520,7 +676,33 @@ import BleBrowserNotice from '../components/ws1300/BleBrowserNotice.astro';
   const btnApply = $<HTMLButtonElement>('btn-apply');
   const formError = $('form-error');
 
-  btnApply.addEventListener('click', async () => {
+  const modalConfirm = $('modal-ws2001-confirm');
+  const modalConfirmDevEui = $('modal-confirm-deveui');
+  const chkConfirm = $<HTMLInputElement>('chk-confirm-irreversible');
+  const btnConfirmCancel = $<HTMLButtonElement>('btn-confirm-cancel');
+  const btnConfirmProceed = $<HTMLButtonElement>('btn-confirm-proceed');
+
+  let pendingMigrationParams: {
+    band: number;
+    subBand: number;
+    joinEui: string;
+    appKey: string;
+    intervalMinutes: number;
+  } | null = null;
+
+  // Toggle proceed button based on checkbox acknowledgment
+  chkConfirm.addEventListener('change', () => {
+    btnConfirmProceed.disabled = !chkConfirm.checked;
+  });
+
+  // Cancel modal
+  btnConfirmCancel.addEventListener('click', () => {
+    modalConfirm.classList.add('hidden');
+    pendingMigrationParams = null;
+  });
+
+  // Apply button clicked -> validate and show confirmation modal
+  btnApply.addEventListener('click', () => {
     if (!client || !client.isConnected) {
       alert('Station is not connected.');
       return;
@@ -533,6 +715,12 @@ import BleBrowserNotice from '../components/ws1300/BleBrowserNotice.astro';
     const joinEuiRaw = $<HTMLInputElement>('cfg-joineui').value.trim();
     const appKeyRaw = $<HTMLInputElement>('cfg-appkey').value.trim();
     const interval = parseInt($<HTMLSelectElement>('cfg-interval').value, 10);
+
+    if (isNaN(band)) {
+      formError.textContent = 'Please select a valid frequency region.';
+      formError.classList.remove('hidden');
+      return;
+    }
 
     // Validate JoinEUI
     let formattedJoinEui = '';
@@ -554,21 +742,43 @@ import BleBrowserNotice from '../components/ws1300/BleBrowserNotice.astro';
       return;
     }
 
-    // Begin progress
+    // Store parameters pending user confirmation
+    pendingMigrationParams = {
+      band,
+      subBand,
+      joinEui: formattedJoinEui,
+      appKey: formattedAppKey,
+      intervalMinutes: interval,
+    };
+
+    // Open confirmation modal
+    modalConfirmDevEui.textContent = currentConfig?.formattedDevEui || currentConfig?.deviceEui || 'WS2001 Station';
+    chkConfirm.checked = false;
+    btnConfirmProceed.disabled = true;
+    modalConfirm.classList.remove('hidden');
+  });
+
+  // Final confirmation proceed -> execute migration
+  btnConfirmProceed.addEventListener('click', async () => {
+    if (!pendingMigrationParams || !client || !client.isConnected) {
+      modalConfirm.classList.add('hidden');
+      return;
+    }
+
+    modalConfirm.classList.add('hidden');
+
+    // Begin progress view
     $('view-device').classList.add('hidden');
     $('view-progress').classList.remove('hidden');
     const progressBar = $('progress-bar');
     const stepText = $('progress-step-text');
 
+    const params = pendingMigrationParams;
+    pendingMigrationParams = null;
+
     try {
       await client.configureOpenLoRaWan(
-        {
-          band,
-          subBand,
-          joinEui: formattedJoinEui,
-          appKey: formattedAppKey,
-          intervalMinutes: interval,
-        },
+        params,
         (stepDesc, current, total) => {
           stepText.textContent = stepDesc;
           const percent = Math.round((current / total) * 100);
