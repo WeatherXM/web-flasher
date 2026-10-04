@@ -51,6 +51,14 @@ describe('Ws2001AtClient helpers', () => {
     expect(parsed.appEui).toBe('70B3D57ED0001234');
     expect(parsed.version).toBe('V3.13');
     expect(parsed.battery).toBe('100%');
+    expect(parsed.defEui).toBe('24E124128A001122');
+    expect(parsed.formattedDefEui).toBe('24:E1:24:12:8A:00:11:22');
+    expect(parsed.devCode).toBe('00:00:00:00:00:00:00:00');
+    expect(parsed.devAddr).toBe('00:00:00:00');
+    expect(parsed.hardwareVersion).toBe('V2.0');
+    expect(parsed.lorawanVersion).toBe('V1.0.3');
+    expect(parsed.classType).toBe('0');
+    expect(parsed.joinType).toBe('1');
     expect(parsed.uploadInterval).toBe(3);
     expect(parsed.frequencyBand).toBe(8);
     expect(parsed.frequencyName).toBe('US915');

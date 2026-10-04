@@ -190,6 +190,7 @@ import Footer from '../components/Footer.astro';
       const btnDownloadLog = document.getElementById('btn-download-log');
 
       // Layout B: compact device bar, console docking and sticky utility bar
+      const devTitle = document.getElementById('dev-title');
       const devStatusPill = document.getElementById('dev-status-pill');
       const devStatusText = document.getElementById('dev-status-text');
       const consoleHome = document.getElementById('console-home');
@@ -542,6 +543,7 @@ import Footer from '../components/Footer.astro';
           flashProgressSection?.classList.add('hidden');
           postFlashSection?.classList.add('hidden');
           recoveryAlertCard?.classList.add('hidden');
+          if (devTitle) devTitle.textContent = 'WeatherXM WG1200';
           if (btnConnect) {
             btnConnect.removeAttribute('disabled');
             btnConnect.innerHTML = defaultBtnConnectHtml;
@@ -693,6 +695,7 @@ import Footer from '../components/Footer.astro';
 
       function handleInspection(data: Wg1200Inspection | null) {
         if (!data) return;
+        if (devTitle && data.deviceName) devTitle.textContent = data.deviceName;
         if (devChip) devChip.textContent = data.chipName;
         if (devFlash) devFlash.textContent = `${data.flashSizeMb} MB (Quad SPI)`;
         const activePartition =

@@ -96,8 +96,16 @@ export interface Ws2001DeviceConfig {
   deviceModel: string;
   deviceEui: string;
   formattedDevEui: string;
+  defEui?: string;           // Factory immutable Default EUI
+  formattedDefEui?: string;
   appEui: string;
-  version: string;
+  devCode?: string;          // Factory device code / serial
+  devAddr?: string;          // LoRaWAN DevAddr
+  version: string;           // Software firmware version
+  hardwareVersion?: string;  // e.g. 'V2.0'
+  lorawanVersion?: string;   // e.g. 'V1.0.3'
+  classType?: string;        // e.g. 'A' or '0'
+  joinType?: string;         // e.g. '1' (OTAA)
   battery: string;
   uploadInterval: number | null;
   frequencyBand: number | null;
@@ -105,6 +113,8 @@ export interface Ws2001DeviceConfig {
   subBand: number | null;
   testModeType: number | null; // 0 = WeatherXM, 1 = Open LoRaWAN, null = unknown/unconfirmed
   rawConfig: string;
+  bleName?: string;
+  bleId?: string;
 }
 
 export type H2DeviceConfig = Ws2001DeviceConfig;
@@ -158,6 +168,24 @@ export function parseAtConfig(raw: string): Partial<Ws2001DeviceConfig> {
     result.deviceEui = devEui.replace(/[^0-9a-fA-F]/g, '').toUpperCase();
   }
 
+  const defEui = extractField('defEui');
+  if (defEui) {
+    result.formattedDefEui = defEui.toUpperCase();
+    result.defEui = defEui.replace(/[^0-9a-fA-F]/g, '').toUpperCase();
+  }
+
+  const devCode = extractField('devCode');
+  if (devCode) result.devCode = devCode;
+
+  const devAddr = extractField('devAddr');
+  if (devAddr) result.devAddr = devAddr;
+
+  const classType = extractField('classType');
+  if (classType) result.classType = classType;
+
+  const joinType = extractField('joinType');
+  if (joinType) result.joinType = joinType;
+
   const model = extractField('deviceModel');
   if (model) result.deviceModel = model;
 
@@ -166,6 +194,16 @@ export function parseAtConfig(raw: string): Partial<Ws2001DeviceConfig> {
 
   // Extract software/firmware version cleanly:
   // Station firmware returns nested version object: version: {Software: 'V3.13', Hardware: 'V2.0', LoRaWAN: 'V1.0.3',}
+  const hwMatch = raw.match(/Hardware\s*:\s*['"]?([^,'"}]+)['"]?/i);
+  if (hwMatch) {
+    result.hardwareVersion = hwMatch[1].trim();
+  }
+
+  const loraMatch = raw.match(/LoRaWAN\s*:\s*['"]?([^,'"}]+)['"]?/i);
+  if (loraMatch) {
+    result.lorawanVersion = loraMatch[1].trim();
+  }
+
   const swMatch = raw.match(/Software\s*:\s*['"]?([^,'"}]+)['"]?/i);
   if (swMatch) {
     result.version = swMatch[1].trim();
@@ -477,8 +515,16 @@ export class Ws2001AtClient {
       deviceModel: parsed.deviceModel || 'Unknown',
       deviceEui: parsed.deviceEui || 'Unknown',
       formattedDevEui: parsed.formattedDevEui || parsed.deviceEui || 'Unknown',
+      defEui: parsed.defEui,
+      formattedDefEui: parsed.formattedDefEui,
       appEui: parsed.appEui || '',
+      devCode: parsed.devCode,
+      devAddr: parsed.devAddr,
       version: parsed.version || 'Unknown',
+      hardwareVersion: parsed.hardwareVersion,
+      lorawanVersion: parsed.lorawanVersion,
+      classType: parsed.classType,
+      joinType: parsed.joinType,
       battery: parsed.battery || 'Unknown',
       uploadInterval: parsed.uploadInterval ?? null,
       frequencyBand: parsed.frequencyBand ?? null,
@@ -486,6 +532,8 @@ export class Ws2001AtClient {
       subBand: parsed.subBand ?? null,
       testModeType: testMode,
       rawConfig: configResp,
+      bleName: this.deviceName,
+      bleId: this.device?.id,
     };
   }
 
