@@ -67,6 +67,14 @@ export function trackTelemetry(payload: TelemetryPayload): void {
             device_type: payload.device_type,
             firmware_target: payload.firmware_target || 'unknown',
           });
+          // Explicit event for H2 devices switched to open LoRaWAN
+          if (payload.device_type === 'ws2001' || payload.firmware_target === 'open_lorawan') {
+            gtag('event', 'switched_to_open', {
+              device_type: payload.device_type,
+              model: 'H2',
+              target: payload.firmware_target || 'open_lorawan',
+            });
+          }
           break;
 
         case 'flash_failed':

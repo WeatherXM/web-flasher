@@ -49,6 +49,12 @@ export default {
           return jsonResponse({ error: 'Database not bound' }, 503);
         }
         const total = await env.DB.prepare('SELECT count(*) as count FROM flasher_events').first<{ count: number }>();
+        const switchedOpen = await env.DB.prepare(
+          "SELECT count(*) as count, count(DISTINCT serial_number) as unique_devices FROM flasher_events WHERE (device_type = 'ws2001' OR firmware_target = 'open_lorawan') AND action = 'flash_completed' AND status = 'success'"
+        ).first<{ count: number; unique_devices: number }>();
+        const flashedTotal = await env.DB.prepare(
+          "SELECT count(*) as count, count(DISTINCT serial_number) as unique_devices FROM flasher_events WHERE action = 'flash_completed' AND status = 'success'"
+        ).first<{ count: number; unique_devices: number }>();
         const breakdown = await env.DB.prepare(
           'SELECT device_type, action, status, count(*) as count FROM flasher_events GROUP BY device_type, action, status'
         ).all();
@@ -58,6 +64,14 @@ export default {
 
         return jsonResponse({
           total_events: total?.count ?? 0,
+          devices_switched_to_open: {
+            total_operations: switchedOpen?.count ?? 0,
+            unique_devices: switchedOpen?.unique_devices ?? 0,
+          },
+          devices_flashed: {
+            total_operations: flashedTotal?.count ?? 0,
+            unique_devices: flashedTotal?.unique_devices ?? 0,
+          },
           breakdown: breakdown.results,
           recent_activity: recent.results,
         });

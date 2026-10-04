@@ -847,6 +847,14 @@ import BleBrowserNotice from '../components/ws1300/BleBrowserNotice.astro';
         action: 'flash_completed',
         firmware_target: 'open_lorawan',
         status: 'success',
+        details: {
+          model: currentConfig?.deviceModel || 'H2',
+          previousVersion: currentConfig?.version,
+          band: params.band,
+          subBand: params.subBand,
+          intervalMinutes: params.intervalMinutes,
+          appEui: params.appEui,
+        },
       });
     } catch (err) {
       addLog(`Configuration failed: ${(err as Error).message}`, 'ERROR');

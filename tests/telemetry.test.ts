@@ -77,6 +77,25 @@ describe('telemetry client helper', () => {
     // Verify MAC was NEVER passed to GA4
     expect(JSON.stringify(gtagSpy.mock.calls)).not.toContain('24:DC:C3');
   });
+
+  it('triggers GA4 switched_to_open event when H2 switches to open LoRaWAN', () => {
+    const gtagSpy = vi.fn();
+    (globalThis as any).gtag = gtagSpy;
+
+    trackTelemetry({
+      device_type: 'ws2001',
+      serial_number: '2C:F7:F1:20:30:40:50:60',
+      action: 'flash_completed',
+      firmware_target: 'open_lorawan',
+      status: 'success',
+    });
+
+    expect(gtagSpy).toHaveBeenCalledWith('event', 'switched_to_open', {
+      device_type: 'ws2001',
+      model: 'H2',
+      target: 'open_lorawan',
+    });
+  });
 });
 
 describe('Cloudflare worker API', () => {
