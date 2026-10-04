@@ -52,6 +52,15 @@ const schema = {
     <meta name="twitter:card" content="summary" />
     <script is:inline type="application/ld+json" set:html={JSON.stringify(schema)} />
     {noindex && <meta name="robots" content="noindex, nofollow" />}
+    <!-- Google tag (gtag.js) -->
+    <script is:inline async src="https://www.googletagmanager.com/gtag/js?id=G-MYSF8H1VYT"></script>
+    <script is:inline>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+
+      gtag('config', 'G-MYSF8H1VYT');
+    </script>
   </head>
 
   <body class="min-h-screen bg-dark-atmospheric bg-dot-grid text-white font-sans antialiased flex flex-col justify-between selection:bg-wxm-beacon selection:text-white">
