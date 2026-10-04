@@ -164,8 +164,13 @@ export class FlasherController {
         firmware_source: this.inspection.currentFirmware?.displayTitle || this.inspection.currentFirmware?.version,
         status: 'success',
         details: {
+          deviceName: this.inspection.deviceName,
+          publicKey: this.inspection.publicKey,
+          publicKeyHash: this.inspection.publicKeyHash,
+          commonName: this.inspection.secureCert.commonName,
           mac: this.inspection.macAddress,
           fingerprint: this.inspection.secureCert.fingerprint,
+          certSha256: this.inspection.secureCert.sha256,
           activeSlot: this.inspection.otadata.activeSlot,
           flashSizeMb: this.inspection.flashSizeMb,
         },
@@ -214,6 +219,10 @@ export class FlasherController {
       firmware_target: fwTarget,
       status: 'in_progress',
       details: {
+        deviceName: this.inspection.deviceName,
+        publicKey: this.inspection.publicKey,
+        publicKeyHash: this.inspection.publicKeyHash,
+        mac: this.inspection.macAddress,
         slot: targetSlot,
         offset: targetOffset,
       },
@@ -343,6 +352,13 @@ export class FlasherController {
         action: 'flash_completed',
         firmware_target: fwTarget,
         status: 'success',
+        details: {
+          deviceName: this.inspection.deviceName,
+          publicKey: this.inspection.publicKey,
+          publicKeyHash: this.inspection.publicKeyHash,
+          mac: this.inspection.macAddress,
+          slot: targetSlot,
+        },
       });
     } catch (err: any) {
       this.addLog(`\n[FATAL ERROR] Installation aborted: ${err.message ?? err}`);
@@ -353,6 +369,10 @@ export class FlasherController {
         firmware_target: fwTarget,
         status: 'failed',
         details: {
+          deviceName: this.inspection?.deviceName,
+          publicKey: this.inspection?.publicKey,
+          publicKeyHash: this.inspection?.publicKeyHash,
+          mac: this.inspection?.macAddress,
           error: err.message ?? String(err),
         },
       });
@@ -390,6 +410,12 @@ export class FlasherController {
       action: 'flash_started',
       firmware_target: 'factory_stock_rollback',
       status: 'in_progress',
+      details: {
+        deviceName: this.inspection?.deviceName,
+        publicKey: this.inspection?.publicKey,
+        publicKeyHash: this.inspection?.publicKeyHash,
+        mac: this.inspection?.macAddress,
+      },
     });
     try {
       this.addLog('\n========================================');
@@ -407,6 +433,12 @@ export class FlasherController {
         action: 'flash_completed',
         firmware_target: 'factory_stock_rollback',
         status: 'success',
+        details: {
+          deviceName: this.inspection?.deviceName,
+          publicKey: this.inspection?.publicKey,
+          publicKeyHash: this.inspection?.publicKeyHash,
+          mac: this.inspection?.macAddress,
+        },
       });
     } catch (err: any) {
       trackTelemetry({
@@ -415,7 +447,13 @@ export class FlasherController {
         action: 'flash_failed',
         firmware_target: 'factory_stock_rollback',
         status: 'failed',
-        details: { error: err.message ?? String(err) },
+        details: {
+          deviceName: this.inspection?.deviceName,
+          publicKey: this.inspection?.publicKey,
+          publicKeyHash: this.inspection?.publicKeyHash,
+          mac: this.inspection?.macAddress,
+          error: err.message ?? String(err),
+        },
       });
       throw err;
     } finally {

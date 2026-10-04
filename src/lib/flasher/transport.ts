@@ -2,7 +2,7 @@ import { ESPLoader, Transport, ESPError, getStubJsonByChipName } from 'esptool-j
 import { parseAppDescriptor, type AppDescriptor } from './appDescriptor';
 import { WG1200_CONSTANTS } from './constants';
 import { compareHexHashes, sha256Hex } from './hashing';
-import { verifySecureCertIdentity, type SecureCertVerificationResult } from './identity';
+import { formatWg1200DeviceName, verifySecureCertIdentity, type SecureCertVerificationResult } from './identity';
 import { determineActiveBootSlot, parseOtadataSector, type OtadataStatus } from './otadata';
 import { parsePartitionTableWithMetadata, verifyWg1200PartitionTable, type PartitionRecord } from './partitions';
 import {
@@ -272,6 +272,9 @@ export interface ProtectedRegionSnapshot {
 export interface Wg1200Inspection {
   chipName: string;
   macAddress?: string;
+  deviceName?: string;
+  publicKey?: string;
+  publicKeyHash?: string;
   flashSizeBytes: number;
   flashSizeMb: number;
   isEsp32S3: boolean;
@@ -525,9 +528,16 @@ export class Wg1200Transport {
     const isValidWg1200 =
       isEsp32S3 && is16Mb && ptResult.valid && secureCert.valid;
 
+    const deviceName = formatWg1200DeviceName(macAddress, secureCert.commonName);
+    const publicKey = secureCert.publicKey;
+    const publicKeyHash = secureCert.publicKeyHash;
+
     return {
       chipName,
       macAddress,
+      deviceName,
+      publicKey,
+      publicKeyHash,
       flashSizeBytes,
       flashSizeMb,
       isEsp32S3,
