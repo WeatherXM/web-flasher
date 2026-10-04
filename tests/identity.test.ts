@@ -5,6 +5,7 @@ import {
   extractDeviceCertBytes,
   extractCommonNameFromDer,
   extractPublicKeyFromDer,
+  pemToDer,
 } from '../src/lib/flasher/identity';
 import { WG1200_CONSTANTS } from '../src/lib/flasher/constants';
 
@@ -47,11 +48,11 @@ describe('identity (esp_secure_cert)', () => {
     expect(result.errors.some((e) => e.includes('zeroed out (all 0x00)'))).toBe(true);
   });
 
-  it('rejects cert partition missing TLV magic', async () => {
+  it('rejects unformatted random partition lacking magic or cert', async () => {
     const cert = makeMockCert(false);
     const result = await verifySecureCertIdentity(cert);
     expect(result.valid).toBe(false);
-    expect(result.errors.some((e) => e.includes('TLV magic'))).toBe(true);
+    expect(result.errors.some((e) => e.includes('TLV magic') || e.includes('cust_flash'))).toBe(true);
   });
 
   it('rejects cert with wrong partition size', async () => {
@@ -79,9 +80,18 @@ describe('identity (esp_secure_cert)', () => {
     });
   });
 
-  describe('DER certificate and public key extraction', () => {
+  describe('DER & PEM certificate and public key extraction', () => {
+    it('converts PEM certificate to DER bytes', () => {
+      const mockDer = new Uint8Array([0x30, 0x82, 0x01, 0x00, 0x01, 0x02, 0x03, 0x04]);
+      const base64 = btoa(String.fromCharCode(...mockDer));
+      const pem = `-----BEGIN CERTIFICATE-----\n${base64}\n-----END CERTIFICATE-----\n`;
+
+      const der = pemToDer(pem);
+      expect(der).not.toBeNull();
+      expect(Array.from(der!)).toEqual(Array.from(mockDer));
+    });
+
     it('extracts Common Name from DER bytes', () => {
-      // Construct minimal DER snippet for OID 2.5.4.3 (0x55, 0x04, 0x03) + UTF8String (0x0C)
       const name = 'WeatherXM Test GW';
       const nameBytes = new TextEncoder().encode(name);
       const der = new Uint8Array([
@@ -96,7 +106,6 @@ describe('identity (esp_secure_cert)', () => {
     });
 
     it('extracts EC public key and calculates SHA256 hash', async () => {
-      // Uncompressed 65-byte EC public key starting with 0x04
       const mockKey = new Uint8Array(65);
       mockKey[0] = 0x04;
       for (let i = 1; i < 65; i++) mockKey[i] = i;
@@ -150,6 +159,80 @@ describe('identity (esp_secure_cert)', () => {
       const result = await verifySecureCertIdentity(partition);
       expect(result.valid).toBe(true);
       expect(result.commonName).toBe('WeatherXM WG1200 Live');
+    });
+
+    it('extracts legacy cust_flash partition with PEM certificate at offset 64 and magic 0x12345678', async () => {
+      const partition = new Uint8Array(WG1200_CONSTANTS.SECURE_CERT.size);
+      partition.fill(0xff);
+
+      // Construct a mock EC DER cert with CN and uncompressed public key
+      const name = 'WeatherXM WG1200 5B2C';
+      const nameBytes = new TextEncoder().encode(name);
+      const mockKey = new Uint8Array(65);
+      mockKey[0] = 0x04;
+      for (let i = 1; i < 65; i++) mockKey[i] = i * 2;
+
+      const derCert = new Uint8Array([
+        0x30, 0x82, 0x01, 0x00,
+        // Common Name
+        0x55, 0x04, 0x03,
+        0x0c, nameBytes.length,
+        ...nameBytes,
+        // Public Key
+        0x2a, 0x86, 0x48, 0xce, 0x3d, 0x02, 0x01,
+        0x03, 0x42, 0x00,
+        ...mockKey,
+      ]);
+
+      // Base64 encode into PEM format
+      const pemStr = `-----BEGIN CERTIFICATE-----\n${btoa(String.fromCharCode(...derCert))}\n-----END CERTIFICATE-----\0`;
+      const pemBytes = new TextEncoder().encode(pemStr);
+
+      // dev_cert at offset 64
+      partition.set(pemBytes, 64);
+
+      // Metadata at offset 0: dev_cert_len at bytes 4-5
+      partition[4] = pemBytes.length & 0xff;
+      partition[5] = (pemBytes.length >> 8) & 0xff;
+
+      // Magic 0x12345678 at byte 32 (LE: 0x78, 0x56, 0x34, 0x12)
+      partition[32] = 0x78;
+      partition[33] = 0x56;
+      partition[34] = 0x34;
+      partition[35] = 0x12;
+
+      const result = await verifySecureCertIdentity(partition);
+      expect(result.valid).toBe(true);
+      expect(result.commonName).toBe('WeatherXM WG1200 5B2C');
+      expect(result.publicKey).not.toBeUndefined();
+      expect(result.publicKey).toHaveLength(130);
+      expect(result.publicKey?.startsWith('04')).toBe(true);
+      expect(result.publicKeyHash).toHaveLength(64);
+    });
+
+    it('extracts standalone PEM certificate placed anywhere in partition', async () => {
+      const partition = new Uint8Array(WG1200_CONSTANTS.SECURE_CERT.size);
+      partition.fill(0xee);
+
+      const name = 'WeatherXM Direct PEM';
+      const nameBytes = new TextEncoder().encode(name);
+      const derCert = new Uint8Array([
+        0x30, 0x40,
+        0x55, 0x04, 0x03,
+        0x0c, nameBytes.length,
+        ...nameBytes,
+      ]);
+
+      const pemStr = `-----BEGIN CERTIFICATE-----\n${btoa(String.fromCharCode(...derCert))}\n-----END CERTIFICATE-----`;
+      const pemBytes = new TextEncoder().encode(pemStr);
+
+      // Place at offset 512
+      partition.set(pemBytes, 512);
+
+      const devCert = extractDeviceCertBytes(partition);
+      expect(devCert).not.toBeNull();
+      const cn = extractCommonNameFromDer(devCert!);
+      expect(cn).toBe('WeatherXM Direct PEM');
     });
   });
 });
