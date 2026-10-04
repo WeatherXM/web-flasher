@@ -35,14 +35,14 @@ const ws1300Latest = ws1300Manifest.releases.find((r) => r.version === ws1300Man
         </div>
         <div class="space-y-2 flex-1">
           <div class="flex items-center justify-between gap-3 flex-wrap">
-            <h2 class="text-xl font-bold">WG1200 Gateway</h2>
+            <h2 class="text-xl font-bold">WG1200 - D1/D2 WiFi Gateway</h2>
             <span class="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-full bg-wxm-midnight/80 border border-wxm-cloud/20 text-wxm-cloud">
               <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v4m6-4v4M7 7h10v5a5 5 0 01-10 0V7zm5 10v4" /></svg>
               USB-C cable
             </span>
           </div>
           <p class="text-sm text-wxm-mist leading-relaxed">
-            The gateway with the display that links your station to the internet. Switch between WeatherXM tri-protocol (v{wg1200Version}) and full Meshtastic firmware.
+            The gateway with the touchscreen display that links your station to the internet and mesh networks. In the latest firmware, the WG1200 speaks WeatherXM LoRa P2P, Meshtastic, and MeshCore, or you can flash it over USB-C to operate as a full standalone Meshtastic or MeshCore node.
           </p>
         </div>
         <div class="flex items-center justify-between gap-3 pt-4 border-t border-wxm-cloud/10">
@@ -70,14 +70,14 @@ const ws1300Latest = ws1300Manifest.releases.find((r) => r.version === ws1300Man
         </div>
         <div class="space-y-2 flex-1">
           <div class="flex items-center justify-between gap-3 flex-wrap">
-            <h2 class="text-xl font-bold">WS1300 (D2) Station</h2>
+            <h2 class="text-xl font-bold">WS1300 - D2 LoRa Weather Station</h2>
             <span class="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-full bg-wxm-beacon/15 border border-wxm-beacon/40 text-wxm-wash">
               <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7l10 10-5 5V2l5 5L7 17" /></svg>
               Bluetooth
             </span>
           </div>
           <p class="text-sm text-wxm-mist leading-relaxed">
-            The outdoor station with weather sensors. Update it to the latest firmware ({ws1300Latest.label}) wirelessly, from a laptop or an Android phone next to it.
+            The outdoor station with precision weather sensors. The WS1300 speaks WeatherXM LoRa P2P, Meshtastic, and MeshCore directly. Update it to the latest firmware ({ws1300Latest.label}) wirelessly over Bluetooth from a laptop or an Android phone next to it.
           </p>
         </div>
         <div class="flex items-center justify-between gap-3 pt-4 border-t border-wxm-cloud/10">
@@ -96,8 +96,8 @@ const ws1300Latest = ws1300Manifest.releases.find((r) => r.version === ws1300Man
       >
         <div class="h-40 rounded-control bg-wxm-abyss/60 border border-wxm-cloud/10 flex items-center justify-center overflow-hidden">
           <img
-            src="/ws2001-angle.webp"
-            alt="WeatherXM WS2001 (H2) weather station"
+            src="/h2.webp"
+            alt="WeatherXM WS2001 - LoRaWAN Weather Station"
             width="388"
             height="228"
             class="w-[85%] max-w-[300px] h-auto drop-shadow-[0_12px_24px_rgba(0,0,0,0.6)] transition-transform group-hover:scale-105"
@@ -105,14 +105,14 @@ const ws1300Latest = ws1300Manifest.releases.find((r) => r.version === ws1300Man
         </div>
         <div class="space-y-2 flex-1">
           <div class="flex items-center justify-between gap-3 flex-wrap">
-            <h2 class="text-xl font-bold">WS2001 (H2) Station</h2>
+            <h2 class="text-xl font-bold">WS2001 - LoRaWAN Weather Station</h2>
             <span class="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/40 text-emerald-300">
               <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7l10 10-5 5V2l5 5L7 17" /></svg>
               Bluetooth
             </span>
           </div>
           <p class="text-sm text-wxm-mist leading-relaxed">
-            Outdoor station (WS2001 / H2). Configure Open LoRaWAN mode to send standard SenseCAP 8-in-1 sensor data to TTN or ChirpStack.
+            The H2 initially starts in <strong>WeatherXM Network mode</strong>. Using flasher.weatherxm.com, you can switch it to the open/OEM firmware. In this mode, it behaves like a Seeed Studio SenseCAP S2120 LoRaWAN device and can connect directly to The Things Network (TTN) or your own private LoRaWAN network (e.g. ChirpStack) using ready-made decode profiles.
           </p>
         </div>
         <div class="flex items-center justify-between gap-3 pt-4 border-t border-wxm-cloud/10">
