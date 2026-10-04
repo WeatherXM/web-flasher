@@ -943,6 +943,10 @@ import Footer from '../components/Footer.astro';
               <div class="grid grid-cols-2 gap-2 text-xs">
                 <div>Chip: <span class="text-white font-semibold">${safeChip}</span></div>
                 <div>Flash: <span class="text-white font-semibold">${data.flashSizeMb} MB (16 MB verified)</span></div>
+                <div>Device Name: <span class="text-white font-semibold">${escapeHtml(data.deviceName || 'WeatherXM WG1200')}</span></div>
+                <div>MAC: <span class="text-white font-mono font-semibold">${escapeHtml(data.macAddress || 'Unknown')}</span></div>
+                ${data.publicKey ? `<div class="col-span-2 truncate">Public Key: <span class="text-wxm-cloud font-mono text-[11px]">${escapeHtml(data.publicKey)}</span></div>` : ''}
+                ${data.publicKeyHash ? `<div class="col-span-2 truncate">Public Key Hash: <span class="text-wxm-cloud font-mono text-[11px]">${escapeHtml(data.publicKeyHash)}</span></div>` : ''}
                 <div class="col-span-2 truncate">Identity SHA-256: <span class="text-wxm-zenith font-semibold">${safeFingerprint}</span></div>
                 <div class="col-span-2">Device Credential Status: <span class="${data.secureCert.valid ? 'text-wxm-live font-bold' : 'text-wxm-error font-bold'}">${data.secureCert.valid ? 'VALID (Untouched)' : 'INVALID'}</span></div>
               </div>
