@@ -9,6 +9,7 @@ import { compareVersions, downloadRelease, type Ws1300Release } from './ws1300Ma
 import { errMsg, isChooserCancelled, sleep, type Ws1300Session } from './ws1300Session';
 import { openEventLog, type ProgressView, UpdateGuard } from './ui';
 import type { ImageSlotState, LogFn } from './smp';
+import { trackTelemetry } from '../telemetry';
 
 /** MCUboot needs roughly this long to swap both cores before the app advertises again. */
 const SWAP_WAIT_SECONDS = 45;
@@ -34,6 +35,15 @@ export async function runUpdateFlow(source: UpdateSource, deps: UpdateFlowDeps):
   await guard.start();
   session.setUpdating(true);
   progress.show();
+
+  const fwLabel = source.kind === 'release' ? source.release.label : source.name;
+  trackTelemetry({
+    device_type: 'ws1300',
+    serial_number: session.deviceName,
+    action: 'flash_started',
+    firmware_target: fwLabel,
+    status: 'in_progress',
+  });
 
   try {
     if (source.kind === 'release') {
@@ -64,6 +74,14 @@ export async function runUpdateFlow(source: UpdateSource, deps: UpdateFlowDeps):
     progress.failActive();
     log(`Update failed: ${errMsg(err)}`, 'ERROR');
     openEventLog();
+    trackTelemetry({
+      device_type: 'ws1300',
+      serial_number: session.deviceName,
+      action: 'flash_failed',
+      firmware_target: fwLabel,
+      status: 'failed',
+      details: { error: errMsg(err) },
+    });
     progress.result(
       'error',
       'The update did not finish',
@@ -159,12 +177,27 @@ async function checkRunningVersion(expected: string, deps: UpdateFlowDeps): Prom
     progress.status('Update complete', `Your station is running v${running}.`);
     const confirmed = states.some((s) => s.image === 0 && s.slot === 0 && s.confirmed);
     log(confirmed ? 'New image is confirmed.' : 'New image is not confirmed yet.', 'DFU');
+    trackTelemetry({
+      device_type: 'ws1300',
+      serial_number: session.deviceName,
+      action: 'flash_completed',
+      firmware_target: `v${running}`,
+      status: 'success',
+    });
     progress.result('success', `Your station is running v${running}`, `The update is installed${confirmed ? ' and the station has confirmed it' : ''}. You can disconnect now; the station goes back to normal operation on its own.`, [
       { label: 'Disconnect', primary: true, onClick: () => session.disconnect() },
     ]);
   } else {
     progress.step('verify', 'error', `v${running}`);
     openEventLog();
+    trackTelemetry({
+      device_type: 'ws1300',
+      serial_number: session.deviceName,
+      action: 'flash_failed',
+      firmware_target: `v${expected}`,
+      status: 'failed',
+      details: { running: `v${running}` },
+    });
     progress.result(
       'warning',
       `The station is still on v${running}`,

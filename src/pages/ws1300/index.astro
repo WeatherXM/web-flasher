@@ -195,6 +195,7 @@ const latest = manifest.releases.find((r) => r.version === manifest.latest) ?? m
   import { runUpdateFlow, type UpdateSource } from '../../lib/ble/updateFlow';
   import type { ImageSlotState } from '../../lib/ble/smp';
   import { $, ProgressView, coreName, createEventLog, kb, renderSlots } from '../../lib/ble/ui';
+  import { trackTelemetry } from '../../lib/telemetry';
 
   const { log } = createEventLog('ws1300_update_log');
   const progress = new ProgressView();
@@ -322,6 +323,13 @@ const latest = manifest.releases.find((r) => r.version === manifest.latest) ?? m
     try {
       await session.connect();
       await readStates();
+      trackTelemetry({
+        device_type: 'ws1300',
+        serial_number: session.deviceName,
+        action: 'connected',
+        firmware_source: installed || undefined,
+        status: 'success',
+      });
     } catch (err) {
       if (isChooserCancelled(err)) {
         log('Device chooser closed without picking a station.', 'BLE');

@@ -1,11 +1,21 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "weatherxm-web-flasher",
+  "main": "src/worker/index.ts",
   "compatibility_date": "2026-09-24",
   "assets": {
     "directory": "./dist",
-    "not_found_handling": "single-page-application"
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
   },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "flasher-telemetry",
+      "database_id": "5ef4ff2c-cc1c-4e25-8fb3-bb41e3a1609a"
+    }
+  ],
   "routes": [
     {
       "pattern": "flash.weatherxm.com",

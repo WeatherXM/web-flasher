@@ -271,6 +271,7 @@ export interface ProtectedRegionSnapshot {
 
 export interface Wg1200Inspection {
   chipName: string;
+  macAddress?: string;
   flashSizeBytes: number;
   flashSizeMb: number;
   isEsp32S3: boolean;
@@ -357,6 +358,15 @@ export class Wg1200Transport {
     const chipName: string = (this.loader as any).chip?.CHIP_NAME ?? 'Unknown';
     const isEsp32S3 =
       chipName.toLowerCase().includes('esp32-s3') || chipName.toLowerCase().includes('esp32s3');
+
+    let macAddress: string | undefined;
+    try {
+      if (typeof (this.loader as any).chip?.readMac === 'function') {
+        macAddress = await (this.loader as any).chip.readMac(this.loader);
+      }
+    } catch (e: any) {
+      this.logger.debug?.(`Could not read MAC address: ${e?.message ?? e}`);
+    }
 
     // 2. Identify flash size (esptool-js 0.7.0 detectFlashSize)
     let flashSizeBytes = 0;
@@ -517,6 +527,7 @@ export class Wg1200Transport {
 
     return {
       chipName,
+      macAddress,
       flashSizeBytes,
       flashSizeMb,
       isEsp32S3,

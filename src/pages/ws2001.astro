@@ -469,6 +469,7 @@ import BleBrowserNotice from '../components/ws1300/BleBrowserNotice.astro';
 <script>
   import { Ws2001AtClient, formatHexWithColons, type Ws2001DeviceConfig } from '../lib/ble/ws2001AtClient';
   import { TTN_PAYLOAD_DECODER, CHIRPSTACK_PAYLOAD_DECODER, CHIRPSTACK_V3_PAYLOAD_DECODER } from '../lib/ble/ws2001Decoder';
+  import { trackTelemetry } from '../lib/telemetry';
 
   const $ = <T extends HTMLElement = HTMLElement>(id: string): T => {
     const el = document.getElementById(id);
@@ -572,6 +573,19 @@ import BleBrowserNotice from '../components/ws1300/BleBrowserNotice.astro';
     $('stat-interval').textContent = cfg.uploadInterval !== null ? `${cfg.uploadInterval} min` : 'Unknown';
 
     updateModeDisplay(cfg.testModeType);
+
+    trackTelemetry({
+      device_type: 'ws2001',
+      serial_number: cfg.formattedDevEui || cfg.devEui,
+      action: 'connected',
+      firmware_source: cfg.version,
+      status: 'success',
+      details: {
+        mode: cfg.testModeType,
+        band: cfg.frequencyName,
+        model: cfg.deviceModel,
+      },
+    });
 
     // Prepopulate form with device current band
     if (cfg.frequencyBand !== null) {
@@ -797,6 +811,21 @@ import BleBrowserNotice from '../components/ws1300/BleBrowserNotice.astro';
     const params = pendingMigrationParams;
     pendingMigrationParams = null;
 
+    const serialNum = currentConfig?.formattedDevEui || currentConfig?.devEui;
+
+    trackTelemetry({
+      device_type: 'ws2001',
+      serial_number: serialNum,
+      action: 'flash_started',
+      firmware_target: 'open_lorawan',
+      status: 'in_progress',
+      details: {
+        band: params.band,
+        subBand: params.subBand,
+        intervalMinutes: params.intervalMinutes,
+      },
+    });
+
     try {
       await client.configureOpenLoRaWan(
         params,
@@ -811,12 +840,31 @@ import BleBrowserNotice from '../components/ws1300/BleBrowserNotice.astro';
       progressBar.style.width = '100%';
       $('view-progress').classList.add('hidden');
       $('view-success').classList.remove('hidden');
+
+      trackTelemetry({
+        device_type: 'ws2001',
+        serial_number: serialNum,
+        action: 'flash_completed',
+        firmware_target: 'open_lorawan',
+        status: 'success',
+      });
     } catch (err) {
       addLog(`Configuration failed: ${(err as Error).message}`, 'ERROR');
       $('view-progress').classList.add('hidden');
       $('view-device').classList.remove('hidden');
       formError.textContent = (err as Error).message;
       formError.classList.remove('hidden');
+
+      trackTelemetry({
+        device_type: 'ws2001',
+        serial_number: serialNum,
+        action: 'flash_failed',
+        firmware_target: 'open_lorawan',
+        status: 'failed',
+        details: {
+          error: (err as Error).message,
+        },
+      });
     }
   });
 

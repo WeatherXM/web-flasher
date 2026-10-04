@@ -10,6 +10,7 @@ import { buildTransactionalOtadataSector } from './otadata';
 import { captureBootLogs, downloadLogFile } from './serialLog';
 import { FlasherStateMachine, type FlasherState, type StateContext } from './state';
 import { Wg1200Transport, type ProtectedRegionSnapshot, type Wg1200Inspection } from './transport';
+import { trackTelemetry } from '../telemetry';
 
 export interface FlasherUICallbacks {
   onStateChange: (context: StateContext) => void;
@@ -155,6 +156,21 @@ export class FlasherController {
       this.addLog(`Active boot slot: ${this.inspection.otadata.activeSlot}`);
       this.callbacks.onInspection(this.inspection);
 
+      const wgSerial = this.inspection.macAddress || this.inspection.secureCert.fingerprint;
+      trackTelemetry({
+        device_type: 'wg1200',
+        serial_number: wgSerial,
+        action: 'connected',
+        firmware_source: this.inspection.currentFirmware?.displayTitle || this.inspection.currentFirmware?.version,
+        status: 'success',
+        details: {
+          mac: this.inspection.macAddress,
+          fingerprint: this.inspection.secureCert.fingerprint,
+          activeSlot: this.inspection.otadata.activeSlot,
+          flashSizeMb: this.inspection.flashSizeMb,
+        },
+      });
+
       if (this.inspection.otadata.isAmbiguous) {
         this.addLog('[WARNING] Boot state is ambiguous or otadata has invalid/aborted states.');
         this.stateMachine.transition('recovery', 'Ambiguous boot state detected. Recovery mode active.');
@@ -188,6 +204,20 @@ export class FlasherController {
 
     const targetSlot = this.inspection.otadata.targetSlot;
     const targetOffset = this.inspection.otadata.targetOffset;
+    const serial = this.inspection.macAddress || this.inspection.secureCert.fingerprint;
+    const fwTarget = `${fwEntry.name} v${fwEntry.version}`;
+
+    trackTelemetry({
+      device_type: 'wg1200',
+      serial_number: serial,
+      action: 'flash_started',
+      firmware_target: fwTarget,
+      status: 'in_progress',
+      details: {
+        slot: targetSlot,
+        offset: targetOffset,
+      },
+    });
 
     this.addLog(`\n========================================`);
     this.addLog(`STARTING INSTALLATION: ${fwEntry.name} v${fwEntry.version}`);
@@ -307,8 +337,25 @@ export class FlasherController {
         'success',
         `Successfully switched to ${fwEntry.name} v${fwEntry.version}!`
       );
+      trackTelemetry({
+        device_type: 'wg1200',
+        serial_number: serial,
+        action: 'flash_completed',
+        firmware_target: fwTarget,
+        status: 'success',
+      });
     } catch (err: any) {
       this.addLog(`\n[FATAL ERROR] Installation aborted: ${err.message ?? err}`);
+      trackTelemetry({
+        device_type: 'wg1200',
+        serial_number: serial,
+        action: 'flash_failed',
+        firmware_target: fwTarget,
+        status: 'failed',
+        details: {
+          error: err.message ?? String(err),
+        },
+      });
       await this.disconnect();
       this.stateMachine.setError(err.message ?? 'Flash failed', true);
     } finally {
@@ -336,6 +383,14 @@ export class FlasherController {
     if (this.isOperating) throw new Error('Another hardware operation is already in progress.');
     if (!this.transport.isConnected) throw new Error('Not connected');
     this.isOperating = true;
+    const serial = this.inspection?.macAddress || this.inspection?.secureCert.fingerprint;
+    trackTelemetry({
+      device_type: 'wg1200',
+      serial_number: serial,
+      action: 'flash_started',
+      firmware_target: 'factory_stock_rollback',
+      status: 'in_progress',
+    });
     try {
       this.addLog('\n========================================');
       this.addLog('EXECUTING FACTORY ROLLBACK (WeatherXM Stock)');
@@ -346,6 +401,23 @@ export class FlasherController {
       await this.transport.hardReset();
       await this.disconnect();
       this.addLog('Factory rollback complete! Gateway will reboot into stock WeatherXM firmware.');
+      trackTelemetry({
+        device_type: 'wg1200',
+        serial_number: serial,
+        action: 'flash_completed',
+        firmware_target: 'factory_stock_rollback',
+        status: 'success',
+      });
+    } catch (err: any) {
+      trackTelemetry({
+        device_type: 'wg1200',
+        serial_number: serial,
+        action: 'flash_failed',
+        firmware_target: 'factory_stock_rollback',
+        status: 'failed',
+        details: { error: err.message ?? String(err) },
+      });
+      throw err;
     } finally {
       this.isOperating = false;
     }
