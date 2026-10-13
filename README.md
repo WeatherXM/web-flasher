@@ -8,6 +8,7 @@ The site opens on a device picker:
 | `/wg1200` | WG1200 / D1 gateway | USB (Web Serial) | Switch between WeatherXM and Meshtastic firmware (below) |
 | `/ws1300` | WS1300 weather station | Bluetooth (Web Bluetooth) | Update to the latest published firmware, or install a `-dfu.zip` / signed `.bin` |
 | `/ws1300/dev` | WS1300 | Bluetooth | Staff tools: Zephyr shell console, any published release, file installs, MCUboot slots. Not linked, `noindex` |
+| `/ws2001` | WS2001 (H2) station | Bluetooth | Connect the station to TTN / ChirpStack (keeps the WeatherXM keys on firmware V4.5+) or switch it back |
 
 ## WG1200 Firmware Web Flasher
 
@@ -137,6 +138,25 @@ The manifest generator validates that:
 * Hashes are calculated and stored in `public/firmware/ws1300/manifest.json` and mirrored to `dist/firmware/ws1300/manifest.json`.
 
 ---
+
+## WS2001 (H2): your own LoRaWAN network
+
+`/ws2001` points a WS2001 at The Things Network, ChirpStack or any LoRaWAN network server over Web Bluetooth (AT
+commands on the station's transparent-UART service). The hardware is the same as the SenseCAP S2120, but the station
+runs WeatherXM's own firmware: one signed 24-byte frame on **FPort 99** with wind gust, rain total and max rain rate
+(1 Helium data credit per uplink).
+
+* **Keys are kept (firmware V4.5+).** The page uses `AT+NETPROFILE`: the customer JoinEUI/AppKey go into profile 1,
+  the WeatherXM keys stay in profile 0, and **Switch back to WeatherXM** reactivates them. On older firmware the page
+  warns that the single key set will be replaced.
+* **Payload stays the WeatherXM frame** (`AT+TESTMODE_TYPE=0`). The legacy TLV format (FPort 3) is no longer selected.
+* **Upload interval defaults to 5 minutes**: a 24-byte SF7 uplink is ~82 ms, so 3 minutes exceeds TTN's
+  30 s/day fair use. Switching back restores 3 minutes.
+* **Decoder:** one script for TTN v3, ChirpStack v4 and ChirpStack v3, at `public/decoders/ws2001_uplink_decoder.js`
+  (served at `/decoders/ws2001_uplink_decoder.js`). The source of truth is
+  `ws2001-firmware/tools/decoders/ws2001_uplink_decoder.js`. Update it with
+  `node scripts/sync-ws2001-decoder.mjs <path-to-firmware-repo>/tools/decoders/ws2001_uplink_decoder.js`, which also
+  regenerates `src/lib/ble/ws2001UplinkDecoder.ts`. A test keeps the two copies identical.
 
 ## Browser & Device Compatibility
 
