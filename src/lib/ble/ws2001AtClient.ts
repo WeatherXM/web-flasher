@@ -114,6 +114,7 @@ export interface Ws2001DeviceConfig {
   testModeType: number | null; // payload format: 0 = WeatherXM 24-byte frame (FPort 99), 1 = legacy TLV (FPort 3)
   netProfile: NetProfileState | null; // null = firmware without network profiles (< V4.5)
   lorawanStatus: string | null; // AT+LW_MODEM_STATUS=?: JOINED, JOINING, MUTE, ...
+  gnssSwitch: boolean | null; // AT+GPSSWITCH=?: GNSS scans on the customer network (V4.7+)
   rawConfig: string;
   bleName?: string;
   bleId?: string;
@@ -150,6 +151,8 @@ export interface ConfigureOpenLoRaWanParams {
   joinEui: string;  // 16 hex chars (with or without colons)
   appKey: string;   // 32 hex chars (with or without colons)
   intervalMinutes: number; // 1..1440
+  // Raw GNSS scans (0xF3 frames) on the customer network; firmware V4.7+ only, off by default
+  gnss?: boolean;
 }
 
 export type Ws2001LogFn = (message: string, level?: 'INFO' | 'CMD' | 'RESP' | 'WARN' | 'ERROR') => void;
@@ -474,6 +477,9 @@ export class Ws2001AtClient {
     }
     if (this.server?.connected) {
       this.server.disconnect();
+    } else {
+      // Also drops a link that is still being set up (connect cancelled mid-way)
+      try { this.device?.gatt?.disconnect(); } catch { /* ignore */ }
     }
     this.cleanup();
     this.log('Disconnected.', 'INFO');
@@ -618,6 +624,15 @@ export class Ws2001AtClient {
       // optional
     }
 
+    let gnssSwitch: boolean | null = null;
+    try {
+      const g = await this.sendCommand('AT+GPSSWITCH=?', 3000);
+      const m = g.match(/^\s*([01])/m);
+      if (m) gnssSwitch = m[1] === '1';
+    } catch {
+      // optional
+    }
+
     return {
       deviceModel: parsed.deviceModel || 'Unknown',
       deviceEui: parsed.deviceEui || 'Unknown',
@@ -640,6 +655,7 @@ export class Ws2001AtClient {
       testModeType: testMode,
       netProfile,
       lorawanStatus,
+      gnssSwitch,
       rawConfig: configResp,
       bleName: this.deviceName,
       bleId: this.device?.id,
@@ -690,7 +706,7 @@ export class Ws2001AtClient {
     if (!options.useProfiles && !options.allowOverwrite) {
       throw new Error('This firmware cannot keep the WeatherXM keys; update the station to V4.5 or confirm overwriting.');
     }
-    const totalSteps = 8;
+    const totalSteps = 9;
     let step = 1;
 
     if (options.useProfiles) {
@@ -722,6 +738,11 @@ export class Ws2001AtClient {
     const interval = Math.max(1, Math.min(params.intervalMinutes, 1440));
     onProgress?.(`Setting upload interval to ${interval} minutes...`, step++, totalSteps);
     await this.expectOk(`AT+INTERVAL=${interval}`, 'set the upload interval');
+
+    // Before V4.7 this switch also turned on the LoRa Cloud services on FPort 199, so only V4.7+
+    // stations get gnss = true from the page; everything else is switched off.
+    onProgress?.(params.gnss ? 'Enabling GNSS location scans...' : 'GNSS location scans off...', step++, totalSteps);
+    await this.expectOk(`AT+GPSSWITCH=${params.gnss ? 1 : 0}`, 'set the GNSS switch');
 
     onProgress?.('Keeping the WeatherXM 24-byte payload (FPort 99)...', step++, totalSteps);
     await this.setPayloadFormatWeatherXm();
