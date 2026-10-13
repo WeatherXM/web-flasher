@@ -693,6 +693,9 @@ import BleBrowserNotice from '../components/ws1300/BleBrowserNotice.astro';
       addLog((err as Error).message, 'ERROR');
       connectError.textContent = (err as Error).message;
       connectError.classList.remove('hidden');
+      // Release a half-open link so the next attempt starts clean
+      await client?.disconnect().catch(() => {});
+      client = null;
     } finally {
       btnConnect.disabled = false;
       $('btn-connect-label').textContent = 'Connect to WS2001 (H2)';
