@@ -65,6 +65,10 @@ import BleBrowserNotice from '../components/ws1300/BleBrowserNotice.astro';
             </svg>
             <span id="btn-connect-label">Connect to WS2001 (H2)</span>
           </button>
+          <label class="flex items-start gap-2.5 text-xs text-wxm-mist leading-relaxed cursor-pointer select-none">
+            <input id="chk-auto-update" type="checkbox" checked class="w-4 h-4 mt-0.5 rounded border-wxm-cloud/30 bg-wxm-abyss text-wxm-beacon focus:ring-0 cursor-pointer" />
+            <span><strong class="text-white">Update the station firmware automatically</strong> when a newer WeatherXM release is available (recommended). Settings, keys and rain data are kept. During the update you pick the station a second time, when it appears as <span class="font-mono text-wxm-cloud">DfuWX…</span>.</span>
+          </label>
           <p id="connect-error" class="hidden text-xs text-red-300 leading-relaxed" role="alert"></p>
         </div>
 
@@ -148,6 +152,22 @@ import BleBrowserNotice from '../components/ws1300/BleBrowserNotice.astro';
               <span class="text-[10px] uppercase tracking-wider text-wxm-mist block font-semibold">Interval</span>
               <span id="stat-interval" class="font-semibold text-white mt-0.5 block text-[11px]">–</span>
             </div>
+          </div>
+
+          <!-- Firmware update (manual) -->
+          <div id="group-fwupdate" class="p-3 rounded-control bg-wxm-abyss/60 border border-wxm-cloud/15 flex items-center justify-between gap-3">
+            <div class="min-w-0">
+              <span class="text-[10px] uppercase tracking-wider text-wxm-mist block font-semibold">Firmware update</span>
+              <span id="fw-update-text" class="font-semibold text-white block mt-0.5 text-[11px]">Checking for updates...</span>
+            </div>
+            <button
+              id="btn-fw-update"
+              type="button"
+              disabled
+              class="px-3 py-1.5 rounded-control text-xs font-bold text-white bg-wxm-storm/60 border border-wxm-cloud/20 hover:bg-wxm-storm hover:border-wxm-zenith shrink-0 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Update
+            </button>
           </div>
 
           <!-- Disconnect / Reboot notice -->
@@ -325,6 +345,33 @@ import BleBrowserNotice from '../components/ws1300/BleBrowserNotice.astro';
           </div>
         </div>
 
+        <!-- 3b. Firmware update card -->
+        <div id="view-dfu" class="hidden p-6 rounded-card bg-wxm-midnight/90 border-2 border-wxm-zenith/40 backdrop-blur-md shadow-card space-y-4">
+          <div class="flex items-center gap-3">
+            <div id="dfu-spinner" class="w-5 h-5 border-2 border-wxm-zenith border-t-transparent rounded-full animate-spin shrink-0"></div>
+            <div class="min-w-0">
+              <h3 id="dfu-title" class="text-sm font-bold text-white">Updating firmware</h3>
+              <p id="dfu-step" class="text-xs text-wxm-mist leading-relaxed">Preparing...</p>
+            </div>
+          </div>
+          <div class="w-full bg-wxm-abyss rounded-full h-2 overflow-hidden border border-wxm-cloud/10">
+            <div id="dfu-bar" class="bg-wxm-zenith h-full transition-all duration-300 w-0"></div>
+          </div>
+          <p id="dfu-detail" class="text-[11px] text-wxm-mist leading-relaxed">Keep the station powered and this device within a few metres until the update finishes.</p>
+          <div id="dfu-name-hint" class="hidden p-3 rounded-control bg-wxm-abyss/80 border border-wxm-zenith/30 text-[11.5px] text-wxm-cloud leading-relaxed space-y-1">
+            <p class="font-bold text-white">Look for a different name in the Bluetooth list</p>
+            <p>
+              In update mode the station is a separate Bluetooth device called
+              <strong id="dfu-name-hint-value" class="font-mono text-wxm-zenith">DfuWX…</strong>
+              (or <span class="font-mono">DfuTarg</span>), <strong>not</strong> "WeatherXM WS2001 …". Only update-mode devices are listed.
+              It returns to its normal name after the update.
+            </p>
+          </div>
+          <button id="btn-dfu-pick" type="button" class="hidden w-full py-3 px-5 rounded-control text-sm btn-primary-beacon flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-wait">Continue: select the station's update mode</button>
+          <button id="btn-dfu-reconnect" type="button" class="hidden w-full py-3 px-5 rounded-control text-sm btn-primary-beacon flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-wait">Reconnect to the station</button>
+          <button id="btn-dfu-close" type="button" class="hidden w-full py-2.5 rounded-control text-xs font-bold text-white bg-wxm-storm/60 border border-wxm-cloud/20 hover:bg-wxm-storm cursor-pointer">Close</button>
+        </div>
+
         <!-- 4. Success card -->
         <div id="view-success" class="hidden p-6 rounded-card bg-wxm-midnight/90 border-2 border-emerald-500/50 backdrop-blur-md shadow-card space-y-4">
           <div class="flex items-center gap-3">
@@ -497,6 +544,8 @@ import BleBrowserNotice from '../components/ws1300/BleBrowserNotice.astro';
   import { Ws2001AtClient, formatHexWithColons, type Ws2001DeviceConfig } from '../lib/ble/ws2001AtClient';
   import { TTN_PAYLOAD_DECODER, CHIRPSTACK_PAYLOAD_DECODER, CHIRPSTACK_V3_PAYLOAD_DECODER } from '../lib/ble/ws2001Decoder';
   import { trackTelemetry } from '../lib/telemetry';
+  import { enterBootloader, requestBootloaderDevice, SecureDfuTransfer, makeBootloaderName, type Ws2001DfuPackage } from '../lib/ble/ws2001Dfu';
+  import { fetchWs2001Manifest, latestRelease, downloadWs2001Release, isOutdated, type Ws2001Release } from '../lib/ble/ws2001Firmware';
 
   const $ = <T extends HTMLElement = HTMLElement>(id: string): T => {
     const el = document.getElementById(id);
@@ -506,6 +555,12 @@ import BleBrowserNotice from '../components/ws1300/BleBrowserNotice.astro';
 
   let client: Ws2001AtClient | null = null;
   let currentConfig: Ws2001DeviceConfig | null = null;
+
+  // Latest published firmware (public/firmware/ws2001/manifest.json)
+  let latest: Ws2001Release | null = null;
+  const latestReady = fetchWs2001Manifest()
+    .then((m) => { latest = latestRelease(m); })
+    .catch((e) => { latest = null; console.warn('WS2001 firmware list unavailable', e); });
 
   const termLog = $('term-log');
 
@@ -577,11 +632,12 @@ import BleBrowserNotice from '../components/ws1300/BleBrowserNotice.astro';
     const modeEl = $('stat-mode');
     const format = cfg.testModeType === 1 ? 'legacy FPort 3 format' : cfg.testModeType === 0 ? '24-byte frame' : 'format unknown';
     const onCustom = cfg.netProfile ? cfg.netProfile.active === 1 : cfg.testModeType === 1;
+    const join = cfg.lorawanStatus === 'JOINED' ? ' · joined' : cfg.lorawanStatus === 'JOINING' ? ' · joining...' : '';
     if (onCustom) {
-      modeEl.textContent = `Your network (${format})`;
+      modeEl.textContent = `Your network (${format})${join}`;
       modeEl.className = 'font-bold text-emerald-400 inline-block text-[11px]';
     } else if (cfg.netProfile || cfg.testModeType === 0) {
-      modeEl.textContent = `WeatherXM (${format})`;
+      modeEl.textContent = `WeatherXM (${format})${join}`;
       modeEl.className = 'font-bold text-amber-400 inline-block text-[11px]';
     } else {
       modeEl.textContent = 'Unknown';
@@ -596,8 +652,24 @@ import BleBrowserNotice from '../components/ws1300/BleBrowserNotice.astro';
     $('group-switchback').classList.toggle('hidden', !(cfg.netProfile && cfg.netProfile.active === 1 && cfg.netProfile.weatherxmStored));
   }
 
+  function updateFirmwarePanel(cfg: Ws2001DeviceConfig) {
+    const btn = $<HTMLButtonElement>('btn-fw-update');
+    const txt = $('fw-update-text');
+    if (!latest) {
+      txt.textContent = 'Firmware list unavailable';
+      btn.disabled = true;
+      return;
+    }
+    const outdated = isOutdated(cfg.version, latest.version);
+    txt.textContent = outdated ? `${cfg.version} → ${latest.label} available` : `Up to date (${latest.label})`;
+    txt.className = `font-semibold block mt-0.5 text-[11px] ${outdated ? 'text-amber-300' : 'text-emerald-300'}`;
+    btn.textContent = outdated ? `Update to ${latest.label}` : `Reinstall ${latest.label}`;
+    btn.disabled = false;
+  }
+
   function populateDeviceView(cfg: Ws2001DeviceConfig) {
     currentConfig = cfg;
+    updateFirmwarePanel(cfg);
 
     // Populate Device Status Card
     const devLabel = client?.deviceName || 'Station';
@@ -684,11 +756,17 @@ import BleBrowserNotice from '../components/ws1300/BleBrowserNotice.astro';
       addLog('Connection established. Querying station info...');
 
       const cfg = await client.readFullConfig();
+      await latestReady;
       populateDeviceView(cfg);
 
       // Show device view
       $('view-connect').classList.add('hidden');
       $('view-device').classList.remove('hidden');
+
+      if (chkAutoUpdate.checked && latest && isOutdated(cfg.version, latest.version)) {
+        addLog(`Station runs ${cfg.version}; updating to ${latest.label} automatically (option enabled).`, 'INFO');
+        void runFirmwareUpdate('auto');
+      }
     } catch (err) {
       addLog((err as Error).message, 'ERROR');
       connectError.textContent = (err as Error).message;
@@ -954,6 +1032,151 @@ import BleBrowserNotice from '../components/ws1300/BleBrowserNotice.astro';
         },
       });
     }
+  });
+
+  // --- Firmware update (auto on connect, or manual) ---
+  const chkAutoUpdate = $<HTMLInputElement>('chk-auto-update');
+  try {
+    chkAutoUpdate.checked = localStorage.getItem('ws2001-auto-update') !== '0';
+  } catch { /* storage unavailable: keep the default (on) */ }
+  chkAutoUpdate.addEventListener('change', () => {
+    try { localStorage.setItem('ws2001-auto-update', chkAutoUpdate.checked ? '1' : '0'); } catch { /* ignore */ }
+  });
+
+  let dfuName = '';
+  let dfuPackage: Ws2001DfuPackage | null = null;
+  let dfuRelease: Ws2001Release | null = null;
+  let dfuFrom = '';
+  let dfuSerial: string | undefined;
+
+  function setDfu(step: string, percent: number, title = 'Updating firmware') {
+    $('dfu-title').textContent = title;
+    $('dfu-step').textContent = step;
+    $('dfu-bar').style.width = `${Math.max(0, Math.min(100, percent))}%`;
+  }
+  function showDfuButtons(which: Array<'pick' | 'reconnect' | 'close'>) {
+    $('btn-dfu-pick').classList.toggle('hidden', !which.includes('pick'));
+    $('btn-dfu-reconnect').classList.toggle('hidden', !which.includes('reconnect'));
+    $('btn-dfu-close').classList.toggle('hidden', !which.includes('close'));
+    $('dfu-spinner').classList.toggle('hidden', which.length > 0);
+    // Whenever the user has to pick the bootloader, explain that it has a different name
+    $('dfu-name-hint-value').textContent = dfuName || 'DfuWX…';
+    $('dfu-name-hint').classList.toggle('hidden', !which.includes('pick'));
+  }
+  function dfuFailed(err: unknown, canResume: boolean) {
+    const msg = (err as Error).message;
+    addLog(`Firmware update failed: ${msg}`, 'ERROR');
+    setDfu(msg, 0, 'Firmware update failed');
+    $('dfu-detail').textContent = canResume
+      ? 'The station stays in update mode for about 2 minutes and keeps its current firmware. Try again to resume.'
+      : 'The station was not changed.';
+    $('btn-dfu-pick').textContent = 'Try again';
+    showDfuButtons(canResume ? ['pick', 'close'] : ['close']);
+    trackTelemetry({ device_type: 'ws2001', serial_number: dfuSerial, action: 'flash_failed', firmware_target: dfuRelease?.label,
+      firmware_source: dfuFrom, status: 'failed', details: { error: msg } });
+  }
+
+  async function runFirmwareUpdate(trigger: 'auto' | 'manual') {
+    if (!client || !client.gattServer || !latest || !currentConfig) return;
+    dfuRelease = latest;
+    dfuFrom = currentConfig.version;
+    dfuSerial = currentConfig.formattedDevEui || currentConfig.deviceEui;
+    $('view-device').classList.add('hidden');
+    $('view-dfu').classList.remove('hidden');
+    $('dfu-detail').textContent = 'Keep the station powered and this device within a few metres until the update finishes.';
+    showDfuButtons([]);
+    setDfu(`Downloading and verifying ${dfuRelease.label}...`, 1);
+    trackTelemetry({ device_type: 'ws2001', serial_number: dfuSerial, action: 'flash_started', firmware_target: dfuRelease.label,
+      firmware_source: dfuFrom, status: 'in_progress', details: { trigger } });
+    try {
+      dfuPackage = await downloadWs2001Release(dfuRelease);
+      addLog(`${dfuRelease.label} verified: signed for the WS2001 bootloader (${dfuPackage.firmware.length} bytes).`);
+    } catch (e) {
+      dfuFailed(e, false);
+      return;
+    }
+    try {
+      dfuName = makeBootloaderName();
+      setDfu('Restarting the station into update mode...', 3);
+      await enterBootloader(client.gattServer, dfuName, addLog);
+      await new Promise((r) => setTimeout(r, 2500));
+    } catch (e) {
+      dfuFailed(e, false);
+      return;
+    }
+    // Browsers need a click to connect to the bootloader, which is a new Bluetooth device.
+    setDfu(`The station is in update mode. Click Continue and pick "${dfuName}" in the Bluetooth list.`, 5);
+    $('btn-dfu-pick').textContent = `Continue: select "${dfuName}"`;
+    showDfuButtons(['pick']);
+  }
+
+  $('btn-fw-update').addEventListener('click', () => {
+    if (!latest || !currentConfig) return;
+    const outdated = isOutdated(currentConfig.version, latest.version);
+    const question = outdated
+      ? `Update this station from ${currentConfig.version} to ${latest.label}? It takes about a minute; settings and keys are kept.`
+      : `Reinstall ${latest.label} on this station? It takes about a minute; settings and keys are kept.`;
+    if (confirm(question)) void runFirmwareUpdate('manual');
+  });
+
+  $('btn-dfu-pick').addEventListener('click', async () => {
+    if (!dfuPackage || !dfuRelease) return;
+    showDfuButtons([]);
+    let server: BluetoothRemoteGATTServer | null = null;
+    try {
+      const dev = await requestBootloaderDevice(dfuName);
+      setDfu(`Connecting to ${dev.name ?? 'the bootloader'}...`, 6);
+      const onProgress = (p: { stage: string; sent: number; total: number; kbPerSec: number }) => {
+        if (p.stage === 'firmware') {
+          const pct = 8 + (92 * p.sent) / p.total;
+          setDfu(`Installing ${dfuRelease!.label}: ${Math.floor((100 * p.sent) / p.total)}% (${p.kbPerSec.toFixed(1)} KB/s)`, pct);
+        }
+      };
+      // The first connection to a freshly rebooted bootloader often drops right away
+      // ("GATT Server is disconnected"): retry a few times before asking the user.
+      let transfer: SecureDfuTransfer | null = null;
+      for (let attempt = 1; !transfer; attempt++) {
+        try {
+          server = await dev.gatt!.connect();
+          transfer = await SecureDfuTransfer.open(server, addLog, onProgress);
+        } catch (e) {
+          if (attempt >= 3 || (e as Error).name === 'DfuError') throw e;
+          addLog(`Bootloader connection dropped (${(e as Error).message}); retrying ${attempt}/2...`, 'WARN');
+          try { server?.disconnect(); } catch { /* ignore */ }
+          await new Promise((r) => setTimeout(r, 1500));
+        }
+      }
+      const t0 = performance.now();
+      setDfu('Sending the signed update header...', 7);
+      await transfer.sendInit(dfuPackage.init);
+      await transfer.sendFirmware(dfuPackage.firmware);
+      addLog(`Transferred ${(dfuPackage.firmware.length / 1024).toFixed(1)} KB in ${((performance.now() - t0) / 1000).toFixed(0)} s.`);
+      setDfu(`${dfuRelease.label} installed. The station is restarting (about 10 seconds).`, 100, 'Firmware updated');
+      $('dfu-detail').textContent = 'Reconnect to check the new version and continue setting up the station.';
+      showDfuButtons(['reconnect', 'close']);
+      trackTelemetry({ device_type: 'ws2001', serial_number: dfuSerial, action: 'flash_completed', firmware_target: dfuRelease.label,
+        firmware_source: dfuFrom, status: 'success' });
+    } catch (e) {
+      if ((e as Error).name === 'NotFoundError') {
+        // Chooser cancelled: offer the button again
+        setDfu(`Pick "${dfuName}" in the Bluetooth list to continue.`, 5);
+        showDfuButtons(['pick', 'close']);
+        return;
+      }
+      dfuFailed(e, true);
+    } finally {
+      try { server?.disconnect(); } catch { /* ignore */ }
+    }
+  });
+
+  $('btn-dfu-reconnect').addEventListener('click', () => {
+    $('view-dfu').classList.add('hidden');
+    $('view-connect').classList.remove('hidden');
+    btnConnect.click(); // same user gesture opens the chooser
+  });
+  $('btn-dfu-close').addEventListener('click', () => {
+    $('view-dfu').classList.add('hidden');
+    $('view-connect').classList.remove('hidden');
   });
 
   // Switch back to WeatherXM (firmware V4.5+)
