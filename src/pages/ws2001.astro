@@ -27,7 +27,7 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
           The H2 starts on the <strong>WeatherXM network</strong>. You can move it to The Things Network (TTN), ChirpStack or any other LoRaWAN network server.
           It is the same hardware as the SenseCAP S2120, with <strong>WeatherXM's own firmware</strong>: its frame carries more weather data,
           such as <strong>wind gust</strong> and <strong>rain total</strong>, in a compact 24-byte payload.
-          The WeatherXM keys stay on the station (firmware V4.5 and later), so you can switch back at any time.
+          The WeatherXM keys stay on the station, so you can switch back at any time.
         </p>
 
         <p class="text-sm">
@@ -314,7 +314,7 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
                   (<span class="font-mono">0xF3</span> frame on FPort 99) that you can store and resolve later with a GNSS solver.
                   It needs the network time from your server (LoRaWAN DeviceTimeReq, answered by TTN and ChirpStack); if the server never answers,
                   the station turns the scans off until it restarts.
-                  <span id="cfg-gnss-note" class="hidden text-amber-300">Needs firmware V4.7 or later: update the station first.</span>
+                  <span id="cfg-gnss-note" class="hidden text-amber-300">Needs the latest firmware: update the station first.</span>
                 </span>
               </label>
             </div>
