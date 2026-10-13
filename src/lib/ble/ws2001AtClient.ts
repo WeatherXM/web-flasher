@@ -113,6 +113,7 @@ export interface Ws2001DeviceConfig {
   subBand: number | null;
   testModeType: number | null; // payload format: 0 = WeatherXM 24-byte frame (FPort 99), 1 = legacy TLV (FPort 3)
   netProfile: NetProfileState | null; // null = firmware without network profiles (< V4.5)
+  lorawanStatus: string | null; // AT+LW_MODEM_STATUS=?: JOINED, JOINING, MUTE, ...
   rawConfig: string;
   bleName?: string;
   bleId?: string;
@@ -304,6 +305,11 @@ export class Ws2001AtClient {
   private readonly onNotificationBound = (ev: Event) => this.handleNotification(ev);
 
   constructor(private readonly log: Ws2001LogFn = () => {}) {}
+
+  /** The bonded GATT link (used for buttonless DFU entry, which must run on the same encrypted connection). */
+  get gattServer(): BluetoothRemoteGATTServer | null {
+    return this.server?.connected ? this.server : null;
+  }
 
   get isConnected(): boolean {
     return Boolean(this.server?.connected && this.rxChar && this.txChar);
@@ -573,6 +579,14 @@ export class Ws2001AtClient {
       this.log(`Could not read network profile: ${(e as Error).message}`, 'WARN');
     }
 
+    let lorawanStatus: string | null = null;
+    try {
+      const st = await this.sendCommand('AT+LW_MODEM_STATUS=?', 3000);
+      lorawanStatus = (st.match(/(JOINED|JOINING|MUTE|SUSPEND|STREAM|UPLOAD|ALC_SYNC|FILE)/) ?? [null])[0];
+    } catch {
+      // optional
+    }
+
     return {
       deviceModel: parsed.deviceModel || 'Unknown',
       deviceEui: parsed.deviceEui || 'Unknown',
@@ -594,6 +608,7 @@ export class Ws2001AtClient {
       subBand: parsed.subBand ?? null,
       testModeType: testMode,
       netProfile,
+      lorawanStatus,
       rawConfig: configResp,
       bleName: this.deviceName,
       bleId: this.device?.id,

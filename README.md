@@ -158,6 +158,28 @@ runs WeatherXM's own firmware: one signed 24-byte frame on **FPort 99** with win
   `node scripts/sync-ws2001-decoder.mjs <path-to-firmware-repo>/tools/decoders/ws2001_uplink_decoder.js`, which also
   regenerates `src/lib/ble/ws2001UplinkDecoder.ts`. A test keeps the two copies identical.
 
+### WS2001 firmware updates
+
+`/ws2001` keeps stations on the latest WeatherXM firmware, so a customer who connects an older station is brought to
+the current release (V4.5 adds the network profiles that keep the WeatherXM keys).
+
+* **Automatic (on by default):** with "Update the station firmware automatically" ticked (the choice is remembered per
+  browser), connecting a station older than the published `latest` starts the update straight away.
+* **Manual:** the device card shows *Update to Vx.y*, or *Reinstall Vx.y* when the station is already current (the
+  bootloader accepts the same version).
+* **How it works** (`src/lib/ble/ws2001Dfu.ts`, port of `ws2001-firmware/tools/ws2001_dfu.py`): the package is
+  downloaded and checked first (SHA-256 against the manifest, image hash against the init packet, ECDSA P-256
+  signature against the WS2001 bootloader public key, HW 52 / S140 7.2.0). Then the station is sent into its
+  bootloader over the bonded link (buttonless DFU) under a unique name `DfuWX……`. Browsers need a click to connect to
+  that new device, so the page asks the user to **pick `DfuWX……` in the Bluetooth list** (not "WeatherXM WS2001 …").
+  The Secure DFU transfer checks a CRC32 per 4 KB object, retries, and resumes if the link drops. The bootloader waits
+  about 2 minutes in update mode and keeps the old firmware until the new one validates.
+* **Publishing a release:** build and sign it in `ws2001-firmware` (`scripts/build_ble_dfu.sh --application-version
+  <major*10+minor>`), then
+  `npm run manifest:ws2001 -- <path>/dist/ws2001-application-v<NN>-ble-dfu.zip --commit <sha>`. This verifies the
+  package and writes `public/firmware/ws2001/ws2001-application-v<x.y>-ble-dfu.zip` plus `manifest.json`; the
+  newest `fw_version` becomes `latest`.
+
 ## Browser & Device Compatibility
 
 | Browser | OS | WG1200 (Web Serial) | WS1300 (Web Bluetooth) |
