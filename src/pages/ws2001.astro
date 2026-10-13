@@ -16,13 +16,17 @@ import BleBrowserNotice from '../components/ws1300/BleBrowserNotice.astro';
       <div class="space-y-4">
         <span class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-wxm-storm/40 border border-wxm-cloud/20 text-xs font-semibold text-white">
           <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
-          Open LoRaWAN Mode (SenseCAP 8-in-1)
+          Your own LoRaWAN network · TTN · ChirpStack
         </span>
         <h1 class="text-3xl sm:text-4xl font-extrabold tracking-tight leading-tight text-balance">
           Configure WS2001 (H2) for Any LoRaWAN Network
         </h1>
         <p class="text-sm sm:text-base text-wxm-mist leading-relaxed">
-          The H2 initially starts in <strong>WeatherXM Network mode</strong>. You can switch it to open/OEM firmware to connect directly to The Things Network (TTN), ChirpStack, or your own LoRaWAN network. Once switched, it operates as a standard <a href="https://www.seeedstudio.com/sensecap-s2120-lorawan-8-in-1-weather-sensor-p-5436.html" target="_blank" rel="noopener noreferrer" class="text-emerald-400 underline hover:text-emerald-300">Seeed Studio SenseCAP S2120</a>, transmitting 8-in-1 weather data (temperature, humidity, barometric pressure, wind speed, wind direction, rain intensity, light intensity, and UV index) using ready-made decode profiles.
+          The H2 starts on the <strong>WeatherXM network</strong>. You can point it at The Things Network (TTN), ChirpStack or any other LoRaWAN network server.
+          The hardware is the same as Seeed Studio's SenseCAP S2120 8-in-1 station, but it runs <strong>WeatherXM's own firmware</strong>, which does more:
+          it samples every 12 seconds and sends one compact 24-byte frame with temperature, humidity, pressure, wind speed and direction,
+          <strong>wind gust</strong>, rain rate, <strong>rain total</strong>, light and UV, signed by the station's secure element.
+          On firmware V4.5 and later the WeatherXM keys are kept, so you can switch back at any time.
         </p>
 
         <p class="text-sm">
@@ -121,7 +125,7 @@ import BleBrowserNotice from '../components/ws1300/BleBrowserNotice.astro';
           <!-- Device stats grid -->
           <div class="grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-xs">
             <div class="p-2.5 rounded-control bg-wxm-abyss/70 border border-wxm-cloud/10 col-span-2 sm:col-span-2">
-              <span class="text-[10px] uppercase tracking-wider text-wxm-mist block font-semibold">Current Mode</span>
+              <span class="text-[10px] uppercase tracking-wider text-wxm-mist block font-semibold">Network</span>
               <span id="stat-mode" class="font-semibold text-white mt-0.5 block truncate text-[11px]">–</span>
             </div>
 
@@ -160,12 +164,25 @@ import BleBrowserNotice from '../components/ws1300/BleBrowserNotice.astro';
             </ul>
           </div>
 
+          <!-- Switch back to WeatherXM (firmware V4.5+, custom profile active) -->
+          <div id="group-switchback" class="hidden p-3.5 rounded-control bg-emerald-500/10 border border-emerald-500/30 text-xs space-y-2 leading-relaxed">
+            <p class="font-bold text-emerald-300">This station is on your own LoRaWAN network.</p>
+            <p class="text-emerald-200/80">Its WeatherXM keys are stored on the station. Switch back to rejoin the WeatherXM network (3-minute uplinks); your network keys stay stored for later.</p>
+            <button
+              id="btn-switchback"
+              type="button"
+              class="w-full py-2.5 rounded-control text-xs font-bold text-white bg-emerald-700/70 border border-emerald-500/40 hover:bg-emerald-600 cursor-pointer disabled:opacity-50 disabled:cursor-wait"
+            >
+              Switch back to WeatherXM
+            </button>
+          </div>
+
           <!-- Configuration Form -->
           <div class="border-t border-wxm-cloud/15 pt-5 space-y-4">
             <div>
               <h3 class="text-sm font-bold text-white">LoRaWAN Network Configuration</h3>
               <p class="text-xs text-wxm-mist mt-1">
-                LoRaWAN 1.0.3 · OTAA · Class A · FPort 3
+                LoRaWAN 1.0.4 · OTAA · Class A · WeatherXM 24-byte frame on FPort 99
               </p>
             </div>
 
@@ -250,11 +267,15 @@ import BleBrowserNotice from '../components/ws1300/BleBrowserNotice.astro';
                   id="cfg-interval"
                   class="w-full px-3 py-2 rounded-control bg-wxm-abyss border border-wxm-cloud/20 text-white text-xs font-semibold focus:outline-none focus:border-wxm-zenith"
                 >
-                  <option value="3" selected>3 minutes (recommended)</option>
-                  <option value="5">5 minutes</option>
-                  <option value="10">10 minutes</option>
+                  <option value="5" selected>5 minutes (recommended, within TTN fair use)</option>
+                  <option value="10">10 minutes (weak signal, SF9 or slower on TTN)</option>
                   <option value="15">15 minutes (battery saving)</option>
+                  <option value="30">30 minutes</option>
+                  <option value="3">3 minutes (private ChirpStack only)</option>
                 </select>
+                <p class="text-[11px] text-wxm-mist mt-1 leading-relaxed">
+                  TTN allows 30 s of airtime per device per day. A 24-byte uplink takes about 82 ms at SF7, so 3-minute uplinks exceed it; use 5 minutes or more.
+                </p>
               </div>
             </div>
 
@@ -267,8 +288,9 @@ import BleBrowserNotice from '../components/ws1300/BleBrowserNotice.astro';
                 <span>Warning</span>
               </div>
               <ul class="list-disc list-inside text-[11px] text-amber-300 space-y-1.5 ml-0.5">
-                <li>Switching to Open LoRaWAN mode removes the station from the WeatherXM network. It will no longer earn $WXM token rewards.</li>
-                <li>Switching back to WeatherXM mode may affect proofs, QoD, and $WXM token rewards.</li>
+                <li>While it is on your network, the station is off the WeatherXM network and does not earn $WXM token rewards.</li>
+                <li id="warn-keys">Checking whether this firmware can keep the WeatherXM keys...</li>
+                <li>Switching back to WeatherXM may affect proofs, QoD, and $WXM token rewards.</li>
               </ul>
             </div>
 
@@ -284,7 +306,7 @@ import BleBrowserNotice from '../components/ws1300/BleBrowserNotice.astro';
               <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
               </svg>
-              <span>Apply & Switch to Open LoRaWAN</span>
+              <span>Apply &amp; Connect to My Network</span>
             </button>
           </div>
         </div>
@@ -310,15 +332,15 @@ import BleBrowserNotice from '../components/ws1300/BleBrowserNotice.astro';
               <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" /></svg>
             </div>
             <div>
-              <h3 class="text-sm font-bold text-white">Open LoRaWAN Mode Configured!</h3>
-              <p class="text-xs text-emerald-300">Settings written to Flash. The station has rebooted to join your network.</p>
+              <h3 id="success-title" class="text-sm font-bold text-white">Connected to your network!</h3>
+              <p id="success-sub" class="text-xs text-emerald-300">Settings written to flash. The station has rebooted to join your network.</p>
             </div>
           </div>
           <div class="p-3.5 rounded-control bg-wxm-abyss/80 border border-wxm-cloud/10 text-xs text-wxm-mist space-y-2">
             <p><strong>Next steps:</strong></p>
-            <ul class="list-disc pl-4 space-y-1">
-              <li>Register the <strong>DevEUI</strong> and <strong>AppKey</strong> in your ChirpStack or TTN application.</li>
-              <li>Set the payload decoder to the SenseCAP 8-in-1 script (FPort 3).</li>
+            <ul id="success-steps" class="list-disc pl-4 space-y-1">
+              <li>Register the <strong>DevEUI</strong>, <strong>JoinEUI</strong> and <strong>AppKey</strong> in your TTN or ChirpStack application (LoRaWAN 1.0.4, OTAA, Class A).</li>
+              <li>Install the <strong>WeatherXM decoder</strong> below: one script for TTN v3, ChirpStack v4 and v3 that decodes the 24-byte frame on FPort 99, including wind gust and rain total.</li>
               <li>Wait for the device's first Join-Request (typically within 30-60 seconds after boot).</li>
             </ul>
           </div>
@@ -333,7 +355,11 @@ import BleBrowserNotice from '../components/ws1300/BleBrowserNotice.astro';
 
         <!-- Payload Decoders -->
         <div class="rounded-card border border-wxm-cloud/20 bg-wxm-abyss/60 p-4 space-y-2.5">
-          <h3 class="text-xs font-bold text-white uppercase tracking-wider">Payload Decoders</h3>
+          <h3 class="text-xs font-bold text-white uppercase tracking-wider">Payload Decoder</h3>
+          <p class="text-[11px] text-wxm-mist leading-relaxed">
+            One script decodes the WeatherXM 24-byte frame (FPort 99) and the legacy FPort 3 format. Paste it into TTN (Payload formatters &gt; Custom JavaScript) or ChirpStack (Device profile &gt; Codec), or
+            <a href="/decoders/ws2001_uplink_decoder.js" download class="text-wxm-zenith underline hover:text-white">download ws2001_uplink_decoder.js</a>.
+          </p>
           <div class="flex flex-wrap gap-2">
             <button
               id="btn-copy-ttn-decoder"
@@ -421,19 +447,20 @@ import BleBrowserNotice from '../components/ws1300/BleBrowserNotice.astro';
         </div>
         <div>
           <h3 class="text-base font-bold text-white">Confirm Network Migration</h3>
-          <p class="text-xs text-amber-400 font-medium">WeatherXM network removal</p>
+          <p class="text-xs text-amber-400 font-medium">Leaving the WeatherXM network</p>
         </div>
       </div>
 
       <div class="space-y-3 py-3 border-y border-wxm-cloud/15 text-xs text-wxm-cloud">
         <p class="text-[12px] text-white leading-relaxed">
-          You are about to switch <strong id="modal-confirm-deveui" class="font-mono text-wxm-zenith"></strong> from WeatherXM mode to standard Open LoRaWAN mode.
+          You are about to move <strong id="modal-confirm-deveui" class="font-mono text-wxm-zenith"></strong> from the WeatherXM network to your own LoRaWAN network server.
         </p>
         <div class="p-3 rounded-control bg-wxm-abyss/80 border border-amber-500/25 text-amber-200/90 text-[11.5px] space-y-1.5">
           <p class="font-bold text-amber-400">Please acknowledge before proceeding:</p>
           <ul class="list-disc list-inside space-y-1 text-amber-200/80">
-            <li>Switching to Open LoRaWAN mode removes the station from the WeatherXM network. It will no longer earn $WXM token rewards.</li>
-            <li>Switching back to WeatherXM mode may affect proofs, QoD, and $WXM token rewards.</li>
+            <li>While it is on your network, the station is off the WeatherXM network and does not earn $WXM token rewards.</li>
+            <li id="modal-warn-keys">Checking whether this firmware can keep the WeatherXM keys...</li>
+            <li>Switching back to WeatherXM may affect proofs, QoD, and $WXM token rewards.</li>
           </ul>
         </div>
       </div>
@@ -546,18 +573,27 @@ import BleBrowserNotice from '../components/ws1300/BleBrowserNotice.astro';
 
 
 
-  function updateModeDisplay(modeType: number | null) {
+  function updateModeDisplay(cfg: Ws2001DeviceConfig) {
     const modeEl = $('stat-mode');
-    if (modeType === 1) {
-      modeEl.textContent = 'Open LoRaWAN (1)';
+    const format = cfg.testModeType === 1 ? 'legacy FPort 3 format' : cfg.testModeType === 0 ? '24-byte frame' : 'format unknown';
+    const onCustom = cfg.netProfile ? cfg.netProfile.active === 1 : cfg.testModeType === 1;
+    if (onCustom) {
+      modeEl.textContent = `Your network (${format})`;
       modeEl.className = 'font-bold text-emerald-400 inline-block text-[11px]';
-    } else if (modeType === 0) {
-      modeEl.textContent = 'WeatherXM (0)';
+    } else if (cfg.netProfile || cfg.testModeType === 0) {
+      modeEl.textContent = `WeatherXM (${format})`;
       modeEl.className = 'font-bold text-amber-400 inline-block text-[11px]';
     } else {
       modeEl.textContent = 'Unknown';
       modeEl.className = 'font-bold text-zinc-400 inline-block text-[11px]';
     }
+
+    const keysText = cfg.netProfile
+      ? 'This firmware keeps the WeatherXM keys in a separate profile: you can switch back at any time.'
+      : 'This firmware (older than V4.5) has a single key set: your network keys REPLACE the WeatherXM keys. Update the station to V4.5 first to keep them.';
+    $('warn-keys').textContent = keysText;
+    $('modal-warn-keys').textContent = keysText;
+    $('group-switchback').classList.toggle('hidden', !(cfg.netProfile && cfg.netProfile.active === 1 && cfg.netProfile.weatherxmStored));
   }
 
   function populateDeviceView(cfg: Ws2001DeviceConfig) {
@@ -572,11 +608,11 @@ import BleBrowserNotice from '../components/ws1300/BleBrowserNotice.astro';
     $('stat-bat').textContent = cfg.battery;
     $('stat-interval').textContent = cfg.uploadInterval !== null ? `${cfg.uploadInterval} min` : 'Unknown';
 
-    updateModeDisplay(cfg.testModeType);
+    updateModeDisplay(cfg);
 
     trackTelemetry({
       device_type: 'ws2001',
-      serial_number: cfg.formattedDevEui || cfg.devEui,
+      serial_number: cfg.formattedDevEui || cfg.deviceEui,
       action: 'connected',
       firmware_source: cfg.version,
       status: 'success',
@@ -595,6 +631,7 @@ import BleBrowserNotice from '../components/ws1300/BleBrowserNotice.astro';
         battery: cfg.battery,
         intervalMinutes: cfg.uploadInterval,
         mode: cfg.testModeType === 0 ? 'weatherxm' : cfg.testModeType === 1 ? 'open_lorawan' : 'unknown',
+        netProfile: cfg.netProfile ? cfg.netProfile.active : null,
         band: cfg.frequencyName,
       },
     });
@@ -608,7 +645,9 @@ import BleBrowserNotice from '../components/ws1300/BleBrowserNotice.astro';
     }
     updateSubbandVisibility();
 
-    if (cfg.uploadInterval !== null) {
+    // Keep the TTN-friendly default unless the station is already on the customer's network
+    const alreadyCustom = cfg.netProfile ? cfg.netProfile.active === 1 : cfg.testModeType === 1;
+    if (cfg.uploadInterval !== null && alreadyCustom) {
       const intervalSelect = $<HTMLSelectElement>('cfg-interval');
       const val = String(cfg.uploadInterval);
       const hasOption = Array.from(intervalSelect.options).some((opt) => opt.value === val);
@@ -823,7 +862,7 @@ import BleBrowserNotice from '../components/ws1300/BleBrowserNotice.astro';
     const params = pendingMigrationParams;
     pendingMigrationParams = null;
 
-    const serialNum = currentConfig?.formattedDevEui || currentConfig?.devEui;
+    const serialNum = currentConfig?.formattedDevEui || currentConfig?.deviceEui;
 
     trackTelemetry({
       device_type: 'ws2001',
@@ -854,7 +893,12 @@ import BleBrowserNotice from '../components/ws1300/BleBrowserNotice.astro';
           progressBar.style.width = `${percent}%`;
           addLog(`[${current}/${total}] ${stepDesc}`, 'RESP');
         },
+        // V4.5+: keys go into the custom profile. Older firmware: the user confirmed the overwrite in the modal.
+        { useProfiles: Boolean(currentConfig?.netProfile), allowOverwrite: true },
       );
+      $('success-title').textContent = 'Connected to your network!';
+      $('success-sub').textContent = 'Settings written to flash. The station has rebooted to join your network.';
+      $('success-steps').classList.remove('hidden');
 
       progressBar.style.width = '100%';
       $('view-progress').classList.add('hidden');
@@ -878,7 +922,7 @@ import BleBrowserNotice from '../components/ws1300/BleBrowserNotice.astro';
           band: params.band,
           subBand: params.subBand,
           intervalMinutes: params.intervalMinutes,
-          appEui: params.appEui,
+          appEui: params.joinEui,
         },
       });
     } catch (err) {
@@ -905,6 +949,38 @@ import BleBrowserNotice from '../components/ws1300/BleBrowserNotice.astro';
           error: (err as Error).message,
         },
       });
+    }
+  });
+
+  // Switch back to WeatherXM (firmware V4.5+)
+  $('btn-switchback').addEventListener('click', async () => {
+    if (!client || !client.isConnected || !currentConfig?.netProfile) return;
+    if (!confirm('Switch this station back to the WeatherXM network? Your network keys stay stored on the station.')) return;
+    const btn = $<HTMLButtonElement>('btn-switchback');
+    btn.disabled = true;
+    $('view-device').classList.add('hidden');
+    $('view-progress').classList.remove('hidden');
+    const serialNum = currentConfig.formattedDevEui || currentConfig.deviceEui;
+    try {
+      await client.switchBackToWeatherXm((stepDesc, current, total) => {
+        $('progress-step-text').textContent = stepDesc;
+        $('progress-bar').style.width = `${Math.round((current / total) * 100)}%`;
+        addLog(`[${current}/${total}] ${stepDesc}`, 'RESP');
+      });
+      $('view-progress').classList.add('hidden');
+      $('success-title').textContent = 'Back on the WeatherXM network!';
+      $('success-sub').textContent = 'The station rebooted with its WeatherXM keys and will rejoin the WeatherXM network.';
+      $('success-steps').classList.add('hidden');
+      $('view-success').classList.remove('hidden');
+      trackTelemetry({ device_type: 'ws2001', serial_number: serialNum, action: 'flash_completed', firmware_target: 'weatherxm', status: 'success', details: { model: currentConfig.deviceModel } });
+    } catch (err) {
+      addLog(`Switch back failed: ${(err as Error).message}`, 'ERROR');
+      $('view-progress').classList.add('hidden');
+      $('view-device').classList.remove('hidden');
+      formError.textContent = (err as Error).message;
+      formError.classList.remove('hidden');
+    } finally {
+      btn.disabled = false;
     }
   });
 
