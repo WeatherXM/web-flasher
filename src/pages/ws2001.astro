@@ -27,7 +27,7 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
           The H2 starts on the <strong>WeatherXM network</strong>. You can move it to The Things Network (TTN), ChirpStack or any other LoRaWAN network server.
           It is the same hardware as the SenseCAP S2120, with <strong>WeatherXM's own firmware</strong>: its frame carries more weather data,
           such as <strong>wind gust</strong> and <strong>rain total</strong>, in a compact 24-byte payload.
-          The WeatherXM keys stay on the station, so you can switch back at any time.
+          The station keeps its WeatherXM settings, so it can potentially return to the WeatherXM network later.
         </p>
 
         <p class="text-sm">
@@ -195,7 +195,7 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
           <!-- Switch back to WeatherXM (firmware V4.5+, custom profile active) -->
           <div id="group-switchback" class="hidden p-3.5 rounded-control bg-emerald-500/10 border border-emerald-500/30 text-xs space-y-2 leading-relaxed">
             <p class="font-bold text-emerald-300">This station is on your own LoRaWAN network.</p>
-            <p class="text-emerald-200/80">Its WeatherXM keys are stored on the station. Switch back to rejoin the WeatherXM network (3-minute uplinks); your network keys stay stored for later.</p>
+            <p class="text-emerald-200/80">Its WeatherXM settings are stored on the station, so it can potentially return to the WeatherXM network. If it does not rejoin, contact WeatherXM support.</p>
             <button
               id="btn-switchback"
               type="button"
@@ -330,7 +330,7 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
               <ul class="list-disc list-inside text-[11px] text-amber-300 space-y-1.5 ml-0.5">
                 <li>While it is on your network, the station is off the WeatherXM network and does not earn $WXM token rewards.</li>
                 <li id="warn-keys">Checking whether this firmware can keep the WeatherXM keys...</li>
-                <li>Switching back to WeatherXM may affect proofs, QoD, and $WXM token rewards.</li>
+                <li>Its data does not appear in the WeatherXM app. The station can potentially return to the WeatherXM network later; contact WeatherXM support if needed.</li>
               </ul>
             </div>
 
@@ -556,7 +556,7 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
           <ul class="list-disc list-inside space-y-1 text-amber-200/80">
             <li>While it is on your network, the station is off the WeatherXM network and does not earn $WXM token rewards.</li>
             <li id="modal-warn-keys">Checking whether this firmware can keep the WeatherXM keys...</li>
-            <li>Switching back to WeatherXM may affect proofs, QoD, and $WXM token rewards.</li>
+            <li>Its data does not appear in the WeatherXM app. The station can potentially return to the WeatherXM network later; contact WeatherXM support if needed.</li>
           </ul>
         </div>
       </div>
@@ -701,8 +701,8 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
     }
 
     const keysText = cfg.netProfile
-      ? 'This firmware keeps the WeatherXM keys in a separate profile: you can switch back at any time.'
-      : 'This firmware (older than V4.5) has a single key set: your network keys REPLACE the WeatherXM keys. Update the station to V4.5 first to keep them.';
+      ? 'Your network settings are stored as a separate profile; the WeatherXM settings on the station are not overwritten.'
+      : 'This firmware is too old for your own network: update the station to the latest firmware first (Update button above).';
     $('warn-keys').textContent = keysText;
     $('modal-warn-keys').textContent = keysText;
     $('group-switchback').classList.toggle('hidden', !(cfg.netProfile && cfg.netProfile.active === 1 && cfg.netProfile.weatherxmStored));
@@ -1019,6 +1019,12 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
 
     formError.classList.add('hidden');
 
+    if (!currentConfig?.netProfile) {
+      formError.textContent = 'This station runs firmware that is too old for your own network. Update it to the latest firmware first (Update button above), then apply your settings.';
+      formError.classList.remove('hidden');
+      return;
+    }
+
     const band = parseInt(bandSelect.value, 10);
     const subBand = parseInt($<HTMLSelectElement>('cfg-subband').value, 10);
     const joinEuiRaw = $<HTMLInputElement>('cfg-joineui').value.trim();
@@ -1114,8 +1120,8 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
           progressBar.style.width = `${percent}%`;
           addLog(`[${current}/${total}] ${stepDesc}`, 'RESP');
         },
-        // V4.5+: keys go into the custom profile. Older firmware: the user confirmed the overwrite in the modal.
-        { useProfiles: Boolean(currentConfig?.netProfile), allowOverwrite: true },
+        // V4.5+ only (older firmware is blocked above): the keys go into the custom profile
+        { useProfiles: true, allowOverwrite: false },
       );
       $('success-title').textContent = 'Connected to your network!';
       $('success-sub').textContent = 'Settings written to flash. The station has rebooted to join your network.';
@@ -1310,7 +1316,7 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
   // Switch back to WeatherXM (firmware V4.5+)
   $('btn-switchback').addEventListener('click', async () => {
     if (!client || !client.isConnected || !currentConfig?.netProfile) return;
-    if (!confirm('Switch this station back to the WeatherXM network? Your network keys stay stored on the station.')) return;
+    if (!confirm('Switch this station back to its WeatherXM network settings? Your network settings stay stored on the station. If it does not rejoin the WeatherXM network, contact WeatherXM support.')) return;
     const btn = $<HTMLButtonElement>('btn-switchback');
     btn.disabled = true;
     $('view-device').classList.add('hidden');
@@ -1327,7 +1333,7 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
       });
       $('view-progress').classList.add('hidden');
       $('success-title').textContent = 'Back on the WeatherXM network!';
-      $('success-sub').textContent = 'The station rebooted with its WeatherXM keys and will rejoin the WeatherXM network.';
+      $('success-sub').textContent = 'The station restarted with its WeatherXM network settings. If it does not rejoin the WeatherXM network, contact WeatherXM support.';
       $('success-steps').classList.add('hidden');
       $('btn-ttn-export-success').classList.add('hidden');
       $('view-success').classList.remove('hidden');
