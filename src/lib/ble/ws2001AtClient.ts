@@ -1,6 +1,6 @@
 /**
  * Web Bluetooth AT Command client for WeatherXM WS2001 weather stations.
- * Communicates over the SenseCAP / ISSC Transparent UART or Nordic UART Service (NUS).
+ * Communicates over the station's ISSC-style Transparent UART service (or Nordic UART Service (NUS)).
  */
 
 // SenseCAP custom UART UUIDs (found in ws2001 firmware app_ble_nus.c with BLE_UUID_NUS_BASE 0x5354)
@@ -111,13 +111,37 @@ export interface Ws2001DeviceConfig {
   frequencyBand: number | null;
   frequencyName: string;
   subBand: number | null;
-  testModeType: number | null; // 0 = WeatherXM, 1 = Open LoRaWAN, null = unknown/unconfirmed
+  testModeType: number | null; // payload format: 0 = WeatherXM 24-byte frame (FPort 99), 1 = legacy TLV (FPort 3)
+  netProfile: NetProfileState | null; // null = firmware without network profiles (< V4.5)
   rawConfig: string;
   bleName?: string;
   bleId?: string;
 }
 
 export type H2DeviceConfig = Ws2001DeviceConfig;
+
+/** AT+NETPROFILE=? (firmware V4.5+): profile 0 = WeatherXM keys, profile 1 = customer network keys. */
+export interface NetProfileState {
+  active: number;
+  weatherxmStored: boolean;
+  customStored: boolean;
+}
+
+export const NET_PROFILE_WEATHERXM = 0;
+export const NET_PROFILE_CUSTOM = 1;
+export const DEFAULT_UPLOAD_INTERVAL_MIN = 5; // keeps a 24-byte SF7 uplink within TTN's 30 s/day fair use
+export const WEATHERXM_UPLOAD_INTERVAL_MIN = 3; // interval used on the WeatherXM (Helium) network
+
+/** Parse `{active: 1, weatherxm: 'stored', custom: 'empty'}`; null if the command is unsupported. */
+export function parseNetProfile(raw: string): NetProfileState | null {
+  const m = raw.match(/active\s*:\s*(\d)/i);
+  if (!m || /AT_ERROR|AT_PARAM_ERROR/.test(raw)) return null;
+  return {
+    active: parseInt(m[1], 10),
+    weatherxmStored: /weatherxm\s*:\s*'?stored/i.test(raw),
+    customStored: /custom\s*:\s*'?stored/i.test(raw),
+  };
+}
 
 export interface ConfigureOpenLoRaWanParams {
   band: number;
@@ -511,6 +535,17 @@ export class Ws2001AtClient {
       }
     }
 
+    let netProfile: NetProfileState | null = null;
+    try {
+      this.log('Reading network profile (AT+NETPROFILE=?)...', 'INFO');
+      netProfile = parseNetProfile(await this.sendCommand('AT+NETPROFILE=?', 3000));
+      if (!netProfile) {
+        this.log('Firmware has no network profiles (< V4.5): switching would overwrite the WeatherXM keys.', 'WARN');
+      }
+    } catch (e) {
+      this.log(`Could not read network profile: ${(e as Error).message}`, 'WARN');
+    }
+
     return {
       deviceModel: parsed.deviceModel || 'Unknown',
       deviceEui: parsed.deviceEui || 'Unknown',
@@ -531,105 +566,116 @@ export class Ws2001AtClient {
       frequencyName: parsed.frequencyName ?? 'Unknown',
       subBand: parsed.subBand ?? null,
       testModeType: testMode,
+      netProfile,
       rawConfig: configResp,
       bleName: this.deviceName,
       bleId: this.device?.id,
     };
   }
 
+  private async expectOk(cmd: string, what: string, timeoutMs?: number): Promise<string> {
+    const resp = await this.sendCommand(cmd, timeoutMs);
+    if (resp.includes('ERROR') || !resp.includes('OK')) {
+      throw new Error(`Failed to ${what}: ${resp.trim()}`);
+    }
+    return resp;
+  }
+
+  private async setPayloadFormatWeatherXm(): Promise<void> {
+    // WeatherXM 24-byte frame on FPort 99: gust, rain total, signed frames (1 Helium DC per uplink)
+    await this.expectOk('AT+TESTMODE_TYPE=0', 'select the WeatherXM payload format');
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    const verify = await this.sendCommand('AT+TESTMODE_TYPE=?');
+    const m = verify.match(/(\d+)/);
+    if (!m || m[1] !== '0') {
+      throw new Error(`Station did not keep the WeatherXM payload format (status: ${verify.trim()})`);
+    }
+  }
+
+  private async rebootToJoin(): Promise<void> {
+    // Allow Nordic FDS flash operations to finalize before rebooting
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    this.log('Rebooting station to apply settings and send a LoRaWAN Join-Request (ATZ)...', 'INFO');
+    try {
+      await this.sendCommand('ATZ', 2000);
+    } catch {
+      // Station reboots immediately and drops BLE, which is expected
+    }
+  }
+
   /**
-   * Execute sequence to configure Open LoRaWAN parameters.
+   * Point the station at the customer's network server.
+   * Firmware V4.5+: keys go into network profile 1; the WeatherXM keys (profile 0) are kept.
+   * Older firmware: the single key set is overwritten (allowOverwrite must be true).
+   * The payload stays the WeatherXM 24-byte frame on FPort 99.
    */
   async configureOpenLoRaWan(
     params: ConfigureOpenLoRaWanParams,
     onProgress?: (step: string, current: number, total: number) => void,
+    options: { useProfiles: boolean; allowOverwrite?: boolean } = { useProfiles: true },
   ): Promise<void> {
-    const totalSteps = 7;
+    if (!options.useProfiles && !options.allowOverwrite) {
+      throw new Error('This firmware cannot keep the WeatherXM keys; update the station to V4.5 or confirm overwriting.');
+    }
+    const totalSteps = 8;
     let step = 1;
 
-    // Step 1: Set Frequency Band
-    onProgress?.(`Setting frequency band to ${REGION_NAMES[params.band] || params.band}...`, step++, totalSteps);
-    const bandResp = await this.sendCommand(`AT+BAND=${params.band}`);
-    if (bandResp.includes('ERROR')) {
-      throw new Error(`Failed to set frequency band: ${bandResp}`);
-    }
-
-    // Step 2: Set SubBand / Channel Group if applicable (e.g. US915 / AU915)
-    if (params.band === 8 || params.band === 1) {
-      const sub = params.subBand ?? 1; // default to FSB 2 (ChannelGroup = 1)
-      onProgress?.(`Setting sub-band / channel group to ${sub}...`, step++, totalSteps);
-      const chanResp = await this.sendCommand(`AT+CHANNEL=${sub}`);
-      if (chanResp.includes('ERROR')) {
-        throw new Error(`Failed to set channel subband: ${chanResp}`);
-      }
+    if (options.useProfiles) {
+      onProgress?.('Selecting the custom network profile (WeatherXM keys are kept)...', step++, totalSteps);
+      await this.expectOk(`AT+NETPROFILE=${NET_PROFILE_CUSTOM}`, 'select the custom network profile');
     } else {
       step++;
     }
 
-    // Step 3: Set JoinEUI / AppEUI
+    onProgress?.(`Setting frequency band to ${REGION_NAMES[params.band] || params.band}...`, step++, totalSteps);
+    await this.expectOk(`AT+BAND=${params.band}`, 'set the frequency band');
+
+    if (params.band === 8 || params.band === 1) {
+      const sub = params.subBand ?? 1; // FSB 2 (ChannelGroup = 1)
+      onProgress?.(`Setting sub-band / channel group to ${sub}...`, step++, totalSteps);
+      await this.expectOk(`AT+CHANNEL=${sub}`, 'set the channel sub-band');
+    } else {
+      step++;
+    }
+
     const formattedJoinEui = formatHexWithColons(params.joinEui, 8);
     onProgress?.(`Setting JoinEUI (${formattedJoinEui})...`, step++, totalSteps);
-    const joinResp = await this.sendCommand(`AT+APPEUI=${formattedJoinEui}`);
-    if (joinResp.includes('ERROR')) {
-      throw new Error(`Failed to set JoinEUI: ${joinResp}`);
-    }
+    await this.expectOk(`AT+APPEUI=${formattedJoinEui}`, 'set the JoinEUI');
 
-    // Step 4: Set AppKey
     const formattedAppKey = formatHexWithColons(params.appKey, 16);
-    onProgress?.(`Setting AppKey (${formattedAppKey})...`, step++, totalSteps);
-    const keyResp = await this.sendCommand(`AT+APPKEY=${formattedAppKey}`);
-    if (keyResp.includes('ERROR')) {
-      throw new Error(`Failed to set AppKey: ${keyResp}`);
-    }
+    onProgress?.('Setting AppKey...', step++, totalSteps);
+    await this.expectOk(`AT+APPKEY=${formattedAppKey}`, 'set the AppKey');
 
-    // Step 5: Set Upload Interval
     const interval = Math.max(1, Math.min(params.intervalMinutes, 1440));
     onProgress?.(`Setting upload interval to ${interval} minutes...`, step++, totalSteps);
-    const intResp = await this.sendCommand(`AT+INTERVAL=${interval}`);
-    if (intResp.includes('ERROR')) {
-      throw new Error(`Failed to set upload interval: ${intResp}`);
-    }
+    await this.expectOk(`AT+INTERVAL=${interval}`, 'set the upload interval');
 
-    // Step 6: Enable Open LoRaWAN Mode (TestMode 1 -> discrete SenseCAP 8-in-1 frames on Port 3)
-    onProgress?.('Enabling Open LoRaWAN mode (AT+TESTMODE_TYPE=1)...', step++, totalSteps);
-    const modeResp = await this.sendCommand('AT+TESTMODE_TYPE=1');
-    if (modeResp.includes('ERROR')) {
-      throw new Error(`Failed to set testmode type: ${modeResp}`);
-    }
+    onProgress?.('Keeping the WeatherXM 24-byte payload (FPort 99)...', step++, totalSteps);
+    await this.setPayloadFormatWeatherXm();
 
-    // Step 7: Verify Open LoRaWAN mode persisted to flash & finalize
-    onProgress?.('Verifying Open LoRaWAN mode in flash...', step, totalSteps);
-    await new Promise((resolve) => setTimeout(resolve, 400));
-    let verifyResp = await this.sendCommand('AT+TESTMODE_TYPE=?');
-    const checkMode1 = (resp: string) => {
-      const m = resp.match(/(\d+)/);
-      return m !== null && m[1] === '1' && resp.includes('OK');
-    };
+    onProgress?.('Committing settings and rebooting...', step, totalSteps);
+    await this.rebootToJoin();
+    this.log('Configuration completed. The station is rebooting to join your network server.', 'INFO');
+  }
 
-    if (!checkMode1(verifyResp)) {
-      this.log(`Verification returned ${verifyResp.trim()}, retrying AT+TESTMODE_TYPE=1...`, 'WARN');
-      await this.sendCommand('AT+TESTMODE_TYPE=1');
-      await new Promise((resolve) => setTimeout(resolve, 800));
-      verifyResp = await this.sendCommand('AT+TESTMODE_TYPE=?');
-      if (!checkMode1(verifyResp)) {
-        throw new Error(`Station failed to persist Open LoRaWAN mode (status: ${verifyResp.trim()})`);
-      }
-    }
-    this.log('Open LoRaWAN mode verified: active (1)', 'INFO');
-
-    // Allow Nordic FDS flash operations and repetitive config cleanup to finalize before rebooting
-    onProgress?.('Committing settings to flash...', step, totalSteps);
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-
-    // Reboot MCU to commit and start LoRaWAN join
-    this.log('Rebooting MCU to apply settings and trigger LoRaWAN join (ATZ)...', 'INFO');
-    try {
-      await this.sendCommand('ATZ', 2000);
-    } catch {
-      // Station reboots immediately and cuts BLE connection, which is normal and expected
-    }
-
-    this.log('Configuration completed successfully! Device is rebooting to join your LNS.', 'INFO');
+  /**
+   * Firmware V4.5+: reactivate the WeatherXM keys (profile 0). The customer profile stays stored.
+   * The upload interval is shared by both profiles, so it is set back explicitly.
+   */
+  async switchBackToWeatherXm(
+    onProgress?: (step: string, current: number, total: number) => void,
+    intervalMinutes = WEATHERXM_UPLOAD_INTERVAL_MIN,
+  ): Promise<void> {
+    onProgress?.('Selecting the WeatherXM network profile...', 1, 4);
+    await this.expectOk(`AT+NETPROFILE=${NET_PROFILE_WEATHERXM}`, 'select the WeatherXM network profile');
+    const interval = Math.max(1, Math.min(intervalMinutes, 1440));
+    onProgress?.(`Setting upload interval to ${interval} minutes...`, 2, 4);
+    await this.expectOk(`AT+INTERVAL=${interval}`, 'set the upload interval');
+    onProgress?.('Selecting the WeatherXM payload format...', 3, 4);
+    await this.setPayloadFormatWeatherXm();
+    onProgress?.('Rebooting to rejoin the WeatherXM network...', 4, 4);
+    await this.rebootToJoin();
+    this.log('Switched back to WeatherXM. The station is rebooting to rejoin.', 'INFO');
   }
 }
 
