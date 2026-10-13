@@ -11,6 +11,8 @@
 //   0xF2  12-byte boot frame (firmware/hardware version, sensor protocol version)
 //   0xF3  GNSS scan (raw LR1110 NAV message; resolve with a GNSS solver)
 // Frames on FPort 3 (legacy "Open LoRaWAN" TLV, AT+TESTMODE_TYPE=1) are decoded too.
+// FPort 199 carries LoRa Basics Modem service messages (time sync for GNSS, device
+// management); they hold no weather data and are returned as { frame: "modem_service" }.
 //
 // Source of truth: ws2001-firmware/tools/decoders/ws2001_uplink_decoder.js
 // (byte layout: application/smtc_board/bsp/peripherals/ccl_sensor/sensor_data.c)
@@ -130,6 +132,9 @@ function wxmDecodeLegacyTlv(bytes) {
 }
 
 function wxmDecode(bytes, fPort) {
+  if (fPort === 199) {
+    return { data: { frame: "modem_service", raw: wxmHex(bytes || [], 0, bytes ? bytes.length : 0) } };
+  }
   if (!bytes || bytes.length === 0) return { data: {} };
   if (fPort === 3) return wxmDecodeLegacyTlv(bytes);
   if (fPort === 99 || bytes[0] === 0xf0 || bytes[0] === 0xf1 || bytes[0] === 0xf2 || bytes[0] === 0xf3) {
