@@ -15,6 +15,7 @@
     "manifest": "node scripts/update-manifests.mjs",
     "manifest:wg1200": "node scripts/update-manifest.mjs",
     "manifest:ws1300": "node scripts/update-ws1300-manifest.mjs",
+    "manifest:ws2001": "node scripts/update-ws2001-manifest.mjs",
     "deploy": "npm run build && wrangler deploy"
   },
   "dependencies": {

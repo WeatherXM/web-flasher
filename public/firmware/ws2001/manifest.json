@@ -1,0 +1,21 @@
+{
+  "schema": 1,
+  "hardware": "WS2001",
+  "soc": "nRF52840",
+  "latest": "4.5",
+  "releases": [
+    {
+      "version": "4.5",
+      "label": "V4.5",
+      "fw_version": 45,
+      "file": "/firmware/ws2001/ws2001-application-v4.5-ble-dfu.zip",
+      "bytes": 224953,
+      "sha256": "693ff3355c3045c5edfda41616ee566a13a4d0bc5144759b6516543aee9b9a06",
+      "image_bytes": 224280,
+      "image_sha256": "99b6ed7a8205c63b3d1a4c217d5d2bc7012ad52d16b93797e46d66a65b61937e",
+      "source_repo": "WeatherXM/ws2001-firmware",
+      "git_commit": "be7eefb",
+      "built_at": "2026-10-13T11:16:05.620Z"
+    }
+  ]
+}
