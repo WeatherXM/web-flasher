@@ -275,7 +275,12 @@ export function parseAtConfig(raw: string): Partial<Ws2001DeviceConfig> {
   return result;
 }
 
-const GATT_STEP_TIMEOUT_MS = 8000;
+// A host without a bond pairs on its first encrypted access (the station also sends a Security
+// Request right after connecting). While the OS pairs, GATT calls stall; the SMP pairing timeout
+// is 30 s. Giving up sooner disconnects mid-pairing, which is why the first attempt used to fail
+// and only the second one worked. Wait just past that timeout.
+const GATT_STEP_TIMEOUT_MS = 35000;
+const PAIRING_WAIT_MS = 35000;
 
 /**
  * Web Bluetooth GATT calls can wait forever when the OS is stuck mid-pairing (seen on Windows);
@@ -424,9 +429,35 @@ export class Ws2001AtClient {
     }
 
     this.txChar.addEventListener('characteristicvaluechanged', this.onNotificationBound);
-    await this.txChar.startNotifications();
+    await this.startNotificationsWhenPaired(this.txChar);
 
     this.log('Connected and subscribed to notifications.', 'INFO');
+  }
+
+  /**
+   * Enable TX notifications. The CCCD needs an encrypted link, so on a host that is not bonded
+   * yet this is the step that pairs; the first write can fail while the OS is still pairing (or
+   * waiting for the user to accept a pairing prompt). Retry on the same connection until the
+   * link is encrypted instead of disconnecting, which would abort the pairing.
+   */
+  private async startNotificationsWhenPaired(char: BluetoothRemoteGATTCharacteristic): Promise<void> {
+    const deadline = Date.now() + PAIRING_WAIT_MS;
+    let hinted = false;
+    for (;;) {
+      try {
+        await withTimeout(char.startNotifications(), PAIRING_WAIT_MS, 'Bluetooth pairing');
+        if (hinted) this.log('Bluetooth pairing complete.', 'INFO');
+        return;
+      } catch (e) {
+        if (!this.server?.connected || Date.now() >= deadline) throw e;
+        if (!hinted) {
+          this.log('Waiting for Bluetooth pairing... If your computer shows a pairing prompt, accept it. ' +
+            'Keep this page open.', 'WARN');
+          hinted = true;
+        }
+        await new Promise((res) => setTimeout(res, 1500));
+      }
+    }
   }
 
   /**
