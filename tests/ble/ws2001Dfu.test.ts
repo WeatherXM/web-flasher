@@ -13,8 +13,10 @@ const zip = new Uint8Array(readFileSync(path.join(__dirname, '../../public', lat
 describe('WS2001 firmware manifest', () => {
   it('lists a valid latest release', () => {
     const m = validateWs2001Manifest(manifest);
-    expect(m.latest).toBe('4.5');
-    expect(m.releases[0].fw_version).toBe(45);
+    // Newest release first; DFU number = major x 10 + minor (V4.6 -> 46)
+    const [major, minor] = m.latest.split('.').map(Number);
+    expect(m.releases[0].version).toBe(m.latest);
+    expect(m.releases[0].fw_version).toBe(major * 10 + minor);
   });
 
   it('compares station versions', () => {
@@ -28,9 +30,9 @@ describe('WS2001 firmware manifest', () => {
 });
 
 describe('WS2001 DFU package', () => {
-  it('accepts the published, signed V4.5 package', async () => {
+  it('accepts the published, signed latest package', async () => {
     const pkg = await parseWs2001DfuPackage(zip);
-    expect(pkg.initPacket.fwVersion).toBe(45);
+    expect(pkg.initPacket.fwVersion).toBe(manifest.releases[0].fw_version);
     expect(pkg.initPacket.hwVersion).toBe(52);
     expect(pkg.initPacket.sdReq).toContain(0x0100);
     expect(pkg.firmware.length).toBe(manifest.releases[0].image_bytes);
