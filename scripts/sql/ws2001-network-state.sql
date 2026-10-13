@@ -1,4 +1,4 @@
--- WS2001 (H2) network state per station, from the flasher telemetry in D1 (flasher-telemetry / flasher_events_v2;
+-- WS2001 (H2) network state per station, from the flasher telemetry in D1 (flasher-telemetry / flasher_events_v2,
 -- the older flasher_events table is a legacy log of early test events and is not used here).
 -- Used by the WeatherXM backend to unprovision stations from its LNS (Helium ChirpStack / LoneStar) when they move
 -- to the customer's own network, and to provision them again when they come back.
@@ -11,7 +11,7 @@
 --   flash_*                                          firmware updates only (target = 'V4.7', ...): ignore here
 --   connected                                        details.netProfile = active profile (0 WeatherXM, 1 own network)
 -- Columns of network_switch_*: keys_kept (WeatherXM keys still on the station), wxm_join_eui, from_network,
--- firmware_version; details (JSON) also has band, subBand, intervalMinutes, gnss.
+-- firmware_version. details (JSON) also has band, subBand, intervalMinutes, gnss.
 
 -- 1. Current network of every station that was ever switched with the flasher (last successful switch wins).
 SELECT

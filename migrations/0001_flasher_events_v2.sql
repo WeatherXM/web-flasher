@@ -1,5 +1,5 @@
 -- Detailed flasher telemetry table. The worker also creates it on first use (src/worker/index.ts,
--- SCHEMA_STATEMENTS); keep both in sync. The original flasher_events table is kept as a legacy log.
+-- SCHEMA_STATEMENTS), keep both in sync. The original flasher_events table is kept as a legacy log.
 -- Apply manually: npx wrangler d1 execute flasher-telemetry --remote --file migrations/0001_flasher_events_v2.sql
 CREATE TABLE IF NOT EXISTS flasher_events_v2 (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
