@@ -274,6 +274,23 @@ export function parseAtConfig(raw: string): Partial<Ws2001DeviceConfig> {
   return result;
 }
 
+const GATT_STEP_TIMEOUT_MS = 8000;
+
+/**
+ * Web Bluetooth GATT calls can wait forever when the OS is stuck mid-pairing (seen on Windows);
+ * bound every step so the page reports an error instead of hanging on "Discovering...".
+ */
+function withTimeout<T>(p: Promise<T>, ms: number, what: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const t = setTimeout(
+      () => reject(new Error(`${what} timed out after ${ms / 1000}s. Disconnect, wait a few seconds and connect again ` +
+        '(if Windows shows a pairing prompt, accept it).')),
+      ms,
+    );
+    p.then((v) => { clearTimeout(t); resolve(v); }, (e) => { clearTimeout(t); reject(e); });
+  });
+}
+
 export class Ws2001AtClient {
   private device: BluetoothDevice | null = null;
   private server: BluetoothRemoteGATTServer | null = null;
@@ -317,14 +334,14 @@ export class Ws2001AtClient {
     });
 
     this.log(`Connecting to ${this.device.name || 'Station'}...`, 'INFO');
-    this.server = await this.device.gatt!.connect();
+    this.server = await withTimeout(this.device.gatt!.connect(), 20000, 'Bluetooth connection');
 
     this.log('Discovering UART Service...', 'INFO');
     let service: BluetoothRemoteGATTService | null = null;
 
     for (const serviceUuid of CANDIDATE_UART_SERVICES) {
       try {
-        service = await this.server.getPrimaryService(serviceUuid);
+        service = await withTimeout(this.server.getPrimaryService(serviceUuid), GATT_STEP_TIMEOUT_MS, 'UART service discovery');
         if (service) {
           this.log(`Found UART Service: ${service.uuid}`, 'INFO');
           break;
@@ -336,7 +353,7 @@ export class Ws2001AtClient {
 
     if (!service) {
       try {
-        const services = await this.server.getPrimaryServices();
+        const services = await withTimeout(this.server.getPrimaryServices(), GATT_STEP_TIMEOUT_MS, 'GATT service discovery');
         const availableUuids = services.map((s) => s.uuid);
         this.log(`Available GATT services: [${availableUuids.join(', ')}]`, 'INFO');
 
@@ -367,7 +384,7 @@ export class Ws2001AtClient {
     }
 
     this.log('Discovering characteristics...', 'INFO');
-    const chars = await service.getCharacteristics();
+    const chars = await withTimeout(service.getCharacteristics(), GATT_STEP_TIMEOUT_MS, 'characteristic discovery');
     this.log(`Discovered ${chars.length} characteristic(s) in service.`, 'INFO');
 
     for (const c of chars) {
