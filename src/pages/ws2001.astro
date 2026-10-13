@@ -348,6 +348,16 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
               </svg>
               <span>Apply &amp; Connect to My Network</span>
             </button>
+            <button id="btn-ttn-export-form" type="button" class="w-full py-2.5 rounded-control text-xs font-bold text-white bg-wxm-storm/60 border border-wxm-cloud/20 hover:bg-wxm-storm hover:border-wxm-zenith cursor-pointer inline-flex items-center justify-center gap-2">
+              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+              Download TTN import file (.json)
+            </button>
+            <p class="text-[11px] text-wxm-mist leading-relaxed">
+              Registers this station in The Things Network in one step: in your TTN application open
+              <strong class="text-white">End devices &gt; Import end devices</strong>, choose <strong class="text-white">The Things Stack JSON</strong>
+              and select the file. It contains the DevEUI, JoinEUI, AppKey, LoRaWAN 1.0.4 / RP002 1.0.3 and the frequency plan.
+              <span class="text-amber-300">The file holds your AppKey: keep it private.</span>
+            </p>
           </div>
         </div>
 
@@ -406,11 +416,15 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
           <div class="p-3.5 rounded-control bg-wxm-abyss/80 border border-wxm-cloud/10 text-xs text-wxm-mist space-y-2">
             <p><strong>Next steps:</strong></p>
             <ul id="success-steps" class="list-disc pl-4 space-y-1">
-              <li>Register the <strong>DevEUI</strong>, <strong>JoinEUI</strong> and <strong>AppKey</strong> in your TTN or ChirpStack application (LoRaWAN 1.0.4, OTAA, Class A).</li>
+              <li>Register the <strong>DevEUI</strong>, <strong>JoinEUI</strong> and <strong>AppKey</strong> in your TTN or ChirpStack application (LoRaWAN 1.0.4, OTAA, Class A). On TTN you can import the file below (<strong>End devices &gt; Import end devices &gt; The Things Stack JSON</strong>).</li>
               <li>Install the <strong>WeatherXM decoder</strong> below: one script for TTN v3, ChirpStack v4 and v3 that decodes the 24-byte frame on FPort 99, including wind gust and rain total.</li>
               <li>Wait for the device's first Join-Request (typically within 30-60 seconds after boot).</li>
             </ul>
           </div>
+          <button id="btn-ttn-export-success" type="button" class="hidden w-full py-2.5 rounded-control text-xs font-bold text-white bg-wxm-storm/60 border border-wxm-cloud/20 hover:bg-wxm-storm hover:border-wxm-zenith cursor-pointer inline-flex items-center justify-center gap-2">
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+            Download TTN import file (.json)
+          </button>
           <button
             id="btn-done"
             type="button"
@@ -579,6 +593,7 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
   import { Ws2001AtClient, formatHexWithColons, type Ws2001DeviceConfig } from '../lib/ble/ws2001AtClient';
   import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
   import { trackTelemetry } from '../lib/telemetry';
+  import { ttnImportJson, ttnImportFileName, type TtnExportParams } from '../lib/ble/ws2001TtnExport';
   import { enterBootloader, requestBootloaderDevice, SecureDfuTransfer, makeBootloaderName, type Ws2001DfuPackage } from '../lib/ble/ws2001Dfu';
   import { fetchWs2001Manifest, latestRelease, downloadWs2001Release, isOutdated, type Ws2001Release } from '../lib/ble/ws2001Firmware';
 
@@ -938,6 +953,43 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
   const btnConfirmCancel = $<HTMLButtonElement>('btn-confirm-cancel');
   const btnConfirmProceed = $<HTMLButtonElement>('btn-confirm-proceed');
 
+  // TTN import file (generated in the browser only, it contains the AppKey)
+  let lastTtnExport: TtnExportParams | null = null;
+  function downloadTtnImport(params: TtnExportParams): void {
+    const blob = new Blob([ttnImportJson(params)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = ttnImportFileName(params);
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    addLog(`Saved ${a.download} for The Things Network import (contains the AppKey).`, 'INFO');
+  }
+  function ttnExportFromForm(): TtnExportParams {
+    const devEui = currentConfig?.deviceEui || currentConfig?.formattedDevEui;
+    if (!devEui || devEui === 'Unknown') throw new Error('Connect to a station first: its DevEUI is needed.');
+    return {
+      devEui,
+      joinEui: $<HTMLInputElement>('cfg-joineui').value.trim(),
+      appKey: $<HTMLInputElement>('cfg-appkey').value.trim(),
+      band: parseInt(bandSelect.value, 10),
+      subBand: parseInt($<HTMLSelectElement>('cfg-subband').value, 10),
+    };
+  }
+  $('btn-ttn-export-form').addEventListener('click', () => {
+    formError.classList.add('hidden');
+    try {
+      downloadTtnImport(ttnExportFromForm());
+    } catch (e) {
+      formError.textContent = (e as Error).message;
+      formError.classList.remove('hidden');
+    }
+  });
+  $('btn-ttn-export-success').addEventListener('click', () => {
+    if (lastTtnExport) downloadTtnImport(lastTtnExport);
+  });
+
   let pendingMigrationParams: {
     band: number;
     subBand: number;
@@ -1068,6 +1120,13 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
       $('success-title').textContent = 'Connected to your network!';
       $('success-sub').textContent = 'Settings written to flash. The station has rebooted to join your network.';
       $('success-steps').classList.remove('hidden');
+      try {
+        lastTtnExport = ttnExportFromForm();
+        $('btn-ttn-export-success').classList.remove('hidden');
+      } catch {
+        lastTtnExport = null;
+        $('btn-ttn-export-success').classList.add('hidden');
+      }
 
       progressBar.style.width = '100%';
       $('view-progress').classList.add('hidden');
@@ -1270,6 +1329,7 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
       $('success-title').textContent = 'Back on the WeatherXM network!';
       $('success-sub').textContent = 'The station rebooted with its WeatherXM keys and will rejoin the WeatherXM network.';
       $('success-steps').classList.add('hidden');
+      $('btn-ttn-export-success').classList.add('hidden');
       $('view-success').classList.remove('hidden');
       trackTelemetry({ device_type: 'ws2001', serial_number: serialNum, action: 'network_switch_completed', firmware_target: 'weatherxm',
         firmware_source: currentConfig.version, status: 'success', details: backDetails });

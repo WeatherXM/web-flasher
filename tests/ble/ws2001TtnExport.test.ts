@@ -1,0 +1,41 @@
+import { describe, it, expect } from 'vitest';
+import { buildTtnEndDevice, ttnFrequencyPlan, ttnImportJson, ttnImportFileName } from '../../src/lib/ble/ws2001TtnExport';
+
+const base = {
+  devEui: '2C:F7:F1:C0:44:80:00:E6',
+  joinEui: '0000000000000000',
+  appKey: '00112233445566778899aabbccddeeff',
+  band: 5,
+};
+
+describe('WS2001 TTN import JSON', () => {
+  it('builds an OTAA LoRaWAN 1.0.4 / RP002 1.0.3 end device', () => {
+    const d = buildTtnEndDevice(base);
+    expect(d.ids).toEqual({ device_id: 'ws2001-8000e6', dev_eui: '2CF7F1C0448000E6', join_eui: '0000000000000000' });
+    expect(d.lorawan_version).toBe('MAC_V1_0_4');
+    expect(d.lorawan_phy_version).toBe('RP002_V1_0_3');
+    expect(d.frequency_plan_id).toBe('EU_863_870_TTN');
+    expect(d.supports_join).toBe(true);
+    expect(d.root_keys.app_key.key).toBe('00112233445566778899AABBCCDDEEFF');
+  });
+
+  it('maps regions and US/AU sub-bands to TTN frequency plans', () => {
+    expect(ttnFrequencyPlan(8, 1)).toBe('US_902_928_FSB_2');
+    expect(ttnFrequencyPlan(1, 0)).toBe('AU_915_928_FSB_1');
+    expect(ttnFrequencyPlan(15)).toBe('AS_923');
+    expect(ttnFrequencyPlan(7)).toBe('IN_865_867');
+    expect(ttnFrequencyPlan(6)).toBe('KR_920_923_TTN');
+    expect(ttnFrequencyPlan(9)).toBe('RU_864_870_TTN');
+    expect(ttnFrequencyPlan(10)).toBeNull();
+  });
+
+  it('rejects malformed keys and unsupported regions', () => {
+    expect(() => buildTtnEndDevice({ ...base, appKey: '1234' })).toThrow(/AppKey/);
+    expect(() => buildTtnEndDevice({ ...base, band: 10 })).toThrow(/frequency plan/);
+  });
+
+  it('produces a single JSON object and a per-station file name', () => {
+    expect(JSON.parse(ttnImportJson(base)).ids.device_id).toBe('ws2001-8000e6');
+    expect(ttnImportFileName(base)).toBe('ttn-import-ws2001-8000e6.json');
+  });
+});
