@@ -24,11 +24,10 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
           Configure WS2001 (H2) for Any LoRaWAN Network
         </h1>
         <p class="text-sm sm:text-base text-wxm-mist leading-relaxed">
-          The H2 starts on the <strong>WeatherXM network</strong>. You can point it at The Things Network (TTN), ChirpStack or any other LoRaWAN network server.
-          The hardware is the same as Seeed Studio's SenseCAP S2120 8-in-1 station, but it runs <strong>WeatherXM's own firmware</strong>, which does more:
-          it samples every 12 seconds and sends one compact 24-byte frame with temperature, humidity, pressure, wind speed and direction,
-          <strong>wind gust</strong>, rain rate, <strong>rain total</strong>, light and UV, signed by the station's secure element.
-          On firmware V4.5 and later the WeatherXM keys are kept, so you can switch back at any time.
+          The H2 starts on the <strong>WeatherXM network</strong>. You can move it to The Things Network (TTN), ChirpStack or any other LoRaWAN network server.
+          It is the same hardware as the SenseCAP S2120, with <strong>WeatherXM's own firmware</strong>: its frame carries more weather data,
+          such as <strong>wind gust</strong> and <strong>rain total</strong>, in a compact 24-byte payload.
+          The WeatherXM keys stay on the station (firmware V4.5 and later), so you can switch back at any time.
         </p>
 
         <p class="text-sm">
@@ -66,6 +65,13 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M7 7l10 10-5 5V2l5 5L7 17" />
             </svg>
             <span id="btn-connect-label">Connect to WS2001 (H2)</span>
+          </button>
+          <button
+            id="btn-cancel-connect"
+            type="button"
+            class="hidden w-full py-2 rounded-control text-xs font-bold text-white bg-wxm-storm/60 border border-wxm-cloud/20 hover:bg-wxm-storm hover:border-red-400/60 cursor-pointer"
+          >
+            Cancel and disconnect
           </button>
           <label class="flex items-start gap-2.5 text-xs text-wxm-mist leading-relaxed cursor-pointer select-none">
             <input id="chk-auto-update" type="checkbox" checked class="w-4 h-4 mt-0.5 rounded border-wxm-cloud/30 bg-wxm-abyss text-wxm-beacon focus:ring-0 cursor-pointer" />
@@ -299,6 +305,18 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
                   TTN allows 30 s of airtime per device per day. A 24-byte uplink takes about 82 ms at SF7, so 3-minute uplinks exceed it; use 5 minutes or more.
                 </p>
               </div>
+
+              <!-- GNSS location scans (V4.7+) -->
+              <label class="flex items-start gap-2.5 text-xs text-wxm-mist leading-relaxed cursor-pointer select-none">
+                <input id="cfg-gnss" type="checkbox" class="w-4 h-4 mt-0.5 rounded border-wxm-cloud/30 bg-wxm-abyss text-wxm-beacon focus:ring-0 cursor-pointer" />
+                <span>
+                  <strong class="text-white">Send GNSS location scans</strong> (optional, off by default). About once a day the station sends a raw satellite scan
+                  (<span class="font-mono">0xF3</span> frame on FPort 99) that you can store and resolve later with a GNSS solver.
+                  It needs the network time from your server (LoRaWAN DeviceTimeReq, answered by TTN and ChirpStack); if the server never answers,
+                  the station turns the scans off until it restarts.
+                  <span id="cfg-gnss-note" class="hidden text-amber-300">Needs firmware V4.7 or later: update the station first.</span>
+                </span>
+              </label>
             </div>
 
             <!-- Warning Banner -->
@@ -458,7 +476,7 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
       </div>
     </div>
 
-    <ol class="mt-6 grid grid-cols-1 md:grid-cols-3 gap-3">
+    <ol id="connect-steps" class="mt-6 grid grid-cols-1 md:grid-cols-3 gap-3">
       <li class="flex gap-3.5 p-4 rounded-card bg-wxm-midnight/60 border border-wxm-cloud/10">
         <span class="w-7 h-7 flex-shrink-0 rounded-full bg-wxm-beacon/20 border border-wxm-beacon/40 text-wxm-zenith text-xs font-bold flex items-center justify-center">1</span>
         <div class="space-y-1">
@@ -471,8 +489,8 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
         <div class="space-y-1">
           <h3 class="text-sm font-bold">Press the station RESET button once <span class="block sm:inline text-xs font-medium text-wxm-mist">(first-time pairing only)</span></h3>
           <p class="text-xs text-wxm-mist leading-relaxed">
-            If the station has never been paired before, press <strong class="text-white font-semibold">RESET</strong> once. You only need this for the initial pairing; the station then stays visible over Bluetooth for 15 minutes.
-            <strong class="text-amber-300 font-semibold">Don't hold RESET:</strong> holding it for 15 seconds resets the station's settings.
+            If the station has never been paired before, press <strong class="text-white font-semibold">RESET</strong> once. You only need this for the initial pairing; new computers can pair during the first 5 minutes after the restart.
+            <strong class="text-amber-300 font-semibold">Don't hold RESET:</strong> holding it for 10 seconds resets the station to factory settings.
           </p>
         </div>
       </li>
@@ -690,8 +708,17 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
     btn.disabled = false;
   }
 
+  // GNSS on a customer network needs V4.7 (DeviceTimeReq, no FPort 199 services)
+  function gnssAllowed(): boolean {
+    return Boolean(currentConfig) && !isOutdated(currentConfig!.version, '4.7');
+  }
+
   function populateDeviceView(cfg: Ws2001DeviceConfig) {
     currentConfig = cfg;
+    const gnssBox = $<HTMLInputElement>('cfg-gnss');
+    gnssBox.disabled = !gnssAllowed();
+    gnssBox.checked = gnssAllowed() && cfg.gnssSwitch === true;
+    $('cfg-gnss-note').classList.toggle('hidden', gnssAllowed());
     updateFirmwarePanel(cfg);
 
     // Populate Device Status Card
@@ -767,23 +794,37 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
   const btnConnect = $<HTMLButtonElement>('btn-connect');
   const connectError = $('connect-error');
 
+  // Cancel a connect that hangs (e.g. the OS stuck mid-pairing): drops the link so the next try starts clean
+  const btnCancelConnect = $<HTMLButtonElement>('btn-cancel-connect');
+  let cancelConnect: (() => void) | null = null;
+  btnCancelConnect.addEventListener('click', () => cancelConnect?.());
+
   btnConnect.addEventListener('click', async () => {
     connectError.classList.add('hidden');
     btnConnect.disabled = true;
     $('btn-connect-label').textContent = 'Connecting...';
+    btnCancelConnect.classList.remove('hidden');
 
     client = new Ws2001AtClient((msg, lvl) => addLog(msg, lvl));
+    const cancelled = new Promise<never>((_, reject) => {
+      cancelConnect = () => reject(new Error('Connection cancelled. Wait a few seconds, then connect again.'));
+    });
 
     try {
-      await client.connect();
-      addLog('Connection established. Querying station info...');
-
-      const cfg = await client.readFullConfig();
+      const cfg = await Promise.race([
+        (async () => {
+          await client!.connect();
+          addLog('Connection established. Querying station info...');
+          return client!.readFullConfig();
+        })(),
+        cancelled,
+      ]);
       await latestReady;
       populateDeviceView(cfg);
 
       // Show device view
       $('view-connect').classList.add('hidden');
+      $('connect-steps').classList.add('hidden');
       $('view-device').classList.remove('hidden');
 
       if (chkAutoUpdate.checked && latest && isOutdated(cfg.version, latest.version)) {
@@ -798,6 +839,8 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
       await client?.disconnect().catch(() => {});
       client = null;
     } finally {
+      cancelConnect = null;
+      btnCancelConnect.classList.add('hidden');
       btnConnect.disabled = false;
       $('btn-connect-label').textContent = 'Connect to WS2001 (H2)';
     }
@@ -861,6 +904,7 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
     }
     $('view-device').classList.add('hidden');
     $('view-connect').classList.remove('hidden');
+    $('connect-steps').classList.remove('hidden');
   });
 
   // Apply configuration button
@@ -879,6 +923,7 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
     joinEui: string;
     appKey: string;
     intervalMinutes: number;
+    gnss: boolean;
   } | null = null;
 
   // Toggle proceed button based on checkbox acknowledgment
@@ -940,6 +985,7 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
       joinEui: formattedJoinEui,
       appKey: formattedAppKey,
       intervalMinutes: interval,
+      gnss: gnssAllowed() && $<HTMLInputElement>('cfg-gnss').checked,
     };
 
     // Open confirmation modal
@@ -1195,11 +1241,13 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
   $('btn-dfu-reconnect').addEventListener('click', () => {
     $('view-dfu').classList.add('hidden');
     $('view-connect').classList.remove('hidden');
+    $('connect-steps').classList.remove('hidden');
     btnConnect.click(); // same user gesture opens the chooser
   });
   $('btn-dfu-close').addEventListener('click', () => {
     $('view-dfu').classList.add('hidden');
     $('view-connect').classList.remove('hidden');
+    $('connect-steps').classList.remove('hidden');
   });
 
   // Switch back to WeatherXM (firmware V4.5+)
@@ -1238,5 +1286,6 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
   $('btn-done').addEventListener('click', () => {
     $('view-success').classList.add('hidden');
     $('view-connect').classList.remove('hidden');
+    $('connect-steps').classList.remove('hidden');
   });
 </script>
