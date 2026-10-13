@@ -19,6 +19,17 @@ const CORS_HEADERS = {
   'Access-Control-Allow-Headers': 'Content-Type',
 };
 
+// WS2001 serial numbers are DevEUIs; store one canonical form (16 uppercase hex chars, no separators)
+// so events from different pages and firmware versions group by device.
+export function normalizeSerial(deviceType: string, serial?: string | null): string | null {
+  if (!serial) return null;
+  if (deviceType === 'ws2001') {
+    const hex = serial.replace(/[^0-9a-fA-F]/g, '').toUpperCase();
+    return hex.length === 16 ? hex : serial;
+  }
+  return serial;
+}
+
 function jsonResponse(data: any, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -49,8 +60,12 @@ export default {
           return jsonResponse({ error: 'Database not bound' }, 503);
         }
         const total = await env.DB.prepare('SELECT count(*) as count FROM flasher_events').first<{ count: number }>();
+        // Network switches only (firmware updates are flash_* events and must not count here)
         const switchedOpen = await env.DB.prepare(
-          "SELECT count(*) as count, count(DISTINCT serial_number) as unique_devices FROM flasher_events WHERE (device_type = 'ws2001' OR firmware_target = 'open_lorawan') AND action = 'flash_completed' AND status = 'success'"
+          "SELECT count(*) as count, count(DISTINCT serial_number) as unique_devices FROM flasher_events WHERE action = 'network_switch_completed' AND firmware_target = 'open_lorawan' AND status = 'success'"
+        ).first<{ count: number; unique_devices: number }>();
+        const switchedBack = await env.DB.prepare(
+          "SELECT count(*) as count, count(DISTINCT serial_number) as unique_devices FROM flasher_events WHERE action = 'network_switch_completed' AND firmware_target = 'weatherxm' AND status = 'success'"
         ).first<{ count: number; unique_devices: number }>();
         const flashedTotal = await env.DB.prepare(
           "SELECT count(*) as count, count(DISTINCT serial_number) as unique_devices FROM flasher_events WHERE action = 'flash_completed' AND status = 'success'"
@@ -67,6 +82,10 @@ export default {
           devices_switched_to_open: {
             total_operations: switchedOpen?.count ?? 0,
             unique_devices: switchedOpen?.unique_devices ?? 0,
+          },
+          devices_switched_back_to_weatherxm: {
+            total_operations: switchedBack?.count ?? 0,
+            unique_devices: switchedBack?.unique_devices ?? 0,
           },
           devices_flashed: {
             total_operations: flashedTotal?.count ?? 0,
@@ -102,7 +121,7 @@ export default {
           )
             .bind(
               body.device_type,
-              body.serial_number || null,
+              normalizeSerial(body.device_type, body.serial_number),
               body.action,
               body.firmware_target || null,
               body.firmware_source || null,

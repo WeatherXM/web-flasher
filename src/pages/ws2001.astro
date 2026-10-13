@@ -708,6 +708,28 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
     btn.disabled = false;
   }
 
+  // What the WeatherXM backend needs to unprovision / re-provision the station on its LNS
+  // (Helium ChirpStack / LoneStar). serial_number on the event is the DevEUI.
+  //  - keysKept: firmware with network profiles (V4.5+) keeps the WeatherXM keys on the station; without
+  //    it the switch overwrote them and coming back needs re-provisioned keys.
+  //  - wxmJoinEui: WeatherXM JoinEUI, known when the WeatherXM profile was active at connect time.
+  //  - fromNetwork: network active before the switch.
+  function networkSwitchDetails(cfg: Ws2001DeviceConfig | null) {
+    const wxmActive = cfg?.netProfile ? cfg.netProfile.active === 0 : cfg?.testModeType !== 1;
+    return {
+      model: cfg?.deviceModel || 'H2',
+      bleName: cfg?.bleName,
+      defEui: cfg?.formattedDefEui || cfg?.defEui,
+      devAddr: cfg?.devAddr,
+      hardwareVersion: cfg?.hardwareVersion,
+      lorawanVersion: cfg?.lorawanVersion,
+      firmwareVersion: cfg?.version,
+      keysKept: Boolean(cfg?.netProfile),
+      fromNetwork: wxmActive ? 'weatherxm' : 'open_lorawan',
+      wxmJoinEui: wxmActive ? cfg?.appEui ?? null : null,
+    };
+  }
+
   // GNSS on a customer network needs V4.7 (DeviceTimeReq, no FPort 199 services)
   function gnssAllowed(): boolean {
     return Boolean(currentConfig) && !isOutdated(currentConfig!.version, '4.7');
@@ -743,7 +765,6 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
         bleName: cfg.bleName,
         bleId: cfg.bleId,
         defEui: cfg.formattedDefEui || cfg.defEui,
-        devCode: cfg.devCode,
         devAddr: cfg.devAddr,
         appEui: cfg.appEui,
         hardwareVersion: cfg.hardwareVersion,
@@ -1014,25 +1035,22 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
     pendingMigrationParams = null;
 
     const serialNum = currentConfig?.formattedDevEui || currentConfig?.deviceEui;
+    const switchDetails = {
+      ...networkSwitchDetails(currentConfig),
+      band: params.band,
+      subBand: params.subBand,
+      intervalMinutes: params.intervalMinutes,
+      gnss: params.gnss,
+    };
 
     trackTelemetry({
       device_type: 'ws2001',
       serial_number: serialNum,
-      action: 'flash_started',
+      action: 'network_switch_started',
       firmware_target: 'open_lorawan',
+      firmware_source: currentConfig?.version,
       status: 'in_progress',
-      details: {
-        model: currentConfig?.deviceModel || 'H2',
-        bleName: currentConfig?.bleName,
-        defEui: currentConfig?.formattedDefEui || currentConfig?.defEui,
-        devCode: currentConfig?.devCode,
-        devAddr: currentConfig?.devAddr,
-        hardwareVersion: currentConfig?.hardwareVersion,
-        lorawanVersion: currentConfig?.lorawanVersion,
-        band: params.band,
-        subBand: params.subBand,
-        intervalMinutes: params.intervalMinutes,
-      },
+      details: switchDetails,
     });
 
     try {
@@ -1058,23 +1076,11 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
       trackTelemetry({
         device_type: 'ws2001',
         serial_number: serialNum,
-        action: 'flash_completed',
+        action: 'network_switch_completed',
         firmware_target: 'open_lorawan',
+        firmware_source: currentConfig?.version,
         status: 'success',
-        details: {
-          model: currentConfig?.deviceModel || 'H2',
-          bleName: currentConfig?.bleName,
-          defEui: currentConfig?.formattedDefEui || currentConfig?.defEui,
-          devCode: currentConfig?.devCode,
-          devAddr: currentConfig?.devAddr,
-          hardwareVersion: currentConfig?.hardwareVersion,
-          lorawanVersion: currentConfig?.lorawanVersion,
-          previousVersion: currentConfig?.version,
-          band: params.band,
-          subBand: params.subBand,
-          intervalMinutes: params.intervalMinutes,
-          appEui: params.joinEui,
-        },
+        details: switchDetails,
       });
     } catch (err) {
       addLog(`Configuration failed: ${(err as Error).message}`, 'ERROR');
@@ -1086,19 +1092,11 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
       trackTelemetry({
         device_type: 'ws2001',
         serial_number: serialNum,
-        action: 'flash_failed',
+        action: 'network_switch_failed',
         firmware_target: 'open_lorawan',
+        firmware_source: currentConfig?.version,
         status: 'failed',
-        details: {
-          model: currentConfig?.deviceModel || 'H2',
-          bleName: currentConfig?.bleName,
-          defEui: currentConfig?.formattedDefEui || currentConfig?.defEui,
-          devCode: currentConfig?.devCode,
-          devAddr: currentConfig?.devAddr,
-          hardwareVersion: currentConfig?.hardwareVersion,
-          lorawanVersion: currentConfig?.lorawanVersion,
-          error: (err as Error).message,
-        },
+        details: { ...switchDetails, error: (err as Error).message },
       });
     }
   });
@@ -1259,6 +1257,9 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
     $('view-device').classList.add('hidden');
     $('view-progress').classList.remove('hidden');
     const serialNum = currentConfig.formattedDevEui || currentConfig.deviceEui;
+    const backDetails = networkSwitchDetails(currentConfig);
+    trackTelemetry({ device_type: 'ws2001', serial_number: serialNum, action: 'network_switch_started', firmware_target: 'weatherxm',
+      firmware_source: currentConfig.version, status: 'in_progress', details: backDetails });
     try {
       await client.switchBackToWeatherXm((stepDesc, current, total) => {
         $('progress-step-text').textContent = stepDesc;
@@ -1270,9 +1271,12 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
       $('success-sub').textContent = 'The station rebooted with its WeatherXM keys and will rejoin the WeatherXM network.';
       $('success-steps').classList.add('hidden');
       $('view-success').classList.remove('hidden');
-      trackTelemetry({ device_type: 'ws2001', serial_number: serialNum, action: 'flash_completed', firmware_target: 'weatherxm', status: 'success', details: { model: currentConfig.deviceModel } });
+      trackTelemetry({ device_type: 'ws2001', serial_number: serialNum, action: 'network_switch_completed', firmware_target: 'weatherxm',
+        firmware_source: currentConfig.version, status: 'success', details: backDetails });
     } catch (err) {
       addLog(`Switch back failed: ${(err as Error).message}`, 'ERROR');
+      trackTelemetry({ device_type: 'ws2001', serial_number: serialNum, action: 'network_switch_failed', firmware_target: 'weatherxm',
+        firmware_source: currentConfig.version, status: 'failed', details: { ...backDetails, error: (err as Error).message } });
       $('view-progress').classList.add('hidden');
       $('view-device').classList.remove('hidden');
       formError.textContent = (err as Error).message;

@@ -85,7 +85,7 @@ describe('telemetry client helper', () => {
     trackTelemetry({
       device_type: 'ws2001',
       serial_number: '2C:F7:F1:20:30:40:50:60',
-      action: 'flash_completed',
+      action: 'network_switch_completed',
       firmware_target: 'open_lorawan',
       status: 'success',
     });
@@ -94,6 +94,39 @@ describe('telemetry client helper', () => {
       device_type: 'ws2001',
       model: 'H2',
       target: 'open_lorawan',
+    });
+  });
+
+  it('does not report a WS2001 firmware update as a switch to open LoRaWAN', () => {
+    const gtagSpy = vi.fn();
+    (globalThis as any).gtag = gtagSpy;
+
+    trackTelemetry({
+      device_type: 'ws2001',
+      serial_number: '2C:F7:F1:20:30:40:50:60',
+      action: 'flash_completed',
+      firmware_target: 'V4.7',
+      status: 'success',
+    });
+
+    expect(gtagSpy.mock.calls.map((c) => c[1])).not.toContain('switched_to_open');
+  });
+
+  it('reports a switch back to WeatherXM', () => {
+    const gtagSpy = vi.fn();
+    (globalThis as any).gtag = gtagSpy;
+
+    trackTelemetry({
+      device_type: 'ws2001',
+      action: 'network_switch_completed',
+      firmware_target: 'weatherxm',
+      status: 'success',
+    });
+
+    expect(gtagSpy).toHaveBeenCalledWith('event', 'switched_to_weatherxm', {
+      device_type: 'ws2001',
+      model: 'H2',
+      target: 'weatherxm',
     });
   });
 });
@@ -126,7 +159,7 @@ describe('Cloudflare worker API', () => {
       body: JSON.stringify({
         device_type: 'ws2001',
         serial_number: '2C:F7:F1:11:22:33:44:55',
-        action: 'flash_completed',
+        action: 'network_switch_completed',
         firmware_target: 'open_lorawan',
         status: 'success',
         details: { band: 0 },
@@ -141,8 +174,8 @@ describe('Cloudflare worker API', () => {
     expect(prepareMock).toHaveBeenCalledWith(expect.stringContaining('INSERT INTO flasher_events'));
     expect(bindMock).toHaveBeenCalledWith(
       'ws2001',
-      '2C:F7:F1:11:22:33:44:55',
-      'flash_completed',
+      '2CF7F11122334455',
+      'network_switch_completed',
       'open_lorawan',
       null,
       'success',
