@@ -150,8 +150,8 @@ runs WeatherXM's own firmware: one signed 24-byte frame on **FPort 99** with win
   the WeatherXM keys stay in profile 0, and **Switch back to WeatherXM** reactivates them. On older firmware the page
   warns that the single key set will be replaced.
 * **Payload stays the WeatherXM frame** (`AT+TESTMODE_TYPE=0`). The legacy TLV format (FPort 3) is no longer selected.
-* **Upload interval defaults to 5 minutes**: a 24-byte SF7 uplink is ~82 ms, so 3 minutes exceeds TTN's
-  30 s/day fair use. Switching back restores 3 minutes.
+* **Upload interval defaults to 5 minutes on your network**: a 24-byte SF7 uplink is ~82 ms, so 3 minutes exceeds TTN's
+  30 s/day fair use. The WeatherXM profile keeps its own 3 minutes (firmware V4.5+ stores the interval per profile).
 * **Decoder:** one script for TTN v3, ChirpStack v4 and ChirpStack v3, at `public/decoders/ws2001_uplink_decoder.js`
   (served at `/decoders/ws2001_uplink_decoder.js`). The source of truth is
   `ws2001-firmware/tools/decoders/ws2001_uplink_decoder.js`. Update it with

@@ -129,8 +129,8 @@ export interface NetProfileState {
 
 export const NET_PROFILE_WEATHERXM = 0;
 export const NET_PROFILE_CUSTOM = 1;
-export const DEFAULT_UPLOAD_INTERVAL_MIN = 5; // keeps a 24-byte SF7 uplink within TTN's 30 s/day fair use
-export const WEATHERXM_UPLOAD_INTERVAL_MIN = 3; // interval used on the WeatherXM (Helium) network
+export const DEFAULT_UPLOAD_INTERVAL_MIN = 5; // custom networks: keeps a 24-byte SF7 uplink within TTN's 30 s/day fair use
+// The WeatherXM profile keeps its own 3-minute interval (per-profile in firmware V4.5+).
 
 /** Parse `{active: 1, weatherxm: 'stored', custom: 'empty'}`; null if the command is unsupported. */
 export function parseNetProfile(raw: string): NetProfileState | null {
@@ -157,6 +157,16 @@ export type Ws2001LogFn = (message: string, level?: 'INFO' | 'CMD' | 'RESP' | 'W
  * Format raw hex into colon-separated uppercase hex bytes expected by ws2001 AT console.
  * Example: "0102030405060708" -> "01:02:03:04:05:06:07:08"
  */
+/**
+ * Mask LoRaWAN key material before it reaches the on-page log (key writes, AT+CONFIG key fields).
+ * The station still receives the real values.
+ */
+export function redactAtLog(text: string): string {
+  return text
+    .replace(/(AT\+(?:APPKEY|NWKKEY|NWKSKEY|APPSKEY|DKEY)=)[0-9A-Fa-f:]+/g, '$1<hidden>')
+    .replace(/((?:nwkSkey|appSkey|devKey|appKey|nwkKey)\s*:\s*)'?[0-9A-Fa-f:]+'?/g, "$1'<hidden>'");
+}
+
 export function formatHexWithColons(hexStr: string, expectedBytes: number): string {
   const clean = hexStr.replace(/[^0-9a-fA-F]/g, '').toUpperCase();
   if (clean.length !== expectedBytes * 2) {
@@ -463,7 +473,7 @@ export class Ws2001AtClient {
     const rxChar = this.rxChar;
     const trimmed = cmd.trim();
     const commandPayload = trimmed + '\r\n';
-    this.log(`> ${trimmed}`, 'CMD');
+    this.log(`> ${redactAtLog(trimmed)}`, 'CMD');
 
     this.rxBuffer = '';
 
@@ -482,7 +492,7 @@ export class Ws2001AtClient {
 
       this.pendingResolver = (res: string) => {
         clearTimeout(timer);
-        this.log(`< ${res.trim().replace(/\r?\n/g, ' ')}`, 'RESP');
+        this.log(`< ${redactAtLog(res.trim().replace(/\r?\n/g, ' '))}`, 'RESP');
         resolve(res);
       };
 
@@ -660,20 +670,14 @@ export class Ws2001AtClient {
 
   /**
    * Firmware V4.5+: reactivate the WeatherXM keys (profile 0). The customer profile stays stored.
-   * The upload interval is shared by both profiles, so it is set back explicitly.
+   * Each profile keeps its own upload interval, so the WeatherXM 3-minute rate comes back with it.
    */
-  async switchBackToWeatherXm(
-    onProgress?: (step: string, current: number, total: number) => void,
-    intervalMinutes = WEATHERXM_UPLOAD_INTERVAL_MIN,
-  ): Promise<void> {
-    onProgress?.('Selecting the WeatherXM network profile...', 1, 4);
+  async switchBackToWeatherXm(onProgress?: (step: string, current: number, total: number) => void): Promise<void> {
+    onProgress?.('Selecting the WeatherXM network profile...', 1, 3);
     await this.expectOk(`AT+NETPROFILE=${NET_PROFILE_WEATHERXM}`, 'select the WeatherXM network profile');
-    const interval = Math.max(1, Math.min(intervalMinutes, 1440));
-    onProgress?.(`Setting upload interval to ${interval} minutes...`, 2, 4);
-    await this.expectOk(`AT+INTERVAL=${interval}`, 'set the upload interval');
-    onProgress?.('Selecting the WeatherXM payload format...', 3, 4);
+    onProgress?.('Selecting the WeatherXM payload format...', 2, 3);
     await this.setPayloadFormatWeatherXm();
-    onProgress?.('Rebooting to rejoin the WeatherXM network...', 4, 4);
+    onProgress?.('Rebooting to rejoin the WeatherXM network...', 3, 3);
     await this.rebootToJoin();
     this.log('Switched back to WeatherXM. The station is rebooting to rejoin.', 'INFO');
   }

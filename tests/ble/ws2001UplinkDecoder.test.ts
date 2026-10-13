@@ -68,3 +68,14 @@ describe('AT+NETPROFILE parsing', () => {
     expect(parseNetProfile('\r\nAT_ERROR\r\n')).toBeNull();
   });
 });
+
+describe('AT log redaction', () => {
+  it('hides AppKey writes and key fields in AT+CONFIG output', async () => {
+    const { redactAtLog } = await import('../../src/lib/ble/ws2001AtClient');
+    expect(redactAtLog('AT+APPKEY=00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF')).toBe('AT+APPKEY=<hidden>');
+    const cfg = "{appEui: '80:00:00:00:00:00:00:09',nwkSkey: '00:11',appSkey: '22:33',devKey: 'B6:BC:61'}";
+    const out = redactAtLog(cfg);
+    expect(out).toContain("appEui: '80:00:00:00:00:00:00:09'");
+    expect(out).not.toMatch(/B6:BC|00:11|22:33/);
+  });
+});

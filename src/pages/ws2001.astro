@@ -660,7 +660,8 @@ import BleBrowserNotice from '../components/ws1300/BleBrowserNotice.astro';
       intervalSelect.value = val;
     }
 
-    if (cfg.appEui && cfg.appEui.length === 16) {
+    // Never pre-fill the WeatherXM JoinEUI into a form meant for the customer's network
+    if (alreadyCustom && cfg.appEui && cfg.appEui.length === 16) {
       $<HTMLInputElement>('cfg-joineui').value = cfg.appEui;
     } else {
       $<HTMLInputElement>('cfg-joineui').value = '0000000000000000';
