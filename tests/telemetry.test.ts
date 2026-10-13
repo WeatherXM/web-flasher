@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { trackTelemetry, type TelemetryPayload } from '../src/lib/telemetry';
-import worker from '../src/worker/index';
+import worker, { resetSchemaCache } from '../src/worker/index';
 
 describe('telemetry client helper', () => {
   beforeEach(() => {
@@ -140,10 +140,11 @@ describe('Cloudflare worker API', () => {
     expect(body.status).toBe('ok');
   });
 
-  it('inserts telemetry into DB on POST /api/telemetry', async () => {
+  it('inserts telemetry into flasher_events_v2 on POST /api/telemetry', async () => {
+    resetSchemaCache();
     const runMock = vi.fn().mockResolvedValue({ success: true });
     const bindMock = vi.fn().mockReturnValue({ run: runMock });
-    const prepareMock = vi.fn().mockReturnValue({ bind: bindMock });
+    const prepareMock = vi.fn().mockReturnValue({ bind: bindMock, run: runMock });
 
     const mockDb: any = {
       prepare: prepareMock,
@@ -162,7 +163,7 @@ describe('Cloudflare worker API', () => {
         action: 'network_switch_completed',
         firmware_target: 'open_lorawan',
         status: 'success',
-        details: { band: 0 },
+        details: { band: 0, keysKept: true, wxmJoinEui: '00:11:22:33:44:55:66:77', fromNetwork: 'weatherxm', firmwareVersion: 'V4.7' },
       }),
     });
 
@@ -171,7 +172,8 @@ describe('Cloudflare worker API', () => {
     const body = await res.json();
     expect(body.ok).toBe(true);
 
-    expect(prepareMock).toHaveBeenCalledWith(expect.stringContaining('INSERT INTO flasher_events'));
+    expect(prepareMock).toHaveBeenCalledWith(expect.stringContaining('CREATE TABLE IF NOT EXISTS flasher_events_v2'));
+    expect(prepareMock).toHaveBeenCalledWith(expect.stringContaining('INSERT INTO flasher_events_v2'));
     expect(bindMock).toHaveBeenCalledWith(
       'ws2001',
       '2CF7F11122334455',
@@ -179,10 +181,23 @@ describe('Cloudflare worker API', () => {
       'open_lorawan',
       null,
       'success',
-      '{"band":0}',
+      'open_lorawan',
+      'weatherxm',
+      1,
+      '00:11:22:33:44:55:66:77',
+      'V4.7',
+      expect.stringContaining('"keysKept":true'),
       'Vitest-Test-Agent',
       'GR'
     );
     expect(runMock).toHaveBeenCalled();
+  });
+
+  it('keeps /api/telemetry/stats closed without the STATS_TOKEN bearer token', async () => {
+    const url = 'https://flasher.weatherxm.com/api/telemetry/stats';
+    expect((await worker.fetch(new Request(url), { DB: {} as any })).status).toBe(401);
+    expect((await worker.fetch(new Request(url), { DB: {} as any, STATS_TOKEN: 's3cret' })).status).toBe(401);
+    const wrong = new Request(url, { headers: { Authorization: 'Bearer nope' } });
+    expect((await worker.fetch(wrong, { DB: {} as any, STATS_TOKEN: 's3cret' })).status).toBe(401);
   });
 });
