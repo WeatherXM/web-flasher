@@ -1,6 +1,8 @@
 ---
 import SiteLayout from '../layouts/SiteLayout.astro';
 import BleBrowserNotice from '../components/ws1300/BleBrowserNotice.astro';
+import { Code } from 'astro:components';
+import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
 ---
 
 <SiteLayout
@@ -400,42 +402,57 @@ import BleBrowserNotice from '../components/ws1300/BleBrowserNotice.astro';
           </button>
         </div>
 
-        <!-- Payload Decoders -->
+        <!-- Payload Decoder -->
         <div class="rounded-card border border-wxm-cloud/20 bg-wxm-abyss/60 p-4 space-y-2.5">
           <h3 class="text-xs font-bold text-white uppercase tracking-wider">Payload Decoder</h3>
           <p class="text-[11px] text-wxm-mist leading-relaxed">
-            One script decodes the WeatherXM 24-byte frame (FPort 99) and the legacy FPort 3 format. Paste it into TTN (Payload formatters &gt; Custom JavaScript) or ChirpStack (Device profile &gt; Codec), or
-            <a href="/decoders/ws2001_uplink_decoder.js" download class="text-wxm-zenith underline hover:text-white">download ws2001_uplink_decoder.js</a>.
+            One script for The Things Stack v3, ChirpStack v4 and ChirpStack v3. It decodes the WeatherXM 24-byte frame on FPort 99, labels the radio's background messages on FPort 199, and still reads the legacy FPort 3 format. Paste it into TTN (Payload formatters &gt; Uplink &gt; Custom Javascript formatter) or ChirpStack (Device profile &gt; Codec).
           </p>
           <div class="flex flex-wrap gap-2">
             <button
-              id="btn-copy-ttn-decoder"
+              id="btn-show-decoder"
               type="button"
-              title="Copy TTN v3 payload decoder"
+              title="Show the payload decoder"
               class="px-3 py-1.5 rounded-control text-xs font-bold bg-wxm-storm/60 border border-wxm-cloud/20 text-white hover:bg-wxm-storm hover:border-wxm-zenith transition-all cursor-pointer inline-flex items-center gap-1.5"
             >
-              <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" /></svg>
-              TTN v3
+              <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+              Show
             </button>
             <button
-              id="btn-copy-chirpstack-decoder"
+              id="btn-copy-decoder"
               type="button"
-              title="Copy ChirpStack v4 payload decoder"
+              title="Copy the payload decoder to the clipboard"
               class="px-3 py-1.5 rounded-control text-xs font-bold bg-wxm-storm/60 border border-wxm-cloud/20 text-white hover:bg-wxm-storm hover:border-wxm-zenith transition-all cursor-pointer inline-flex items-center gap-1.5"
             >
               <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" /></svg>
-              ChirpStack v4
+              Copy decoder
             </button>
-            <button
-              id="btn-copy-chirpstack-v3-decoder"
-              type="button"
-              title="Copy ChirpStack v3 payload decoder"
+            <a
+              href="/decoders/ws2001_uplink_decoder.js"
+              download="ws2001_uplink_decoder.js"
+              title="Download ws2001_uplink_decoder.js"
               class="px-3 py-1.5 rounded-control text-xs font-bold bg-wxm-storm/60 border border-wxm-cloud/20 text-white hover:bg-wxm-storm hover:border-wxm-zenith transition-all cursor-pointer inline-flex items-center gap-1.5"
             >
-              <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" /></svg>
-              ChirpStack v3
-            </button>
+              <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+              Download .js
+            </a>
           </div>
+          <dialog
+            id="decoder-dialog"
+            aria-labelledby="decoder-dialog-title"
+            class="m-auto w-[min(56rem,calc(100vw-2rem))] max-h-[85vh] rounded-card border border-wxm-cloud/20 bg-wxm-abyss p-0 text-white backdrop:bg-black/70"
+          >
+            <div class="flex items-center justify-between gap-3 px-4 py-3 border-b border-wxm-cloud/20">
+              <h3 id="decoder-dialog-title" class="text-sm font-bold">ws2001_uplink_decoder.js</h3>
+              <div class="flex items-center gap-2">
+                <button id="btn-dialog-copy-decoder" type="button" class="px-3 py-1.5 rounded-control text-xs font-bold bg-wxm-storm/60 border border-wxm-cloud/20 hover:bg-wxm-storm hover:border-wxm-zenith cursor-pointer">Copy</button>
+                <button id="btn-close-decoder" type="button" aria-label="Close" class="px-3 py-1.5 rounded-control text-xs font-bold bg-wxm-storm/60 border border-wxm-cloud/20 hover:bg-wxm-storm cursor-pointer">Close</button>
+              </div>
+            </div>
+            <div class="overflow-auto max-h-[calc(85vh-3.5rem)] text-xs [&_pre]:p-4 [&_pre]:m-0">
+              <Code code={WS2001_UPLINK_DECODER} lang="js" theme="github-dark" />
+            </div>
+          </dialog>
           <span id="decoder-copy-toast" class="hidden text-[11px] font-semibold text-emerald-300 block"></span>
         </div>
       </div>
@@ -542,7 +559,7 @@ import BleBrowserNotice from '../components/ws1300/BleBrowserNotice.astro';
 
 <script>
   import { Ws2001AtClient, formatHexWithColons, type Ws2001DeviceConfig } from '../lib/ble/ws2001AtClient';
-  import { TTN_PAYLOAD_DECODER, CHIRPSTACK_PAYLOAD_DECODER, CHIRPSTACK_V3_PAYLOAD_DECODER } from '../lib/ble/ws2001Decoder';
+  import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
   import { trackTelemetry } from '../lib/telemetry';
   import { enterBootloader, requestBootloaderDevice, SecureDfuTransfer, makeBootloaderName, type Ws2001DfuPackage } from '../lib/ble/ws2001Dfu';
   import { fetchWs2001Manifest, latestRelease, downloadWs2001Release, isOutdated, type Ws2001Release } from '../lib/ble/ws2001Firmware';
@@ -587,19 +604,25 @@ import BleBrowserNotice from '../components/ws1300/BleBrowserNotice.astro';
     setTimeout(() => decoderToast.classList.add('hidden'), 3500);
   };
 
-  $('btn-copy-ttn-decoder').addEventListener('click', async () => {
-    await navigator.clipboard.writeText(TTN_PAYLOAD_DECODER);
-    showDecoderToast('Copied TTN v3 payload decoder to clipboard!');
+  const copyDecoder = async () => {
+    try {
+      await navigator.clipboard.writeText(WS2001_UPLINK_DECODER);
+      showDecoderToast('Copied the payload decoder to the clipboard.');
+    } catch {
+      showDecoderToast('Copy failed: use Download .js instead.');
+    }
+  };
+  const decoderDialog = $<HTMLDialogElement>('decoder-dialog');
+  $('btn-copy-decoder').addEventListener('click', copyDecoder);
+  $('btn-show-decoder').addEventListener('click', () => decoderDialog.showModal());
+  $('btn-close-decoder').addEventListener('click', () => decoderDialog.close());
+  $('btn-dialog-copy-decoder').addEventListener('click', async () => {
+    await copyDecoder();
+    decoderDialog.close();
   });
-
-  $('btn-copy-chirpstack-decoder').addEventListener('click', async () => {
-    await navigator.clipboard.writeText(CHIRPSTACK_PAYLOAD_DECODER);
-    showDecoderToast('Copied ChirpStack v4 payload decoder to clipboard!');
-  });
-
-  $('btn-copy-chirpstack-v3-decoder').addEventListener('click', async () => {
-    await navigator.clipboard.writeText(CHIRPSTACK_V3_PAYLOAD_DECODER);
-    showDecoderToast('Copied ChirpStack v3 payload decoder to clipboard!');
+  // Close when clicking the backdrop
+  decoderDialog.addEventListener('click', (e) => {
+    if (e.target === decoderDialog) decoderDialog.close();
   });
 
   $('btn-clear-log').addEventListener('click', () => {
