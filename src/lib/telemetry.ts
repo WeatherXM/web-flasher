@@ -1,5 +1,15 @@
 export type DeviceType = 'wg1200' | 'ws1300' | 'ws2001';
-export type TelemetryAction = 'connected' | 'flash_started' | 'flash_completed' | 'flash_failed';
+// flash_*: firmware written to the device (all devices).
+// network_switch_*: WS2001 moved between the WeatherXM network and the customer's own LoRaWAN network
+// (firmware_target = 'open_lorawan' or 'weatherxm'). These drive unprovisioning on the WeatherXM LNS.
+export type TelemetryAction =
+  | 'connected'
+  | 'flash_started'
+  | 'flash_completed'
+  | 'flash_failed'
+  | 'network_switch_started'
+  | 'network_switch_completed'
+  | 'network_switch_failed';
 export type TelemetryStatus = 'success' | 'failed' | 'in_progress';
 
 export interface TelemetryPayload {
@@ -67,14 +77,22 @@ export function trackTelemetry(payload: TelemetryPayload): void {
             device_type: payload.device_type,
             firmware_target: payload.firmware_target || 'unknown',
           });
-          // Explicit event for H2 devices switched to open LoRaWAN
-          if (payload.device_type === 'ws2001' || payload.firmware_target === 'open_lorawan') {
-            gtag('event', 'switched_to_open', {
-              device_type: payload.device_type,
-              model: 'H2',
-              target: payload.firmware_target || 'open_lorawan',
-            });
-          }
+          break;
+
+        case 'network_switch_completed':
+          // H2 moved to the customer's own LoRaWAN network, or back to WeatherXM
+          gtag('event', payload.firmware_target === 'weatherxm' ? 'switched_to_weatherxm' : 'switched_to_open', {
+            device_type: payload.device_type,
+            model: 'H2',
+            target: payload.firmware_target || 'open_lorawan',
+          });
+          break;
+
+        case 'network_switch_failed':
+          gtag('event', 'network_switch_failed', {
+            device_type: payload.device_type,
+            target: payload.firmware_target || 'unknown',
+          });
           break;
 
         case 'flash_failed':
