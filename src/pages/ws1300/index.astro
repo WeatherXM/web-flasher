@@ -113,7 +113,7 @@ const latest = manifest.releases.find((r) => r.version === manifest.latest) ?? m
       </div>
     </div>
 
-    <ol class="mt-6 grid grid-cols-1 md:grid-cols-3 gap-3">
+    <ol id="connect-steps" class="mt-6 grid grid-cols-1 md:grid-cols-3 gap-3">
       <li class="flex gap-3.5 p-4 rounded-card bg-wxm-midnight/60 border border-wxm-cloud/10">
         <span class="w-7 h-7 flex-shrink-0 rounded-full bg-wxm-beacon/20 border border-wxm-beacon/40 text-wxm-zenith text-xs font-bold flex items-center justify-center">1</span>
         <div class="space-y-1">
@@ -225,8 +225,9 @@ const latest = manifest.releases.find((r) => r.version === manifest.latest) ?? m
   });
 
   function render() {
-    const connected = session.state === 'connected' || session.state === 'updating';
+    const connected = session.state === 'connected' || session.state === 'updating' || busy;
     show($('view-connect'), !connected);
+    show($('connect-steps'), !connected);
     show($('view-station'), connected);
     btnConnect.disabled = session.state === 'connecting' || busy;
     $('btn-connect-label').textContent = session.state === 'connecting' ? 'Connecting…' : 'Connect to WS1300 (D2)';
