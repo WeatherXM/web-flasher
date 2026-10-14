@@ -8,19 +8,19 @@
       "version": "22.7.0",
       "label": "v22.7",
       "file": "/firmware/ws1300/ws1300_release_v22.7-dfu.zip",
-      "bytes": 745241,
-      "sha256": "5b2ac64eff0a56655051aca751567852e0c9415837bd80b3973c910d1f9e6056",
+      "bytes": 745225,
+      "sha256": "d734090dc3044f88ef9ffe071c3e1865521df0ebaecf96357ba230377c029107",
       "source_repo": "WeatherXM/ws1300-firmware-legacy",
       "git_commit": "d90374a",
-      "built_at": "2026-10-14T14:08:56.000Z",
+      "built_at": "2026-10-14T15:55:17.000Z",
       "images": [
         {
           "file": "app_update.bin",
           "image_index": 0,
           "core": "app",
           "version": "22.7.0",
-          "bytes": 572251,
-          "sha256": "bafc244b05aefb0afcd21938d38d5d162f00e0c858fbeef9c908f099385c9e34"
+          "bytes": 572235,
+          "sha256": "54e0ff75d07f0c07b418c52e6ac07b65144b77ce830eaf946cc2ab69b91bd04c"
         },
         {
           "file": "net_core_app_update.bin",
@@ -28,7 +28,7 @@
           "core": "net",
           "version": "22.7.0",
           "bytes": 171351,
-          "sha256": "150578940cdaa9a8c98ed32e0772a5f36dd5ca4e102ac66efbacd514a3c3afaa"
+          "sha256": "452822bc2fa49b2b2e09c007b4a0ccc0ecb94159fd05cce3799449d2a627242e"
         }
       ]
     },
