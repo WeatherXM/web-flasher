@@ -7,14 +7,14 @@
   "firmwares": {
     "weatherxm": {
       "name": "WeatherXM",
-      "version": "0.8.28",
-      "label": "WeatherXM v0.8.28 (Latest Release)",
+      "version": "0.8.33",
+      "label": "WeatherXM v0.8.33 (Latest Release)",
       "category": "weatherxm",
-      "file": "/firmware/weatherxm/fw_release_0.8.28-g77ceed0-signed.bin",
-      "bytes": 3543040,
-      "sha256": "5c0745e2d2441d79fb2bc3ac74c49520ac73fc81674a911d191a76827fa1ab52",
+      "file": "/firmware/weatherxm/fw_release_0.8.33-g36148bd-dirty-signed.bin",
+      "bytes": 3608576,
+      "sha256": "d97e6f82994fbc5a644fe55f7d66cc86265e1e2be6e78e04322452e86834bd00",
       "source_repo": "WeatherXM/wg1200-firmware",
-      "git_commit": "77ceed0",
+      "git_commit": "36148bd",
       "secure_boot_v2": true
     },
     "meshtastic": {
