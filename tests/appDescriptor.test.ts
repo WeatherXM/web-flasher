@@ -32,6 +32,23 @@ describe('appDescriptor', () => {
     expect(desc).not.toBeNull();
     expect(desc?.firmwareType).toBe('weatherxm');
     expect(desc?.projectName).toBe('wg1010_port');
+    expect(desc?.version).toContain('0.8.34');
+    expect(desc?.displayTitle).toContain('WeatherXM');
+  });
+
+  it('correctly parses legacy stable v0.6.2 WeatherXM signed binary header', () => {
+    const legacyFw = manifest.firmwares.weatherxm_0_6_2;
+    expect(legacyFw).toBeDefined();
+    expect(legacyFw.version).toBe('0.6.2');
+    const binPath = path.resolve(__dirname, '../public', legacyFw.file.replace(/^\//, ''));
+    const buf = fs.readFileSync(binPath);
+    const header = new Uint8Array(buf.subarray(0, 512));
+    const desc = parseAppDescriptor(header);
+
+    expect(desc).not.toBeNull();
+    expect(desc?.firmwareType).toBe('weatherxm');
+    expect(desc?.projectName).toBe('wg1010_port');
+    expect(desc?.version).toContain('0.6.2');
     expect(desc?.displayTitle).toContain('WeatherXM');
   });
 

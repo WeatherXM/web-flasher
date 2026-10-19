@@ -735,8 +735,15 @@ import Footer from '../components/Footer.astro';
             : 'px-2.5 py-1 text-xs font-semibold rounded-full bg-wxm-midnight/70 text-wxm-mist border border-wxm-cloud/20';
         }
 
+        const selectWxmBuild = document.getElementById('select-wxm-build') as HTMLSelectElement | null;
+        const isLegacyWxmSelected = selectWxmBuild ? selectWxmBuild.value !== 'weatherxm' : false;
+
         if (btnFlashWxmLabel) {
-          btnFlashWxmLabel.textContent = isWxmActive ? 'Reinstall WeatherXM Tri-Protocol' : 'Switch to WeatherXM Tri-Protocol';
+          if (isLegacyWxmSelected) {
+            btnFlashWxmLabel.textContent = 'Revert to WeatherXM v0.6.2 (Legacy Stable)';
+          } else {
+            btnFlashWxmLabel.textContent = isWxmActive ? 'Reinstall WeatherXM Tri-Protocol' : 'Switch to WeatherXM Tri-Protocol';
+          }
         }
         if (btnFlashMeshLabel) {
           btnFlashMeshLabel.textContent = isMeshActive ? 'Reinstall Full Meshtastic' : 'Switch to Full Meshtastic';
@@ -789,6 +796,30 @@ import Footer from '../components/Footer.astro';
           if (wxmVersionText) wxmVersionText.textContent = `v${fw.version}`;
           if (wxmSelectedFile) wxmSelectedFile.textContent = fw.file.split('/').pop() ?? fw.file;
           if (wxmSelectedSize) wxmSelectedSize.textContent = `${(fw.bytes / (1024 * 1024)).toFixed(2)} MB`;
+
+          const tipLatest = document.getElementById('wxm-variant-tip-latest');
+          const tipLegacy = document.getElementById('wxm-variant-tip-legacy');
+          const isLatest = selectWxmBuild.value === 'weatherxm';
+          if (tipLatest && tipLegacy) {
+            if (isLatest) {
+              tipLatest.classList.remove('hidden');
+              tipLegacy.classList.add('hidden');
+            } else {
+              tipLatest.classList.add('hidden');
+              tipLegacy.classList.remove('hidden');
+            }
+          }
+
+          if (btnFlashWxmLabel) {
+            const isWxmActive = controller.getInspectionData()?.currentFirmware?.firmwareType === 'weatherxm';
+            if (!isLatest) {
+              btnFlashWxmLabel.textContent = `Revert to WeatherXM v${fw.version} (Legacy Stable)`;
+            } else if (controller.getInspectionData()) {
+              btnFlashWxmLabel.textContent = isWxmActive ? 'Reinstall WeatherXM Tri-Protocol' : 'Switch to WeatherXM Tri-Protocol';
+            } else {
+              btnFlashWxmLabel.textContent = 'Flash WeatherXM Tri-Protocol';
+            }
+          }
         }
 
         function updateMeshDetails() {
