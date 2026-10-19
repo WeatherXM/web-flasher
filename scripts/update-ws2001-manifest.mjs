@@ -82,7 +82,7 @@ function main() {
   const args = process.argv.slice(2);
   const commitIdx = args.indexOf('--commit');
   const commit = commitIdx >= 0 ? args[commitIdx + 1] : undefined;
-  const input = args.find((a, i) => !a.startsWith('--') && i !== commitIdx + 1);
+  const input = args.find((a, i) => !a.startsWith('--') && (commitIdx < 0 || i !== commitIdx + 1));
   const previous = fs.existsSync(MANIFEST_PATH) ? JSON.parse(fs.readFileSync(MANIFEST_PATH, 'utf8')) : { releases: [] };
 
   if (input) {
@@ -99,18 +99,19 @@ function main() {
     const buf = fs.readFileSync(path.join(FW_DIR, file));
     const info = inspect(buf, file);
     const prev = previous.releases.find((r) => r.fw_version === info.fwVersion) ?? {};
+    const fileSha256 = sha256(buf);
     releases.push({
       version: label(info.fwVersion),
       label: `V${label(info.fwVersion)}`,
       fw_version: info.fwVersion,
       file: `/firmware/ws2001/${file}`,
       bytes: buf.length,
-      sha256: sha256(buf),
+      sha256: fileSha256,
       image_bytes: info.imageBytes,
       image_sha256: info.imageSha256,
       source_repo: 'WeatherXM/ws2001-firmware',
       ...(prev.git_commit ? { git_commit: prev.git_commit } : {}),
-      built_at: fs.statSync(path.join(FW_DIR, file)).mtime.toISOString(),
+      built_at: prev.sha256 === fileSha256 && prev.built_at ? prev.built_at : fs.statSync(path.join(FW_DIR, file)).mtime.toISOString(),
     });
   }
   if (releases.length === 0) throw new Error('No *-ble-dfu.zip packages in public/firmware/ws2001');
