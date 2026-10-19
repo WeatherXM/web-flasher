@@ -98,6 +98,20 @@ const defaultMesh = (meshEntries.find(([k]) => k === 'meshtastic')?.[1] ?? meshE
             <span id="wxm-selected-file" class="font-mono text-[10px] text-wxm-cloud truncate max-w-[200px]">{defaultWxm ? (defaultWxm.file.split('/').pop() ?? defaultWxm.file) : ''}</span>
             <span id="wxm-selected-size" class="font-mono text-[10px] text-wxm-beacon font-semibold">{defaultWxm ? (defaultWxm.bytes / (1024 * 1024)).toFixed(2) + ' MB' : ''}</span>
           </div>
+
+          <!-- Build Version Description -->
+          <div class="mt-2.5 p-2.5 rounded bg-wxm-midnight/70 border border-wxm-beacon/20 text-[11px] leading-relaxed">
+            <div id="wxm-variant-tip-latest" class="text-wxm-mist">
+              <span class="inline-block w-1.5 h-1.5 rounded-full bg-wxm-zenith mr-1.5 align-middle"></span>
+              <strong class="text-white">Latest Release (Default):</strong> Full <span class="text-wxm-zenith font-semibold">Tri-Protocol gateway</span> (WeatherXM + Meshtastic + MeshCore).
+              <span class="block text-wxm-mist/75 mt-0.5 text-[10px]">Select v0.6.2 in the dropdown above if you wish to revert to the early-2026 legacy stable firmware.</span>
+            </div>
+            <div id="wxm-variant-tip-legacy" class="hidden text-wxm-mist">
+              <span class="inline-block w-1.5 h-1.5 rounded-full bg-amber-400 mr-1.5 align-middle"></span>
+              <strong class="text-white">Legacy Stable (Early 2026 Revert):</strong> Reverts the WG1200 to the <span class="text-amber-300 font-semibold">v0.6.2 stock WeatherXM firmware</span> (prior to Tri-Protocol mesh features).
+              <span class="block text-wxm-mist/75 mt-0.5 text-[10px]">You can upgrade back to the latest Tri-Protocol release at any time.</span>
+            </div>
+          </div>
         </div>
       </div>
 

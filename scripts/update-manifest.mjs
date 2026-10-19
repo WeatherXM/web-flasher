@@ -29,6 +29,17 @@ const ESP_IMAGE_MAGIC = 0xe9;
 const ESP_APP_DESC_MAGIC = 0xabcd5432;
 
 const KNOWN_METADATA = {
+  // WeatherXM v0.8.34
+  'bb5af75dfe1b5df7d973110d834c8b7c26af983acc0ff2728900b3ca88dc19eb': {
+    git_commit: '86b609b',
+    source_repo: 'WeatherXM/wg1200-firmware',
+  },
+  // WeatherXM v0.6.2 (Legacy Stable — Early 2026)
+  'ffd51598243fa1acd5754d5c6bb9a65a281cb4cb080b82231a5bc4ff43b599a4': {
+    git_commit: '8f4dca2',
+    source_repo: 'WeatherXM/wg1200-firmware-legacy',
+    label: 'WeatherXM v0.6.2 (Legacy Stable — Early 2026)',
+  },
   // WeatherXM v0.8.27
   '7a394f858ab9c4a04ed653d20ca1337be9eb4112d741b21c4eacad3e0fc953a6': {
     git_commit: 'ceee14f',
@@ -262,6 +273,7 @@ export function generateManifest() {
         secure_boot_v2: isSecure,
         date: appDesc?.date,
         source_repo,
+        custom_label: known?.label,
       });
     }
   }
@@ -273,9 +285,11 @@ export function generateManifest() {
   wxmEntries.forEach((entry, idx) => {
     const isLatest = idx === 0;
     const key = isLatest ? 'weatherxm' : `weatherxm_${entry.version.replace(/\./g, '_')}`;
-    const label = isLatest
-      ? `WeatherXM v${entry.version} (Latest Release)`
-      : `WeatherXM v${entry.version} (Stable Release)`;
+    const label =
+      entry.custom_label ??
+      (isLatest
+        ? `WeatherXM v${entry.version} (Latest Release)`
+        : `WeatherXM v${entry.version} (Stable Release)`);
 
     manifest.firmwares[key] = {
       name: 'WeatherXM',

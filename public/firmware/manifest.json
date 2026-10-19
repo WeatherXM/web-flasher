@@ -7,14 +7,26 @@
   "firmwares": {
     "weatherxm": {
       "name": "WeatherXM",
-      "version": "0.8.33",
-      "label": "WeatherXM v0.8.33 (Latest Release)",
+      "version": "0.8.34",
+      "label": "WeatherXM v0.8.34 (Latest Release)",
       "category": "weatherxm",
-      "file": "/firmware/weatherxm/fw_release_0.8.33-g36148bd-dirty-signed.bin",
-      "bytes": 3608576,
-      "sha256": "d97e6f82994fbc5a644fe55f7d66cc86265e1e2be6e78e04322452e86834bd00",
+      "file": "/firmware/weatherxm/fw_release_0.8.34-g86b609b-signed.bin",
+      "bytes": 3674112,
+      "sha256": "bb5af75dfe1b5df7d973110d834c8b7c26af983acc0ff2728900b3ca88dc19eb",
       "source_repo": "WeatherXM/wg1200-firmware",
-      "git_commit": "36148bd",
+      "git_commit": "86b609b",
+      "secure_boot_v2": true
+    },
+    "weatherxm_0_6_2": {
+      "name": "WeatherXM",
+      "version": "0.6.2",
+      "label": "WeatherXM v0.6.2 (Legacy Stable — Early 2026)",
+      "category": "weatherxm",
+      "file": "/firmware/weatherxm/fw_release_0.6.2-g8f4dca2-signed.bin",
+      "bytes": 2244608,
+      "sha256": "ffd51598243fa1acd5754d5c6bb9a65a281cb4cb080b82231a5bc4ff43b599a4",
+      "source_repo": "WeatherXM/wg1200-firmware-legacy",
+      "git_commit": "8f4dca2",
       "secure_boot_v2": true
     },
     "meshtastic": {
