@@ -285,6 +285,7 @@ export interface Wg1200Inspection {
   secureCert: SecureCertVerificationResult;
   otadata: OtadataStatus;
   currentFirmware: AppDescriptor | null;
+  inactiveFirmware: AppDescriptor | null;
   isValidWg1200: boolean;
 }
 
@@ -525,6 +526,48 @@ export class Wg1200Transport {
       this.logger.log(`Could not read application descriptor from offset 0x${activeAppOffset.toString(16)}`);
     }
 
+    // 8. Detect application in the inactive/target OTA slot
+    let inactiveFirmware: AppDescriptor | null = null;
+    try {
+      this.logger.log(
+        `Scanning inactive slot (${otadata.targetSlot}) descriptor at offset 0x${otadata.targetOffset.toString(16)}…`
+      );
+      const inactiveHeaderBytes = await this.readRegion(otadata.targetOffset, 4096);
+      inactiveFirmware = parseAppDescriptor(inactiveHeaderBytes);
+      if (!inactiveFirmware) {
+        const isErased = inactiveHeaderBytes.slice(0, 32).every((b) => b === 0xff);
+        if (isErased) {
+          inactiveFirmware = {
+            magic: 0,
+            secureVersion: 0,
+            version: '',
+            projectName: '',
+            compileTime: '',
+            compileDate: '',
+            idfVersion: '',
+            firmwareType: 'unknown',
+            displayTitle: 'Empty / Unprogrammed Slot',
+          };
+        } else if (inactiveHeaderBytes[0] === 0xe9) {
+          inactiveFirmware = {
+            magic: 0,
+            secureVersion: 0,
+            version: '',
+            projectName: '',
+            compileTime: '',
+            compileDate: '',
+            idfVersion: '',
+            firmwareType: 'unknown',
+            displayTitle: 'Custom / Unrecognized Firmware',
+          };
+        }
+      }
+    } catch (e) {
+      this.logger.log(
+        `Could not read inactive application descriptor from offset 0x${otadata.targetOffset.toString(16)}`
+      );
+    }
+
     const isValidWg1200 =
       isEsp32S3 && is16Mb && ptResult.valid && secureCert.valid;
 
@@ -548,6 +591,7 @@ export class Wg1200Transport {
       secureCert,
       otadata,
       currentFirmware,
+      inactiveFirmware,
       isValidWg1200,
     };
   }

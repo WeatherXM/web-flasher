@@ -549,5 +549,57 @@ describe('transport & serialLog', () => {
     expect(inspection.currentFirmware?.displayTitle).toBe('WeatherXM v0.8.27');
     expect(inspection.otadata.activeSlot).toBe('ota_0');
   });
+
+  it('inspect() inspects both active slot and inactive target slot (inactiveFirmware)', async () => {
+    const transport = new Wg1200Transport({
+      log: () => {},
+      error: () => {},
+    });
+
+    const otaBuf = new Uint8Array(8192);
+    const otaView = new DataView(otaBuf.buffer);
+    otaView.setUint32(0, 1, true); // seq = 1 -> ota_0 active, ota_1 target (0x820000)
+    otaView.setUint32(24, 0, true);
+    const { calculateOtaSeqCrc32 } = await import('../src/lib/flasher/otadata');
+    otaView.setUint32(28, calculateOtaSeqCrc32(1), true);
+
+    const ota0Buf = new Uint8Array(4096);
+    const ota0View = new DataView(ota0Buf.buffer);
+    ota0View.setUint32(32, 0xabcd5432, true);
+    ota0Buf.set(new TextEncoder().encode('wg1010_port\0'), 32 + 48);
+    ota0Buf.set(new TextEncoder().encode('v0.8.34-g86b609b\0'), 32 + 16);
+
+    const ota1Buf = new Uint8Array(4096);
+    const ota1View = new DataView(ota1Buf.buffer);
+    ota1View.setUint32(32, 0xabcd5432, true);
+    ota1Buf.set(new TextEncoder().encode('wg1010_port\0'), 32 + 48);
+    ota1Buf.set(new TextEncoder().encode('v0.6.2-2-g8f4dca2\0'), 32 + 16);
+
+    const mockLoader = {
+      chip: { CHIP_NAME: 'ESP32-S3' },
+      detectFlashSize: vi.fn().mockResolvedValue('16MB'),
+      readFlash: vi.fn().mockImplementation((offset: number, size: number) => {
+        if (offset === 0xc000) {
+          const buf = new Uint8Array(size);
+          buf[0] = 0xaa;
+          buf[1] = 0x50;
+          return Promise.resolve(buf);
+        }
+        if (offset === 0x13000) return Promise.resolve(otaBuf);
+        if (offset === WG1200_CONSTANTS.APP_OTA_0.offset) return Promise.resolve(ota0Buf);
+        if (offset === WG1200_CONSTANTS.APP_OTA_1.offset) return Promise.resolve(ota1Buf);
+        return Promise.resolve(new Uint8Array(size).fill(0xff));
+      }),
+    };
+
+    (transport as any).loader = mockLoader;
+
+    const inspection = await transport.inspect();
+    expect(inspection.otadata.activeSlot).toBe('ota_0');
+    expect(inspection.otadata.targetSlot).toBe('ota_1');
+    expect(inspection.currentFirmware?.displayTitle).toBe('WeatherXM v0.8.34-g86b609b');
+    expect(inspection.inactiveFirmware?.displayTitle).toBe('WeatherXM v0.6.2-2-g8f4dca2');
+  });
 });
+
 

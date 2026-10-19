@@ -1,7 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
-import { parseAppDescriptor } from '../src/lib/flasher/appDescriptor';
+import {
+  parseAppDescriptor,
+  isValidAppDescriptor,
+  doesDescriptorMatchManifestEntry,
+  type AppDescriptor,
+} from '../src/lib/flasher/appDescriptor';
 
 describe('appDescriptor', () => {
   const manifestPath = path.resolve(__dirname, '../public/firmware/manifest.json');
@@ -94,4 +99,66 @@ describe('appDescriptor', () => {
     expect(desc?.version).toBe('2.5.0');
     expect(desc?.displayTitle).toBe('Meshtastic (2.5.0)');
   });
+
+  it('isValidAppDescriptor distinguishes real firmware descriptors from synthetic empty/unrecognized placeholders', () => {
+    const validDesc: AppDescriptor = {
+      magic: 0xabcd5432,
+      secureVersion: 0,
+      version: 'v0.6.2-2-g8f4dca2',
+      projectName: 'wg1010_port',
+      compileTime: '12:00:00',
+      compileDate: 'Jan 21 2026',
+      idfVersion: 'v5.3',
+      firmwareType: 'weatherxm',
+      displayTitle: 'WeatherXM v0.6.2-2-g8f4dca2',
+    };
+    const emptyPlaceholder: AppDescriptor = {
+      magic: 0,
+      secureVersion: 0,
+      version: 'none',
+      projectName: 'Empty Slot',
+      compileTime: '',
+      compileDate: '',
+      idfVersion: '',
+      firmwareType: 'unknown',
+      displayTitle: 'Empty / Unprogrammed Slot',
+    };
+    expect(isValidAppDescriptor(validDesc)).toBe(true);
+    expect(isValidAppDescriptor(emptyPlaceholder)).toBe(false);
+    expect(isValidAppDescriptor(null)).toBe(false);
+  });
+
+  it('doesDescriptorMatchManifestEntry matches real v0.8.34, v0.6.2, and v0.6.1-dirty cloud OTA descriptors', () => {
+    const latestFw = manifest.firmwares.weatherxm;
+    const legacyFw = manifest.firmwares.weatherxm_0_6_2;
+    const meshFw = manifest.firmwares.meshtastic;
+
+    const latestBin = fs.readFileSync(path.resolve(__dirname, '../public', latestFw.file.replace(/^\//, '')));
+    const latestDesc = parseAppDescriptor(new Uint8Array(latestBin.subarray(0, 512)));
+
+    const legacyBin = fs.readFileSync(path.resolve(__dirname, '../public', legacyFw.file.replace(/^\//, '')));
+    const legacyDesc = parseAppDescriptor(new Uint8Array(legacyBin.subarray(0, 512)));
+
+    expect(doesDescriptorMatchManifestEntry(latestDesc, latestFw)).toBe(true);
+    expect(doesDescriptorMatchManifestEntry(latestDesc, legacyFw)).toBe(false);
+    expect(doesDescriptorMatchManifestEntry(legacyDesc, legacyFw)).toBe(true);
+    expect(doesDescriptorMatchManifestEntry(legacyDesc, latestFw)).toBe(false);
+    expect(doesDescriptorMatchManifestEntry(legacyDesc, meshFw)).toBe(false);
+
+    // Also verify Jan 2026 official cloud OTA v0.6.2 build whose embedded esp_app_desc_t.version is v0.6.1-dirty
+    const cloudOtaLegacyDesc: AppDescriptor = {
+      magic: 0xabcd5432,
+      secureVersion: 0,
+      version: 'v0.6.1-dirty',
+      projectName: 'wg1010_port',
+      compileTime: '15:18:10',
+      compileDate: 'Jan 21 2026',
+      idfVersion: 'v5.3',
+      firmwareType: 'weatherxm',
+      displayTitle: 'WeatherXM v0.6.1-dirty',
+    };
+    expect(doesDescriptorMatchManifestEntry(cloudOtaLegacyDesc, legacyFw)).toBe(true);
+    expect(doesDescriptorMatchManifestEntry(cloudOtaLegacyDesc, latestFw)).toBe(false);
+  });
 });
+

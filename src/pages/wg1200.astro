@@ -87,6 +87,7 @@ import Footer from '../components/Footer.astro';
       import type { FirmwareManifest } from '../lib/flasher/manifest';
       import { WG1200_CONSTANTS } from '../lib/flasher/constants';
       import { validateFullBackupImage } from '../lib/flasher/writeGuard';
+      import { doesDescriptorMatchManifestEntry, isValidAppDescriptor } from '../lib/flasher/appDescriptor';
 
       // DOM Elements
       const browserWarning = document.getElementById('browser-warning');
@@ -119,7 +120,12 @@ import Footer from '../components/Footer.astro';
       const modalFwName = document.getElementById('modal-fw-name');
       const modalFwVersion = document.getElementById('modal-fw-version');
       const modalTargetSlot = document.getElementById('modal-target-slot');
+      const modalTargetSlotCurrent = document.getElementById('modal-target-slot-current');
+      const modalFastSwitchBanner = document.getElementById('modal-fast-switch-banner');
+      const modalFastSwitchDetected = document.getElementById('modal-fast-switch-detected');
+      const modalFastSwitchSlot = document.getElementById('modal-fast-switch-slot');
       const btnModalCancel = document.getElementById('btn-modal-cancel');
+      const btnModalFastSwitch = document.getElementById('btn-modal-fast-switch');
       const btnModalConfirm = document.getElementById('btn-modal-confirm');
 
       const flashProgressSection = document.getElementById('flash-progress-section');
@@ -131,6 +137,7 @@ import Footer from '../components/Footer.astro';
       const btnRetryFlash = document.getElementById('btn-retry-flash');
 
       const postFlashSection = document.getElementById('post-flash-section');
+      const postFlashSubtitle = document.getElementById('post-flash-subtitle');
       const instructionsWxm = document.getElementById('instructions-wxm');
       const instructionsMesh = document.getElementById('instructions-mesh');
       const btnPostFlashDone = document.getElementById('btn-post-flash-done');
@@ -149,12 +156,22 @@ import Footer from '../components/Footer.astro';
       const btnToolBackup = document.getElementById('btn-tool-backup');
       const btnToolRestore = document.getElementById('btn-tool-restore');
       const fileRestoreBackup = document.getElementById('file-restore-backup') as HTMLInputElement | null;
+      const toolInactiveSlotName = document.getElementById('tool-inactive-slot-name');
+      const toolInactiveSlotFw = document.getElementById('tool-inactive-slot-fw');
+      const btnToolSwitchSlot = document.getElementById('btn-tool-switch-slot');
       const btnToolRollback = document.getElementById('btn-tool-rollback');
 
       const modalPartitionInfo = document.getElementById('modal-partition-info');
       const partitionModalBody = document.getElementById('partition-modal-body');
       const btnClosePartitionModal = document.getElementById('btn-close-partition-modal');
       const btnClosePartitionModal2 = document.getElementById('btn-close-partition-modal-2');
+
+      const modalSlotSwitchConfirm = document.getElementById('modal-slot-switch-confirm');
+      const slotSwitchActiveInfo = document.getElementById('slot-switch-active-info');
+      const slotSwitchTargetInfo = document.getElementById('slot-switch-target-info');
+      const slotSwitchFwInfo = document.getElementById('slot-switch-fw-info');
+      const btnCancelSlotSwitch = document.getElementById('btn-cancel-slot-switch');
+      const btnConfirmSlotSwitch = document.getElementById('btn-confirm-slot-switch');
 
       const modalRollbackConfirm = document.getElementById('modal-rollback-confirm');
       const btnCancelRollback = document.getElementById('btn-cancel-rollback');
@@ -281,6 +298,15 @@ import Footer from '../components/Footer.astro';
       });
 
       btnModalCancel?.addEventListener('click', closeConfirmModal);
+      btnModalFastSwitch?.addEventListener('click', async () => {
+        closeConfirmModal();
+        try {
+          hasStartedFlashing = true;
+          await controller.executeOtaSlotSwitch();
+        } catch (e: any) {
+          alert(`Instant OTA slot switch failed: ${e.message}`);
+        }
+      });
       btnModalConfirm?.addEventListener('click', () => {
         closeConfirmModal();
         if (pendingTargetFw) {
@@ -471,6 +497,42 @@ import Footer from '../components/Footer.astro';
         }
       });
 
+      btnToolSwitchSlot?.addEventListener('click', () => {
+        const data = controller.getInspectionData();
+        if (!data || !isValidAppDescriptor(data.inactiveFirmware)) {
+          alert('No valid bootable firmware was detected in the inactive OTA slot. Please flash a firmware image first.');
+          return;
+        }
+        const activeTitle = data.currentFirmware?.displayTitle ?? 'Unknown';
+        const inactiveTitle = data.inactiveFirmware.displayTitle;
+        if (slotSwitchActiveInfo) {
+          slotSwitchActiveInfo.textContent = `${data.otadata.activeSlot.toUpperCase()} — ${activeTitle}`;
+        }
+        if (slotSwitchTargetInfo) {
+          slotSwitchTargetInfo.textContent = `${data.otadata.targetSlot.toUpperCase()} (0x${data.otadata.targetOffset.toString(16)})`;
+        }
+        if (slotSwitchFwInfo) {
+          slotSwitchFwInfo.textContent = inactiveTitle;
+        }
+        modalSlotSwitchConfirm?.classList.remove('hidden');
+      });
+
+      btnCancelSlotSwitch?.addEventListener('click', () => {
+        modalSlotSwitchConfirm?.classList.add('hidden');
+      });
+
+      btnConfirmSlotSwitch?.addEventListener('click', async () => {
+        modalSlotSwitchConfirm?.classList.add('hidden');
+        const data = controller.getInspectionData();
+        pendingTargetFw = data?.inactiveFirmware?.firmwareType === 'meshtastic' ? 'meshtastic' : 'weatherxm';
+        try {
+          hasStartedFlashing = true;
+          await controller.executeOtaSlotSwitch();
+        } catch (e: any) {
+          alert(`OTA slot switch failed: ${e.message}`);
+        }
+      });
+
       btnToolRollback?.addEventListener('click', () => {
         modalRollbackConfirm?.classList.remove('hidden');
       });
@@ -636,6 +698,10 @@ import Footer from '../components/Footer.astro';
           postFlashSection?.classList.remove('hidden');
           recoveryAlertCard?.classList.add('hidden');
 
+          if (postFlashSubtitle) {
+            postFlashSubtitle.textContent = ctx.statusMessage || 'Your gateway has been safely flashed and rebooted.';
+          }
+
           const isWxm = pendingTargetFw ? pendingTargetFw.startsWith('weatherxm') : true;
           if (isWxm) {
             instructionsWxm?.classList.remove('hidden');
@@ -714,8 +780,29 @@ import Footer from '../components/Footer.astro';
         if (devRunningFw) {
           devRunningFw.textContent = data.currentFirmware?.displayTitle ?? 'Unrecognized Firmware';
         }
+        const hasValidInactive = isValidAppDescriptor(data.inactiveFirmware);
+        const targetLabel = `${data.otadata.targetSlot.toUpperCase()} (0x${data.otadata.targetOffset.toString(16)})`;
         if (devTargetSlot) {
-          devTargetSlot.textContent = `${data.otadata.targetSlot.toUpperCase()} (0x${data.otadata.targetOffset.toString(16)})`;
+          devTargetSlot.textContent = hasValidInactive
+            ? `${targetLabel} — ${data.inactiveFirmware!.displayTitle}`
+            : targetLabel;
+        }
+        if (toolInactiveSlotName) {
+          toolInactiveSlotName.textContent = targetLabel;
+        }
+        if (toolInactiveSlotFw) {
+          toolInactiveSlotFw.textContent = hasValidInactive
+            ? data.inactiveFirmware!.displayTitle
+            : 'Empty / Uninitialized';
+        }
+        if (btnToolSwitchSlot) {
+          if (hasValidInactive) {
+            btnToolSwitchSlot.removeAttribute('disabled');
+            btnToolSwitchSlot.textContent = `Switch to ${data.otadata.targetSlot.toUpperCase()} (${data.inactiveFirmware!.displayTitle}) (~2s)`;
+          } else {
+            btnToolSwitchSlot.setAttribute('disabled', 'true');
+            btnToolSwitchSlot.textContent = `Switch to ${data.otadata.targetSlot.toUpperCase()} (No Valid Firmware in Slot)`;
+          }
         }
 
         const isWxmActive = data.currentFirmware?.firmwareType === 'weatherxm';
@@ -867,9 +954,38 @@ import Footer from '../components/Footer.astro';
         if (modalFwFile) modalFwFile.textContent = fw.file.split('/').pop() ?? fw.file;
         if (modalFwSize) modalFwSize.textContent = `${(fw.bytes / (1024 * 1024)).toFixed(2)} MB (${fw.bytes.toLocaleString()} bytes)`;
 
+        const slotLabel = `${inspection.otadata.targetSlot.toUpperCase()} (0x${inspection.otadata.targetOffset.toString(16)})`;
         if (modalTargetSlot) {
-          modalTargetSlot.textContent = `${inspection.otadata.targetSlot.toUpperCase()} (0x${inspection.otadata.targetOffset.toString(16)})`;
+          modalTargetSlot.textContent = slotLabel;
         }
+        const hasValidInactive = isValidAppDescriptor(inspection.inactiveFirmware);
+        if (modalTargetSlotCurrent) {
+          modalTargetSlotCurrent.textContent = hasValidInactive
+            ? inspection.inactiveFirmware!.displayTitle
+            : 'Empty / Uninitialized';
+        }
+
+        const isFastSwitchMatch = doesDescriptorMatchManifestEntry(inspection.inactiveFirmware, fw);
+        if (isFastSwitchMatch && inspection.inactiveFirmware) {
+          if (modalFastSwitchDetected) {
+            modalFastSwitchDetected.textContent = inspection.inactiveFirmware.displayTitle;
+          }
+          if (modalFastSwitchSlot) {
+            modalFastSwitchSlot.textContent = slotLabel;
+          }
+          modalFastSwitchBanner?.classList.remove('hidden');
+          btnModalFastSwitch?.classList.remove('hidden');
+          if (btnModalConfirm) {
+            btnModalConfirm.textContent = 'Clean Reflash (~25s)';
+          }
+        } else {
+          modalFastSwitchBanner?.classList.add('hidden');
+          btnModalFastSwitch?.classList.add('hidden');
+          if (btnModalConfirm) {
+            btnModalConfirm.textContent = 'Confirm and Flash';
+          }
+        }
+
         modalConfirm?.classList.remove('hidden');
       }
 
@@ -988,6 +1104,8 @@ import Footer from '../components/Footer.astro';
               <div class="grid grid-cols-2 gap-2 text-xs">
                 <div>Active Slot: <span class="text-wxm-live font-bold">${data.otadata.activeSlot.toUpperCase()}</span></div>
                 <div>Target Inactive Slot: <span class="text-wxm-zenith font-bold">${data.otadata.targetSlot.toUpperCase()} (0x${data.otadata.targetOffset.toString(16)})</span></div>
+                <div class="col-span-2">Active Slot Firmware: <span class="text-white font-semibold">${escapeHtml(data.currentFirmware?.displayTitle ?? 'Unrecognized')}</span></div>
+                <div class="col-span-2">Inactive Slot Firmware: <span class="text-wxm-zenith font-semibold">${escapeHtml(isValidAppDescriptor(data.inactiveFirmware) ? data.inactiveFirmware.displayTitle : 'Empty / Uninitialized')}</span></div>
                 <div>Next Sequence: <span class="text-white font-semibold">${data.otadata.nextSeq}</span></div>
                 <div>Boot State Ambiguous: <span class="${data.otadata.isAmbiguous ? 'text-wxm-error font-bold' : 'text-wxm-mist'}">${data.otadata.isAmbiguous ? 'YES' : 'NO'}</span></div>
                 <div class="text-wxm-mist">Sector 0 (0x13000): <span class="text-wxm-cloud">seq=${data.otadata.sector0.seq}, valid=${data.otadata.sector0.valid}</span></div>

@@ -1,4 +1,5 @@
 import { WG1200_CONSTANTS } from './constants';
+import { isValidAppDescriptor } from './appDescriptor';
 import { md5Hex } from './hashing';
 import {
   fetchAndVerifyFirmware,
@@ -154,6 +155,9 @@ export class FlasherController {
         `WeatherXM Identity verified! Fingerprint: ${this.inspection.secureCert.fingerprint}`
       );
       this.addLog(`Active boot slot: ${this.inspection.otadata.activeSlot}`);
+      this.addLog(
+        `Inactive target slot (${this.inspection.otadata.targetSlot}): ${this.inspection.inactiveFirmware?.displayTitle ?? 'Unknown'}`
+      );
       this.callbacks.onInspection(this.inspection);
 
       const wgSerial = this.inspection.macAddress || this.inspection.secureCert.fingerprint;
@@ -172,6 +176,7 @@ export class FlasherController {
           fingerprint: this.inspection.secureCert.fingerprint,
           certSha256: this.inspection.secureCert.sha256,
           activeSlot: this.inspection.otadata.activeSlot,
+          inactiveFirmware: this.inspection.inactiveFirmware?.displayTitle,
           flashSizeMb: this.inspection.flashSizeMb,
         },
       });
@@ -394,6 +399,131 @@ export class FlasherController {
     // Transition recovery to downloading
     this.stateMachine.transition('ready', 'Starting targeted recovery flash…');
     await this.flashFirmware(choice);
+  }
+
+  /**
+   * Instantaneously switches the active boot pointer to the inactive OTA slot (ota_0 or ota_1)
+   * without re-downloading or overwriting the application binary.
+   */
+  public async executeOtaSlotSwitch(): Promise<void> {
+    if (this.isOperating) throw new Error('Another hardware operation is already in progress.');
+    if (!this.inspection || !this.transport.isConnected) throw new Error('Not connected');
+
+    const inactiveFw = this.inspection.inactiveFirmware;
+    const targetSlot = this.inspection.otadata.targetSlot;
+    const targetOffset = this.inspection.otadata.targetOffset;
+    const nextSeq = this.inspection.otadata.nextSeq;
+    const targetSector = this.inspection.otadata.targetSector;
+
+    if (!isValidAppDescriptor(inactiveFw)) {
+      throw new Error(
+        `Inactive slot ${targetSlot.toUpperCase()} (0x${targetOffset.toString(16)}) does not contain a valid bootable application image.`
+      );
+    }
+
+    this.isOperating = true;
+    const serial = this.inspection.macAddress || this.inspection.secureCert.fingerprint;
+    const fwTarget = `${inactiveFw.displayTitle} [instant_ota_switch]`;
+
+    trackTelemetry({
+      device_type: 'wg1200',
+      serial_number: serial,
+      action: 'flash_started',
+      firmware_target: fwTarget,
+      status: 'in_progress',
+      details: {
+        deviceName: this.inspection.deviceName,
+        publicKey: this.inspection.publicKey,
+        publicKeyHash: this.inspection.publicKeyHash,
+        mac: this.inspection.macAddress,
+        slot: targetSlot,
+        offset: targetOffset,
+        nextSeq,
+        mode: 'instant_ota_switch',
+      },
+    });
+
+    try {
+      this.addLog('\n========================================');
+      this.addLog(`EXECUTING INSTANT OTA SLOT SWITCH -> ${targetSlot.toUpperCase()}`);
+      this.addLog(`Detected firmware in ${targetSlot.toUpperCase()}: ${inactiveFw.displayTitle}`);
+      this.addLog(
+        `Transactionally updating otadata sector ${targetSector} to sequence ${nextSeq}…`
+      );
+      this.addLog('========================================\n');
+
+      this.stateMachine.transition(
+        'rebooting',
+        `Flipping OTA boot pointer to ${targetSlot.toUpperCase()} (${inactiveFw.displayTitle})…`
+      );
+      this.stateMachine.setProgress(50, 'Writing transactional otadata sector…');
+
+      const { targetAddress, sectorData } = buildTransactionalOtadataSector(nextSeq, targetSector);
+      await this.transport.writeOtaSelectSector(targetAddress, sectorData, nextSeq);
+
+      this.addLog(
+        `Transactional otadata update verified: ${targetSlot.toUpperCase()} is now the active boot partition.`
+      );
+      this.stateMachine.setProgress(85, 'Boot pointer updated. Restarting WG1200…');
+
+      this.addLog('Toggling RTS to hard reset ESP32-S3…');
+      try {
+        await this.transport.hardReset();
+        await this.transport.disconnect();
+
+        this.addLog('Listening for post-switch boot logs for 6 seconds…');
+        const bootAnalysis = await captureBootLogs(this.serialPort, 6000, (line) => {
+          this.addLog(`[BOOT] ${line}`);
+        });
+        this.addLog(`Boot signature detected: ${bootAnalysis.detectedSign}`);
+      } catch (bootErr: any) {
+        this.addLog(`[INFO] Post-reset monitor finished or skipped: ${bootErr.message || bootErr}`);
+      }
+
+      this.stateMachine.setProgress(100, 'Complete');
+      this.stateMachine.transition(
+        'success',
+        `Instantly switched active boot slot to ${inactiveFw.displayTitle} (${targetSlot.toUpperCase()})!`
+      );
+
+      trackTelemetry({
+        device_type: 'wg1200',
+        serial_number: serial,
+        action: 'flash_completed',
+        firmware_target: fwTarget,
+        status: 'success',
+        details: {
+          deviceName: this.inspection.deviceName,
+          publicKey: this.inspection.publicKey,
+          publicKeyHash: this.inspection.publicKeyHash,
+          mac: this.inspection.macAddress,
+          slot: targetSlot,
+          nextSeq,
+          mode: 'instant_ota_switch',
+        },
+      });
+    } catch (err: any) {
+      this.addLog(`\n[FATAL ERROR] OTA slot switch failed: ${err.message ?? err}`);
+      trackTelemetry({
+        device_type: 'wg1200',
+        serial_number: serial,
+        action: 'flash_failed',
+        firmware_target: fwTarget,
+        status: 'failed',
+        details: {
+          deviceName: this.inspection?.deviceName,
+          publicKey: this.inspection?.publicKey,
+          publicKeyHash: this.inspection?.publicKeyHash,
+          mac: this.inspection?.macAddress,
+          error: err.message ?? String(err),
+          mode: 'instant_ota_switch',
+        },
+      });
+      await this.disconnect();
+      this.stateMachine.setError(err.message ?? 'OTA slot switch failed', false);
+    } finally {
+      this.isOperating = false;
+    }
   }
 
   /**

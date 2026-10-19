@@ -47,7 +47,7 @@
         </div>
         <div>
           <h4 class="font-bold text-white">Advanced & Diagnostic Tools</h4>
-          <p class="text-xs text-wxm-mist">Partition inspection, 16MB flash backup, factory rollback, and live serial monitor</p>
+          <p class="text-xs text-wxm-mist">Partition inspection, 16MB flash backup, OTA slot switch, factory rollback, and live serial monitor</p>
         </div>
       </div>
       
@@ -113,25 +113,37 @@
           </div>
         </div>
 
-        <!-- Tool 3: Factory Rollback -->
+        <!-- Tool 3: OTA Slot Switch & Factory Rollback -->
         <div class="bg-wxm-midnight/60 p-4 rounded-control border border-wxm-cloud/10 flex flex-col justify-between">
           <div>
-            <div class="text-wxm-error font-bold flex items-center space-x-2">
+            <div class="text-wxm-zenith font-bold flex items-center space-x-2">
               <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
               </svg>
-              <span>Factory Rollback</span>
+              <span>OTA Slot Switch &amp; Rollback</span>
             </div>
             <p class="text-xs text-wxm-mist mt-2 leading-relaxed">
-              Erases otadata sectors to 0xFF, rolling back immediately to the preserved factory recovery WeatherXM partition (0x020000).
+              Flip the active <code class="font-mono text-wxm-cloud">otadata</code> boot pointer to the inactive OTA partition (~2s) or roll back to the preserved factory partition (<code class="font-mono text-wxm-cloud">0x020000</code>).
             </p>
+            <div class="mt-2.5 px-2.5 py-1.5 rounded-control bg-wxm-abyss/70 border border-wxm-cloud/15 text-[11px] font-mono text-wxm-mist flex items-center justify-between gap-2">
+              <span id="tool-inactive-slot-name">Inactive Slot:</span>
+              <span id="tool-inactive-slot-fw" class="text-wxm-cloud font-semibold truncate">—</span>
+            </div>
           </div>
-          <button id="btn-tool-rollback" class="mt-4 w-full py-2.5 px-3 bg-wxm-error/20 hover:bg-wxm-error/30 border border-wxm-error/40 text-wxm-error hover:text-white rounded-control text-xs font-bold transition-all shadow-card cursor-pointer flex items-center justify-center space-x-2 active:scale-98">
-            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-            </svg>
-            <span>Rollback to Factory</span>
-          </button>
+          <div class="mt-4 space-y-2">
+            <button id="btn-tool-switch-slot" disabled class="w-full py-2.5 px-3 bg-wxm-beacon/20 hover:bg-wxm-beacon/30 border border-wxm-beacon/40 text-wxm-zenith hover:text-white disabled:opacity-40 disabled:cursor-not-allowed rounded-control text-xs font-bold transition-all shadow-card cursor-pointer flex items-center justify-center space-x-2 active:scale-98">
+              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+              </svg>
+              <span id="btn-tool-switch-slot-label">Switch Active OTA Slot</span>
+            </button>
+            <button id="btn-tool-rollback" class="w-full py-2.5 px-3 bg-wxm-error/20 hover:bg-wxm-error/30 border border-wxm-error/40 text-wxm-error hover:text-white rounded-control text-xs font-bold transition-all shadow-card cursor-pointer flex items-center justify-center space-x-2 active:scale-98">
+              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+              </svg>
+              <span>Rollback to Factory (0x020000)</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -193,6 +205,48 @@
         </button>
         <button id="btn-confirm-backup" disabled class="px-4 py-2 bg-wxm-beacon hover:bg-wxm-horizon disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-control text-sm font-bold transition-colors shadow-card cursor-pointer">
           Download Private Backup
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Instant OTA Slot Switch Confirmation Modal -->
+  <div id="modal-slot-switch-confirm" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-wxm-ink/80 backdrop-blur-sm hidden">
+    <div class="bg-wxm-midnight border border-wxm-beacon/40 rounded-modal max-w-md w-full p-6 shadow-2xl">
+      <div class="flex items-center space-x-3 text-wxm-zenith mb-4">
+        <div class="w-10 h-10 rounded-control bg-wxm-beacon/15 border border-wxm-beacon/30 flex items-center justify-center flex-shrink-0">
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+          </svg>
+        </div>
+        <div>
+          <h3 class="text-lg font-bold text-white">Switch Active OTA Slot</h3>
+          <p class="text-xs text-wxm-mist">Instant transactional otadata pointer update (~2s)</p>
+        </div>
+      </div>
+      <div class="space-y-2.5 py-3 border-y border-wxm-cloud/15 text-xs">
+        <div class="flex justify-between items-center">
+          <span class="text-wxm-mist">Currently Booting Slot:</span>
+          <span id="slot-switch-active-info" class="font-mono text-wxm-cloud">OTA_1 (WeatherXM v0.8.34)</span>
+        </div>
+        <div class="flex justify-between items-center">
+          <span class="text-wxm-mist">New Active Boot Slot:</span>
+          <span id="slot-switch-target-info" class="font-mono text-wxm-zenith font-bold">OTA_0 (0x420000)</span>
+        </div>
+        <div class="flex justify-between items-center">
+          <span class="text-wxm-mist">Firmware in Target Slot:</span>
+          <span id="slot-switch-fw-info" class="font-mono text-wxm-live font-bold">WeatherXM v0.6.2</span>
+        </div>
+      </div>
+      <p class="text-xs text-wxm-cloud leading-relaxed mt-4">
+        This will transactionally update the <code class="text-wxm-zenith font-mono">otadata</code> boot selector without modifying either application partition, and immediately reboot the gateway into the inactive slot.
+      </p>
+      <div class="mt-6 flex justify-end space-x-3">
+        <button id="btn-cancel-slot-switch" class="px-4 py-2 bg-wxm-storm/60 hover:bg-wxm-storm border border-wxm-cloud/20 text-wxm-cloud rounded-control text-sm font-medium transition-colors cursor-pointer">
+          Cancel
+        </button>
+        <button id="btn-confirm-slot-switch" class="px-4 py-2 bg-wxm-beacon hover:bg-wxm-horizon text-white rounded-control text-sm font-bold transition-colors shadow-card cursor-pointer">
+          Switch Slot &amp; Reboot
         </button>
       </div>
     </div>

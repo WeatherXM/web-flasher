@@ -28,7 +28,7 @@ const VALID_TRANSITIONS: Record<FlasherState, readonly FlasherState[]> = {
   connecting: ['inspecting', 'idle', 'error'],
   inspecting: ['ready', 'recovery', 'idle', 'error'],
   recovery: ['ready', 'downloading', 'idle', 'error'],
-  ready: ['downloading', 'connecting', 'idle', 'error'],
+  ready: ['downloading', 'rebooting', 'success', 'connecting', 'idle', 'error'],
   downloading: ['flashing', 'error'],
   flashing: ['verifying-flash', 'error'],
   'verifying-flash': ['verifying-protected-data', 'error'],
