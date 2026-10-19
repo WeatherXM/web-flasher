@@ -108,3 +108,59 @@ function formatDisplayTitle(
       return projectName ? `${projectName} (${version})` : 'Unknown compatible firmware';
   }
 }
+
+/**
+ * Returns true if the descriptor represents a valid, bootable application image
+ * (as opposed to an erased 0xFF slot or unrecognized header).
+ */
+export function isValidAppDescriptor(
+  desc: AppDescriptor | null | undefined
+): desc is AppDescriptor {
+  return Boolean(
+    desc &&
+      desc.magic === WG1200_CONSTANTS.APP_DESC_MAGIC &&
+      desc.firmwareType !== 'unknown' &&
+      desc.version.length > 0
+  );
+}
+
+/**
+ * Checks whether an on-chip application descriptor matches a manifest firmware entry.
+ * Handles exact/substring version matching, git commit matching, and the Jan 2026
+ * WeatherXM v0.6.2 cloud OTA build whose embedded esp_app_desc_t version is 'v0.6.1-dirty'.
+ */
+export function doesDescriptorMatchManifestEntry(
+  desc: AppDescriptor | null | undefined,
+  fw: { version: string; category?: string; git_commit?: string }
+): boolean {
+  if (!isValidAppDescriptor(desc)) return false;
+
+  if (fw.category && desc.firmwareType !== fw.category) {
+    return false;
+  }
+
+  const normalizedDescVer = desc.version.toLowerCase();
+  const normalizedTargetVer = fw.version.toLowerCase().replace(/^v/, '');
+
+  if (normalizedDescVer.includes(normalizedTargetVer)) {
+    return true;
+  }
+
+  if (fw.git_commit && normalizedDescVer.includes(fw.git_commit.toLowerCase())) {
+    return true;
+  }
+
+  // Official Jan 2026 cloud OTA v0.6.2 binary has esp_app_desc_t.version === 'v0.6.1-dirty'
+  if (
+    desc.firmwareType === 'weatherxm' &&
+    normalizedTargetVer === '0.6.2' &&
+    (normalizedDescVer === 'v0.6.1-dirty' ||
+      normalizedDescVer.startsWith('v0.6.') ||
+      normalizedDescVer.startsWith('0.6.'))
+  ) {
+    return true;
+  }
+
+  return false;
+}
+

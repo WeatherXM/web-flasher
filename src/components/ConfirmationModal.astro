@@ -37,6 +37,10 @@
         <span id="modal-target-slot" class="font-mono text-wxm-zenith">OTA_0 (0x420000)</span>
       </div>
       <div class="flex justify-between items-center py-1">
+        <span class="text-wxm-mist">Currently in Destination Slot:</span>
+        <span id="modal-target-slot-current" class="font-mono text-wxm-cloud text-[11px]">Empty / Unprogrammed Slot</span>
+      </div>
+      <div class="flex justify-between items-center py-1">
         <span class="text-wxm-mist">Factory Partition (0x020000):</span>
         <span class="font-semibold text-wxm-live">Untouched & Safe</span>
       </div>
@@ -46,17 +50,40 @@
       </div>
     </div>
 
+    <!-- Smart Fast OTA Switch Callout (shown when target firmware is already in inactive slot) -->
+    <div id="modal-fast-switch-banner" class="hidden mt-4 p-3.5 rounded-control bg-wxm-live/10 border border-wxm-live/35 text-xs space-y-1.5">
+      <div class="flex items-center space-x-2 text-wxm-live font-bold">
+        <svg class="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 10V3L4 14h7v7l9-11h-7z" />
+        </svg>
+        <span id="modal-fast-switch-title">Already Installed in Inactive Slot!</span>
+      </div>
+      <p class="text-wxm-cloud leading-relaxed text-[11px]">
+        Detected <strong id="modal-fast-switch-detected" class="text-white font-mono">WeatherXM v0.6.2</strong> already residing in the inactive <strong id="modal-fast-switch-slot" class="text-wxm-zenith font-mono">OTA_0</strong> partition. You can either flip the OTA boot pointer instantly (~2s) or perform a full clean reflash (~25s).
+      </p>
+    </div>
+
     <p class="text-xs text-wxm-mist mt-4 leading-relaxed">
-      Please keep your WG1200 connected and do not unplug the USB cable during the flashing process.
+      Please keep your WG1200 connected and do not unplug the USB cable during the operation.
     </p>
 
-    <div class="mt-6 flex space-x-3 justify-end">
+    <div class="mt-6 flex flex-wrap gap-2.5 justify-end">
       <button
         id="btn-modal-cancel"
         type="button"
         class="px-4 py-2.5 rounded-control text-xs font-semibold text-wxm-cloud hover:text-white border border-wxm-cloud/20 bg-wxm-storm/50 hover:bg-wxm-storm transition-colors cursor-pointer"
       >
         Cancel
+      </button>
+      <button
+        id="btn-modal-fast-switch"
+        type="button"
+        class="hidden px-4 py-2.5 rounded-control text-xs font-bold text-wxm-abyss bg-wxm-live hover:bg-emerald-400 shadow-card shadow-wxm-live/20 transition-all cursor-pointer items-center space-x-1.5"
+      >
+        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 10V3L4 14h7v7l9-11h-7z" />
+        </svg>
+        <span id="btn-modal-fast-switch-label">Instant Switch (~2s)</span>
       </button>
       <button
         id="btn-modal-confirm"
