@@ -12,24 +12,24 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
 >
   <BleBrowserNotice />
 
-  <section class="max-w-6xl mx-auto px-4 sm:px-8">
+  <!-- ===================== 1. Not connected: introduction + connect ===================== -->
+  <section id="view-connect" class="max-w-7xl mx-auto px-4 sm:px-8">
     <div class="grid grid-cols-1 lg:grid-cols-[1.1fr_1fr] gap-8 lg:gap-12 items-start">
-      <!-- Left: introduction & documentation -->
       <div class="space-y-4">
         <span class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-wxm-storm/40 border border-wxm-cloud/20 text-xs font-semibold text-white">
           <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
-          Your own LoRaWAN network · TTN · ChirpStack
+          WeatherXM network · Your own LoRaWAN (TTN, ChirpStack)
         </span>
         <h1 class="text-3xl sm:text-4xl font-extrabold tracking-tight leading-tight text-balance">
-          Configure WS2001 (H2) for Any LoRaWAN Network
+          Update and configure your WS2001 (H2)
         </h1>
         <p class="text-sm sm:text-base text-wxm-mist leading-relaxed">
-          The H2 starts on the <strong>WeatherXM network</strong>. You can move it to The Things Network (TTN), ChirpStack or any other LoRaWAN network server.
-          It is the same hardware as the SenseCAP S2120, with <strong>WeatherXM's own firmware</strong>: its frame carries more weather data,
-          such as <strong>wind gust</strong> and <strong>rain total</strong>, in a compact 24-byte payload.
-          The station keeps its WeatherXM settings, so it can potentially return to the WeatherXM network later.
+          The H2 starts on the <strong>WeatherXM network</strong>. Connect over Bluetooth to update its firmware or to move it to
+          The Things Network (TTN), ChirpStack or any other LoRaWAN network server with the <strong>Open Edition</strong> profile.
+          It runs <strong>WeatherXM's own firmware</strong>, whose compact 24-byte frame carries more weather data than the stock
+          SenseCAP S2120 firmware, such as <strong>wind gust</strong> and <strong>rain total</strong>.
+          Both network identities stay stored on the station, so you can switch back at any time.
         </p>
-
         <p class="text-sm">
           <a href="https://weatherxm.com/stations/" class="inline-flex items-center gap-1.5 font-semibold text-wxm-zenith hover:text-white underline underline-offset-4 decoration-wxm-cloud/30">
             Explore WeatherXM stations <span aria-hidden="true">&rarr;</span>
@@ -37,570 +37,44 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
         </p>
       </div>
 
-      <!-- Right: Action card -->
-      <div class="space-y-4">
-        <!-- 1. Connect view -->
-        <div id="view-connect" class="p-6 rounded-card bg-wxm-midnight/90 border-2 border-wxm-beacon/40 backdrop-blur-md shadow-card space-y-5">
-          <div class="flex items-center gap-5">
-            <img
-              src="/h2.webp"
-              alt="WeatherXM WS2001 (H2) Weather Station"
-              width="388"
-              height="228"
-              class="w-24 sm:w-28 h-auto flex-shrink-0 drop-shadow-[0_8px_16px_rgba(0,0,0,0.5)]"
-            />
-            <div class="space-y-1">
-              <span class="text-[11px] font-extrabold text-wxm-zenith uppercase tracking-widest block">Bluetooth connection</span>
-              <h2 class="text-lg font-bold">Connect to WS2001 (H2)</h2>
-              <p class="text-xs text-wxm-mist">Make sure your station is powered on and within Bluetooth range.</p>
-            </div>
-          </div>
-
-          <button
-            id="btn-connect"
-            type="button"
-            class="w-full py-4 px-6 rounded-control text-base btn-primary-beacon flex items-center justify-center gap-3 cursor-pointer disabled:opacity-50 disabled:cursor-wait focus:outline-none focus-visible:ring-2 focus-visible:ring-wxm-zenith"
-          >
-            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M7 7l10 10-5 5V2l5 5L7 17" />
-            </svg>
-            <span id="btn-connect-label">Connect to WS2001 (H2)</span>
-          </button>
-          <button
-            id="btn-cancel-connect"
-            type="button"
-            class="hidden w-full py-2 rounded-control text-xs font-bold text-white bg-wxm-storm/60 border border-wxm-cloud/20 hover:bg-wxm-storm hover:border-red-400/60 cursor-pointer"
-          >
-            Cancel and disconnect
-          </button>
-          <label class="flex items-start gap-2.5 text-xs text-wxm-mist leading-relaxed cursor-pointer select-none">
-            <input id="chk-auto-update" type="checkbox" class="w-4 h-4 mt-0.5 rounded border-wxm-cloud/30 bg-wxm-abyss text-wxm-beacon focus:ring-0 cursor-pointer" />
-            <span><strong class="text-white">Auto-update to latest firmware immediately on connect</strong> (leave unchecked to choose whether to flash a specific version, switch to Open LoRaWAN, or switch to Helium after connecting).</span>
-          </label>
-          <p id="connect-error" class="hidden text-xs text-red-300 leading-relaxed" role="alert"></p>
-        </div>
-
-        <!-- 2. Device info card (unhides when connected) -->
-        <div id="view-device" class="hidden p-6 rounded-card bg-wxm-midnight/90 border-2 border-wxm-cloud/20 backdrop-blur-md shadow-card space-y-5">
-          <div class="flex items-start justify-between gap-3">
-            <div class="min-w-0">
-              <span class="text-[11px] font-extrabold text-wxm-live uppercase tracking-widest flex items-center gap-1.5">
-                <span class="indicator-dot-green"></span> Connected
-              </span>
-              <h2 id="dev-name" class="text-lg font-bold mt-0.5 truncate">WeatherXM WS2001 (H2)</h2>
-            </div>
-            <div class="flex items-center gap-2 shrink-0">
-              <button
-                id="btn-refresh"
-                type="button"
-                title="Refresh station configuration and status"
-                class="px-2.5 py-1 rounded-control text-xs font-semibold text-wxm-mist hover:text-white border border-wxm-cloud/20 hover:bg-wxm-storm/40 transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <svg id="icon-refresh" class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-                <span id="label-refresh">Refresh</span>
-              </button>
-              <button
-                id="btn-disconnect"
-                type="button"
-                title="Disconnect from station"
-                class="px-2.5 py-1 rounded-control text-xs font-semibold text-wxm-mist hover:text-red-300 hover:border-red-500/40 hover:bg-red-500/10 border border-wxm-cloud/20 transition-colors flex items-center gap-1.5 cursor-pointer"
-              >
-                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                </svg>
-                <span>Disconnect</span>
-              </button>
-            </div>
-          </div>
-
-          <!-- DevEUI full-width banner (guarantees full 23-char DevEUI is always visible) -->
-          <div class="p-2.5 rounded-control bg-wxm-abyss/70 border border-wxm-cloud/10 flex items-center justify-between gap-3">
-            <div class="min-w-0">
-              <span class="text-[10px] uppercase tracking-wider text-wxm-mist block font-semibold">DevEUI</span>
-              <span id="stat-deveui" class="font-mono font-bold text-white text-xs sm:text-sm tracking-wide select-all block mt-0.5">–</span>
-            </div>
-            <button
-              id="btn-copy-deveui"
-              type="button"
-              title="Copy DevEUI"
-              class="px-2.5 py-1 rounded-control text-xs font-semibold text-wxm-mist hover:text-white border border-wxm-cloud/20 hover:bg-wxm-storm/40 transition-colors flex items-center gap-1.5 shrink-0 cursor-pointer"
-            >
-              <svg id="icon-copy-deveui" class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-              </svg>
-              <span id="label-copy-deveui">Copy</span>
-            </button>
-          </div>
-
-          <!-- Device stats grid -->
-          <div class="grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-xs">
-            <div class="p-2.5 rounded-control bg-wxm-abyss/70 border border-wxm-cloud/10 col-span-2 sm:col-span-2">
-              <span class="text-[10px] uppercase tracking-wider text-wxm-mist block font-semibold">Network</span>
-              <span id="stat-mode" class="font-semibold text-white mt-0.5 block truncate text-[11px]">–</span>
-            </div>
-
-            <div class="p-2.5 rounded-control bg-wxm-abyss/70 border border-wxm-cloud/10">
-              <span class="text-[10px] uppercase tracking-wider text-wxm-mist block font-semibold">Region / Band</span>
-              <span id="stat-band" class="font-semibold text-white mt-0.5 block truncate text-[11px]">–</span>
-            </div>
-
-            <div class="p-2.5 rounded-control bg-wxm-abyss/70 border border-wxm-cloud/10">
-              <span class="text-[10px] uppercase tracking-wider text-wxm-mist block font-semibold">Firmware</span>
-              <span id="stat-ver" class="font-mono text-white mt-0.5 block text-[11px]">–</span>
-            </div>
-
-            <div class="p-2.5 rounded-control bg-wxm-abyss/70 border border-wxm-cloud/10">
-              <span class="text-[10px] uppercase tracking-wider text-wxm-mist block font-semibold">Battery</span>
-              <span id="stat-bat" class="font-semibold text-white mt-0.5 block text-[11px]">–</span>
-            </div>
-
-            <div class="p-2.5 rounded-control bg-wxm-abyss/70 border border-wxm-cloud/10">
-              <span class="text-[10px] uppercase tracking-wider text-wxm-mist block font-semibold">Interval</span>
-              <span id="stat-interval" class="font-semibold text-white mt-0.5 block text-[11px]">–</span>
-            </div>
-          </div>
-
-          <!-- Action Chooser: Ask user what they want to do upon connection -->
-          <div id="action-chooser" class="border-t border-wxm-cloud/15 pt-4 space-y-2.5">
-            <span class="text-[11px] font-extrabold text-wxm-zenith uppercase tracking-widest block">What would you like to do?</span>
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2" role="tablist" aria-label="Station actions">
-              <button
-                id="btn-mode-flash"
-                type="button"
-                role="tab"
-                aria-selected="false"
-                class="p-3 rounded-control text-left border border-wxm-cloud/20 bg-wxm-abyss/60 hover:bg-wxm-storm/50 transition-all cursor-pointer space-y-1"
-              >
-                <span class="text-xs font-bold text-white flex items-center justify-between gap-1">
-                  <span>1. Flash Firmware</span>
-                  <span id="badge-mode-flash" class="hidden px-1.5 py-0.5 rounded bg-amber-500/20 border border-amber-400/40 text-[10px] text-amber-300 font-mono">Update</span>
-                </span>
-                <span class="text-[11px] text-wxm-mist block leading-snug">Flash V4.9 or a specific release only</span>
-              </button>
-
-              <button
-                id="btn-mode-open"
-                type="button"
-                role="tab"
-                aria-selected="true"
-                class="p-3 rounded-control text-left border border-wxm-zenith bg-wxm-storm/60 hover:bg-wxm-storm/50 transition-all cursor-pointer space-y-1"
-              >
-                <span class="text-xs font-bold text-white flex items-center justify-between gap-1">
-                  <span>2. Open LoRaWAN</span>
-                  <span id="badge-mode-open" class="hidden px-1.5 py-0.5 rounded bg-emerald-500/20 border border-emerald-400/40 text-[10px] text-emerald-300 font-mono">Saved</span>
-                </span>
-                <span class="text-[11px] text-wxm-mist block leading-snug">Switch to TTN, ChirpStack or custom LNS</span>
-              </button>
-
-              <button
-                id="btn-mode-helium"
-                type="button"
-                role="tab"
-                aria-selected="false"
-                class="p-3 rounded-control text-left border border-wxm-cloud/20 bg-wxm-abyss/60 hover:bg-wxm-storm/50 transition-all cursor-pointer space-y-1"
-              >
-                <span class="text-xs font-bold text-white flex items-center justify-between gap-1">
-                  <span>3. Helium (WXM)</span>
-                  <span id="badge-mode-helium" class="hidden px-1.5 py-0.5 rounded bg-emerald-500/20 border border-emerald-400/40 text-[10px] text-emerald-300 font-mono">Saved</span>
-                </span>
-                <span class="text-[11px] text-wxm-mist block leading-snug">Return to WeatherXM Helium (0 config)</span>
-              </button>
-            </div>
-          </div>
-
-          <!-- PANEL 1: Flash a specific firmware version -->
-          <div id="panel-flash" class="hidden border-t border-wxm-cloud/15 pt-4 space-y-4">
-            <div id="group-fwupdate" class="p-4 rounded-control bg-wxm-abyss/70 border border-wxm-cloud/15 space-y-3">
-              <div class="flex items-start justify-between gap-3">
-                <div>
-                  <span class="text-[10px] uppercase tracking-wider text-wxm-mist block font-semibold">Firmware Flash</span>
-                  <span id="fw-update-text" class="font-semibold text-white block mt-0.5 text-xs">Checking for updates...</span>
-                </div>
-              </div>
-
-              <div>
-                <label for="cfg-fw-version" class="block text-xs font-semibold text-wxm-cloud mb-1">Target Firmware Version</label>
-                <select
-                  id="cfg-fw-version"
-                  class="w-full px-3 py-2 rounded-control bg-wxm-abyss border border-wxm-cloud/20 text-white text-xs font-semibold focus:outline-none focus:border-wxm-zenith"
-                >
-                  <option value="4.9">V4.9 (Latest — Dual Network Profiles + Flash Preservation)</option>
-                  <option value="custom">Custom signed package (-ble-dfu.zip)...</option>
-                </select>
-              </div>
-
-              <div id="group-fw-custom" class="hidden space-y-1">
-                <label for="cfg-fw-file" class="block text-xs font-semibold text-wxm-cloud">Select Signed DFU Package (<span class="font-mono">-ble-dfu.zip</span>)</label>
-                <input
-                  id="cfg-fw-file"
-                  type="file"
-                  accept=".zip,application/zip"
-                  class="w-full text-xs text-wxm-mist file:mr-3 file:py-1.5 file:px-3 file:rounded-control file:border file:border-wxm-cloud/20 file:text-xs file:font-semibold file:bg-wxm-storm/60 file:text-white hover:file:bg-wxm-storm cursor-pointer"
-                />
-              </div>
-
-              <p id="fw-version-note" class="text-[11px] text-wxm-mist leading-relaxed">
-                Flashing V4.9 onto a V4.3 field station preserves all existing settings and automatically backs up its factory Helium (WeatherXM) keys into Profile 0 so you can switch between Open LoRaWAN and Helium at any time.
-              </p>
-
-              <button
-                id="btn-fw-update"
-                type="button"
-                disabled
-                class="w-full py-3 px-4 rounded-control text-xs font-bold text-white btn-primary-beacon flex items-center justify-center gap-2 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                Flash Selected Firmware
-              </button>
-            </div>
-          </div>
-
-          <!-- PANEL 3: Switch to Helium / WeatherXM (0 configuration needed) -->
-          <div id="panel-helium" class="hidden border-t border-wxm-cloud/15 pt-4 space-y-4">
-            <div id="group-switchback" class="p-4 rounded-control bg-emerald-500/10 border border-emerald-500/30 text-xs space-y-3 leading-relaxed">
-              <div class="space-y-1">
-                <p id="helium-status-title" class="font-bold text-emerald-300 text-sm">Switch to Helium (WeatherXM Network)</p>
-                <p id="helium-status-desc" class="text-emerald-200/80">
-                  Restores the station's factory Helium (WeatherXM) credentials and 3-minute upload interval from Profile 0 (<span class="font-mono">AT+NETPROFILE=0</span>). No keys or parameters need to be entered, and any custom Open LoRaWAN profile remains saved in Profile 1.
-                </p>
-              </div>
-              <button
-                id="btn-switchback"
-                type="button"
-                class="w-full py-3 rounded-control text-xs font-bold text-white bg-emerald-700/80 border border-emerald-500/40 hover:bg-emerald-600 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                Switch to Helium (WeatherXM) — No Configuration Needed
-              </button>
-            </div>
-          </div>
-
-          <!-- PANEL 2: Switch to Open LoRaWAN -->
-          <div id="panel-open" class="border-t border-wxm-cloud/15 pt-4 space-y-4">
-            <!-- Banner when station runs < V4.5 (e.g. V4.3) -->
-            <div id="open-old-fw-banner" class="hidden p-3.5 rounded-control bg-amber-500/15 border border-amber-400/40 text-xs space-y-2.5 leading-relaxed">
-              <p class="font-bold text-amber-300">Station is running <span id="open-old-fw-ver" class="font-mono">V4.3</span> (no dual profiles yet)</p>
-              <p class="text-amber-200/90">
-                Flash <strong>V4.9</strong> first so the station automatically backs up its factory Helium (WeatherXM) credentials into Profile 0 before switching to Open LoRaWAN.
-              </p>
-              <button
-                id="btn-goto-flash-v49"
-                type="button"
-                class="w-full py-2.5 px-4 rounded-control text-xs font-bold text-white bg-amber-600 hover:bg-amber-500 cursor-pointer"
-              >
-                Step 1: Flash V4.9 Firmware First
-              </button>
-            </div>
-
-            <!-- 1-Click Switch to Stored Open LoRaWAN Profile (shown when customStored is true) -->
-            <div id="group-switch-open-stored" class="hidden p-3.5 rounded-control bg-emerald-500/10 border border-emerald-500/30 text-xs space-y-2.5 leading-relaxed">
-              <p class="font-bold text-emerald-300">Stored Open LoRaWAN Profile Available (No Configuration Needed)</p>
-              <p class="text-emerald-200/80">
-                This station already has Open LoRaWAN credentials saved in Profile 1. You can reactivate Profile 1 in one click without re-entering any keys, or update the credentials in the form below.
-              </p>
-              <button
-                id="btn-switch-open-stored"
-                type="button"
-                class="w-full py-2.5 rounded-control text-xs font-bold text-white bg-emerald-700/80 border border-emerald-500/40 hover:bg-emerald-600 cursor-pointer disabled:opacity-50 disabled:cursor-wait"
-              >
-                Switch to Stored Open LoRaWAN Profile Now
-              </button>
-            </div>
-
-            <div>
-              <h3 class="text-sm font-bold text-white">Open LoRaWAN Network Configuration</h3>
-              <p class="text-xs text-wxm-mist mt-1">
-                LoRaWAN 1.0.4 · OTAA · Class A · WeatherXM 24-byte frame on FPort 99
-              </p>
-            </div>
-
-            <div class="space-y-3">
-              <!-- Frequency Region -->
-              <div>
-                <label for="cfg-band" class="block text-xs font-semibold text-wxm-cloud mb-1">Frequency Region</label>
-                <select
-                  id="cfg-band"
-                  class="w-full px-3 py-2 rounded-control bg-wxm-abyss border border-wxm-cloud/20 text-white text-xs font-semibold focus:outline-none focus:border-wxm-zenith"
-                >
-                  <option value="5">EU868 (Europe 868 MHz)</option>
-                  <option value="8">US915 (North America 915 MHz)</option>
-                  <option value="1">AU915 (Australia 915 MHz)</option>
-                  <option value="15">AS923-1 (Asia 923 MHz)</option>
-                  <option value="7">IN865 (India 865 MHz)</option>
-                  <option value="6">KR920 (Korea 920 MHz)</option>
-                  <option value="9">RU864 (Russia 864 MHz)</option>
-                </select>
-              </div>
-
-              <!-- Sub-band (US915 / AU915) -->
-              <div id="group-subband">
-                <label for="cfg-subband" class="block text-xs font-semibold text-wxm-cloud mb-1">
-                  Channel Sub-Band (FSB)
-                </label>
-                <select
-                  id="cfg-subband"
-                  class="w-full px-3 py-2 rounded-control bg-wxm-abyss border border-wxm-cloud/20 text-white text-xs font-semibold focus:outline-none focus:border-wxm-zenith"
-                >
-                  <option value="1">Sub-Band 2 (Channels 8-15) — Standard for TTN & ChirpStack</option>
-                  <option value="0">Sub-Band 1 (Channels 0-7)</option>
-                  <option value="2">Sub-Band 3 (Channels 16-23)</option>
-                  <option value="3">Sub-Band 4 (Channels 24-31)</option>
-                  <option value="4">Sub-Band 5 (Channels 32-39)</option>
-                  <option value="5">Sub-Band 6 (Channels 40-47)</option>
-                  <option value="6">Sub-Band 7 (Channels 48-55)</option>
-                  <option value="7">Sub-Band 8 (Channels 56-63)</option>
-                </select>
-              </div>
-
-              <!-- JoinEUI / AppEUI -->
-              <div>
-                <div class="flex items-center justify-between mb-1">
-                  <label for="cfg-joineui" class="text-xs font-semibold text-wxm-cloud">JoinEUI / AppEUI (16 hex chars)</label>
-                  <span class="text-[10px] text-wxm-mist font-mono">MSB</span>
-                </div>
-                <input
-                  id="cfg-joineui"
-                  type="text"
-                  maxlength="23"
-                  placeholder="0000000000000000"
-                  class="w-full px-3 py-2 rounded-control bg-wxm-abyss border border-wxm-cloud/20 text-white font-mono text-xs focus:outline-none focus:border-wxm-zenith uppercase"
-                />
-              </div>
-
-              <!-- AppKey -->
-              <div>
-                <div class="flex items-center justify-between mb-1">
-                  <label for="cfg-appkey" class="text-xs font-semibold text-wxm-cloud">AppKey (32 hex chars)</label>
-                  <button
-                    id="btn-gen-appkey"
-                    type="button"
-                    class="text-[11px] font-semibold text-wxm-zenith hover:text-white cursor-pointer"
-                  >
-                    Generate Random
-                  </button>
-                </div>
-                <input
-                  id="cfg-appkey"
-                  type="text"
-                  maxlength="47"
-                  placeholder="00112233445566778899AABBCCDDEEFF"
-                  class="w-full px-3 py-2 rounded-control bg-wxm-abyss border border-wxm-cloud/20 text-white font-mono text-xs focus:outline-none focus:border-wxm-zenith uppercase"
-                />
-              </div>
-
-              <!-- Upload Interval -->
-              <div>
-                <label for="cfg-interval" class="block text-xs font-semibold text-wxm-cloud mb-1">Upload Interval</label>
-                <select
-                  id="cfg-interval"
-                  class="w-full px-3 py-2 rounded-control bg-wxm-abyss border border-wxm-cloud/20 text-white text-xs font-semibold focus:outline-none focus:border-wxm-zenith"
-                >
-                  <option value="5" selected>5 minutes (recommended, within TTN fair use)</option>
-                  <option value="10">10 minutes (weak signal, SF9 or slower on TTN)</option>
-                  <option value="15">15 minutes (battery saving)</option>
-                  <option value="30">30 minutes</option>
-                  <option value="3">3 minutes (private ChirpStack only)</option>
-                </select>
-                <p class="text-[11px] text-wxm-mist mt-1 leading-relaxed">
-                  TTN allows 30 s of airtime per device per day. A 24-byte uplink takes about 82 ms at SF7, so 3-minute uplinks exceed it; use 5 minutes or more.
-                </p>
-              </div>
-
-              <!-- GNSS location scans (V4.7+) -->
-              <label class="flex items-start gap-2.5 text-xs text-wxm-mist leading-relaxed cursor-pointer select-none">
-                <input id="cfg-gnss" type="checkbox" class="w-4 h-4 mt-0.5 rounded border-wxm-cloud/30 bg-wxm-abyss text-wxm-beacon focus:ring-0 cursor-pointer" />
-                <span>
-                  <strong class="text-white">Send GNSS location scans</strong> (optional, off by default). About once a day the station sends a raw satellite scan
-                  (<span class="font-mono">0xF3</span> frame on FPort 99) that you can store and resolve later with a GNSS solver.
-                  It needs the network time from your server (LoRaWAN DeviceTimeReq, answered by TTN and ChirpStack); if the server never answers,
-                  the station turns the scans off until it restarts.
-                  <span id="cfg-gnss-note" class="hidden text-amber-300">Needs the latest firmware: update the station first.</span>
-                </span>
-              </label>
-            </div>
-
-            <!-- Warning Banner -->
-            <div class="p-3.5 rounded-control bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs space-y-2 leading-relaxed">
-              <div class="flex items-center gap-2 font-bold text-amber-400">
-                <svg class="w-4 h-4 text-amber-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
-                <span>Warning</span>
-              </div>
-              <ul class="list-disc list-inside text-[11px] text-amber-300 space-y-1.5 ml-0.5">
-                <li>While it is on your network, the station is off the WeatherXM network and does not earn $WXM token rewards.</li>
-                <li id="warn-keys">Checking whether this firmware can keep the WeatherXM keys...</li>
-                <li>Its data does not appear in the WeatherXM app. The station can return to the WeatherXM (Helium) network at any time via the Helium tab above.</li>
-              </ul>
-            </div>
-
-            <!-- Submit button -->
-            <button
-              id="btn-apply"
-              type="button"
-              class="w-full py-3.5 px-5 rounded-control text-sm btn-primary-beacon flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-wait"
-            >
-              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-              </svg>
-              <span>Apply &amp; Connect to My Network</span>
-            </button>
-            <button id="btn-ttn-export-form" type="button" class="w-full py-2.5 rounded-control text-xs font-bold text-white bg-wxm-storm/60 border border-wxm-cloud/20 hover:bg-wxm-storm hover:border-wxm-zenith cursor-pointer inline-flex items-center justify-center gap-2">
-              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-              Download TTN import file (.json)
-            </button>
-            <p class="text-[11px] text-wxm-mist leading-relaxed">
-              Registers this station in The Things Network in one step: in your TTN application open
-              <strong class="text-white">End devices &gt; Import end devices</strong>, choose <strong class="text-white">The Things Stack JSON</strong>
-              and select the file. It contains the DevEUI, JoinEUI, AppKey, LoRaWAN 1.0.4 / RP002 1.0.3 and the frequency plan.
-              <span class="text-amber-300">The file holds your AppKey: keep it private.</span>
-            </p>
-          </div>
-
-          <!-- Validation alert (shared across tabs) -->
-          <p id="form-error" class="hidden text-xs text-red-300 leading-relaxed font-semibold"></p>
-
-          <!-- Disconnect / Reboot notice -->
-          <div class="p-3 rounded-control bg-wxm-abyss/60 border border-wxm-cloud/15 text-xs text-wxm-mist space-y-1.5 leading-relaxed">
-            <div class="flex items-center gap-2 font-bold text-white text-xs">
-              <svg class="w-3.5 h-3.5 text-wxm-zenith shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <span>Note</span>
-            </div>
-            <ul class="list-disc list-inside text-[11px] text-wxm-mist space-y-1 ml-0.5">
-              <li>Disconnecting reboots the station and triggers a LoRaWAN <code class="text-wxm-zenith bg-wxm-abyss px-1 py-0.5 rounded">Join-Request</code>.</li>
-              <li>Click <code class="text-wxm-zenith bg-wxm-abyss px-1 py-0.5 rounded">Refresh</code> to reload any <strong class="text-white">Unknown</strong> values.</li>
-            </ul>
+      <div class="p-6 rounded-card bg-wxm-midnight/90 border-2 border-wxm-beacon/40 backdrop-blur-md shadow-card space-y-5">
+        <div class="flex items-center gap-5">
+          <img
+            src="/h2.webp"
+            alt="WeatherXM WS2001 (H2) Weather Station"
+            width="388"
+            height="228"
+            class="w-24 sm:w-28 h-auto flex-shrink-0 drop-shadow-[0_8px_16px_rgba(0,0,0,0.5)]"
+          />
+          <div class="space-y-1">
+            <span class="text-[11px] font-extrabold text-wxm-zenith uppercase tracking-widest block">Step 1 · Bluetooth</span>
+            <h2 class="text-lg font-bold">Connect to WS2001 (H2)</h2>
+            <p class="text-xs text-wxm-mist">Make sure your station is powered on and within Bluetooth range.</p>
           </div>
         </div>
 
-        <!-- 3. Progress card (during write) -->
-        <div id="view-progress" class="hidden p-6 rounded-card bg-wxm-midnight/90 border-2 border-wxm-zenith/40 backdrop-blur-md shadow-card space-y-4">
-          <div class="flex items-center gap-3">
-            <div class="w-5 h-5 border-2 border-wxm-zenith border-t-transparent rounded-full animate-spin"></div>
-            <div>
-              <h3 class="text-sm font-bold text-white">Configuring Station...</h3>
-              <p id="progress-step-text" class="text-xs text-wxm-mist">Applying LoRaWAN parameters over Bluetooth</p>
-            </div>
-          </div>
-          <div class="w-full bg-wxm-abyss rounded-full h-2 overflow-hidden border border-wxm-cloud/10">
-            <div id="progress-bar" class="bg-wxm-zenith h-full transition-all duration-300 w-0"></div>
-          </div>
-        </div>
-
-        <!-- 3b. Firmware update card -->
-        <div id="view-dfu" class="hidden p-6 rounded-card bg-wxm-midnight/90 border-2 border-wxm-zenith/40 backdrop-blur-md shadow-card space-y-4">
-          <div class="flex items-center gap-3">
-            <div id="dfu-spinner" class="w-5 h-5 border-2 border-wxm-zenith border-t-transparent rounded-full animate-spin shrink-0"></div>
-            <div class="min-w-0">
-              <h3 id="dfu-title" class="text-sm font-bold text-white">Updating firmware</h3>
-              <p id="dfu-step" class="text-xs text-wxm-mist leading-relaxed">Preparing...</p>
-            </div>
-          </div>
-          <div class="w-full bg-wxm-abyss rounded-full h-2 overflow-hidden border border-wxm-cloud/10">
-            <div id="dfu-bar" class="bg-wxm-zenith h-full transition-all duration-300 w-0"></div>
-          </div>
-          <p id="dfu-detail" class="text-[11px] text-wxm-mist leading-relaxed">Keep the station powered and this device within a few metres until the update finishes.</p>
-          <div id="dfu-name-hint" class="hidden p-3 rounded-control bg-wxm-abyss/80 border border-wxm-zenith/30 text-[11.5px] text-wxm-cloud leading-relaxed space-y-1">
-            <p class="font-bold text-white">Look for a different name in the Bluetooth list</p>
-            <p>
-              In update mode the station is a separate Bluetooth device called
-              <strong id="dfu-name-hint-value" class="font-mono text-wxm-zenith">DfuWX…</strong>
-              (or <span class="font-mono">DfuTarg</span>), <strong>not</strong> "WeatherXM WS2001 …". Only update-mode devices are listed.
-              It returns to its normal name after the update.
-            </p>
-          </div>
-          <button id="btn-dfu-pick" type="button" class="hidden w-full py-3 px-5 rounded-control text-sm btn-primary-beacon flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-wait">Continue: select the station's update mode</button>
-          <button id="btn-dfu-reconnect" type="button" class="hidden w-full py-3 px-5 rounded-control text-sm btn-primary-beacon flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-wait">Reconnect to the station</button>
-          <button id="btn-dfu-close" type="button" class="hidden w-full py-2.5 rounded-control text-xs font-bold text-white bg-wxm-storm/60 border border-wxm-cloud/20 hover:bg-wxm-storm cursor-pointer">Close</button>
-        </div>
-
-        <!-- 4. Success card -->
-        <div id="view-success" class="hidden p-6 rounded-card bg-wxm-midnight/90 border-2 border-emerald-500/50 backdrop-blur-md shadow-card space-y-4">
-          <div class="flex items-center gap-3">
-            <div class="w-8 h-8 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400">
-              <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" /></svg>
-            </div>
-            <div>
-              <h3 id="success-title" class="text-sm font-bold text-white">Connected to your network!</h3>
-              <p id="success-sub" class="text-xs text-emerald-300">Settings written to flash. The station has rebooted to join your network.</p>
-            </div>
-          </div>
-          <div class="p-3.5 rounded-control bg-wxm-abyss/80 border border-wxm-cloud/10 text-xs text-wxm-mist space-y-2">
-            <p><strong>Next steps:</strong></p>
-            <ul id="success-steps" class="list-disc pl-4 space-y-1">
-              <li>Register the <strong>DevEUI</strong>, <strong>JoinEUI</strong> and <strong>AppKey</strong> in your TTN or ChirpStack application (LoRaWAN 1.0.4, OTAA, Class A). On TTN you can import the file below (<strong>End devices &gt; Import end devices &gt; The Things Stack JSON</strong>).</li>
-              <li>Install the <strong>WeatherXM decoder</strong> below: one script for TTN v3, ChirpStack v4 and v3 that decodes the 24-byte frame on FPort 99, including wind gust and rain total.</li>
-              <li>Wait for the device's first Join-Request (typically within 30-60 seconds after boot).</li>
-            </ul>
-          </div>
-          <button id="btn-ttn-export-success" type="button" class="hidden w-full py-2.5 rounded-control text-xs font-bold text-white bg-wxm-storm/60 border border-wxm-cloud/20 hover:bg-wxm-storm hover:border-wxm-zenith cursor-pointer inline-flex items-center justify-center gap-2">
-            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-            Download TTN import file (.json)
-          </button>
-          <button
-            id="btn-done"
-            type="button"
-            class="w-full py-2.5 rounded-control text-xs font-bold text-white bg-wxm-storm/60 border border-wxm-cloud/20 hover:bg-wxm-storm cursor-pointer"
-          >
-            Configure Another Device
-          </button>
-        </div>
-
-        <!-- Payload Decoder -->
-        <div class="rounded-card border border-wxm-cloud/20 bg-wxm-abyss/60 p-4 space-y-2.5">
-          <h3 class="text-xs font-bold text-white uppercase tracking-wider">Payload Decoder</h3>
-          <p class="text-[11px] text-wxm-mist leading-relaxed">
-            One script for The Things Stack v3, ChirpStack v4 and ChirpStack v3. It decodes the WeatherXM 24-byte frame on FPort 99, labels the radio's background messages on FPort 199, and still reads the legacy FPort 3 format. Paste it into TTN (Payload formatters &gt; Uplink &gt; Custom Javascript formatter) or ChirpStack (Device profile &gt; Codec).
-          </p>
-          <div class="flex flex-wrap gap-2">
-            <button
-              id="btn-show-decoder"
-              type="button"
-              title="Show the payload decoder"
-              class="px-3 py-1.5 rounded-control text-xs font-bold bg-wxm-storm/60 border border-wxm-cloud/20 text-white hover:bg-wxm-storm hover:border-wxm-zenith transition-all cursor-pointer inline-flex items-center gap-1.5"
-            >
-              <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
-              Show
-            </button>
-            <button
-              id="btn-copy-decoder"
-              type="button"
-              title="Copy the payload decoder to the clipboard"
-              class="px-3 py-1.5 rounded-control text-xs font-bold bg-wxm-storm/60 border border-wxm-cloud/20 text-white hover:bg-wxm-storm hover:border-wxm-zenith transition-all cursor-pointer inline-flex items-center gap-1.5"
-            >
-              <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" /></svg>
-              Copy decoder
-            </button>
-            <a
-              href="/decoders/ws2001_uplink_decoder.js"
-              download="ws2001_uplink_decoder.js"
-              title="Download ws2001_uplink_decoder.js"
-              class="px-3 py-1.5 rounded-control text-xs font-bold bg-wxm-storm/60 border border-wxm-cloud/20 text-white hover:bg-wxm-storm hover:border-wxm-zenith transition-all cursor-pointer inline-flex items-center gap-1.5"
-            >
-              <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-              Download .js
-            </a>
-          </div>
-          <dialog
-            id="decoder-dialog"
-            aria-labelledby="decoder-dialog-title"
-            class="m-auto w-[min(56rem,calc(100vw-2rem))] max-h-[85vh] rounded-card border border-wxm-cloud/20 bg-wxm-abyss p-0 text-white backdrop:bg-black/70"
-          >
-            <div class="flex items-center justify-between gap-3 px-4 py-3 border-b border-wxm-cloud/20">
-              <h3 id="decoder-dialog-title" class="text-sm font-bold">ws2001_uplink_decoder.js</h3>
-              <div class="flex items-center gap-2">
-                <button id="btn-dialog-copy-decoder" type="button" class="px-3 py-1.5 rounded-control text-xs font-bold bg-wxm-storm/60 border border-wxm-cloud/20 hover:bg-wxm-storm hover:border-wxm-zenith cursor-pointer">Copy</button>
-                <button id="btn-close-decoder" type="button" aria-label="Close" class="px-3 py-1.5 rounded-control text-xs font-bold bg-wxm-storm/60 border border-wxm-cloud/20 hover:bg-wxm-storm cursor-pointer">Close</button>
-              </div>
-            </div>
-            <div class="overflow-auto max-h-[calc(85vh-3.5rem)] text-xs [&_pre]:p-4 [&_pre]:m-0">
-              <Code code={WS2001_UPLINK_DECODER} lang="js" theme="github-dark" />
-            </div>
-          </dialog>
-          <span id="decoder-copy-toast" class="hidden text-[11px] font-semibold text-emerald-300 block"></span>
-        </div>
+        <button
+          id="btn-connect"
+          type="button"
+          class="w-full py-4 px-6 rounded-control text-base btn-primary-beacon flex items-center justify-center gap-3 cursor-pointer disabled:opacity-50 disabled:cursor-wait focus:outline-none focus-visible:ring-2 focus-visible:ring-wxm-zenith"
+        >
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M7 7l10 10-5 5V2l5 5L7 17" />
+          </svg>
+          <span id="btn-connect-label">Connect to WS2001 (H2)</span>
+        </button>
+        <button
+          id="btn-cancel-connect"
+          type="button"
+          class="hidden w-full py-2 rounded-control text-xs font-bold text-white bg-wxm-storm/60 border border-wxm-cloud/20 hover:bg-wxm-storm hover:border-red-400/60 cursor-pointer"
+        >
+          Cancel and disconnect
+        </button>
+        <label class="flex items-start gap-2.5 text-xs text-wxm-mist leading-relaxed cursor-pointer select-none">
+          <input id="chk-auto-update" type="checkbox" class="w-4 h-4 mt-0.5 rounded border-wxm-cloud/30 bg-wxm-abyss text-wxm-beacon focus:ring-0 cursor-pointer" />
+          <span><strong class="text-white">Update to the latest firmware as soon as I connect.</strong> Leave unchecked to review the station first and choose.</span>
+        </label>
+        <p id="connect-error" class="hidden text-xs text-red-300 leading-relaxed" role="alert"></p>
       </div>
     </div>
 
@@ -630,18 +104,539 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
         </div>
       </li>
     </ol>
+  </section>
 
-    <!-- Communication Log -->
-    <div class="mt-6 p-4 rounded-card bg-wxm-abyss/80 border border-wxm-cloud/15 space-y-2">
-      <div class="flex items-center justify-between text-xs">
-        <span class="font-bold text-wxm-cloud uppercase tracking-wider text-[10px]">Communication Log</span>
-        <button id="btn-clear-log" type="button" class="text-wxm-mist hover:text-white text-[11px] cursor-pointer">Clear</button>
+  <!-- ===================== 2. Connected: station header, firmware, network choice ===================== -->
+  <section id="view-device" class="hidden max-w-7xl mx-auto px-4 sm:px-8 space-y-5">
+    <!-- Station header -->
+    <div class="rounded-card border border-wxm-cloud/15 bg-wxm-storm/30 backdrop-blur-md px-4 py-3 shadow-card flex flex-wrap items-center gap-x-6 gap-y-3">
+      <div class="flex items-center gap-3 min-w-0">
+        <img src="/h2.webp" alt="WS2001 (H2)" width="388" height="228" class="w-14 h-auto object-contain select-none" />
+        <div class="space-y-1 min-w-0">
+          <h2 id="dev-name" class="text-sm font-bold text-white leading-none truncate">WeatherXM WS2001 (H2)</h2>
+          <span class="badge-status-green inline-flex items-center space-x-1.5">
+            <span class="indicator-dot-green animate-pulse"></span>
+            <span>Connected over Bluetooth</span>
+          </span>
+        </div>
       </div>
-      <div
-        id="term-log"
-        class="h-36 overflow-y-auto font-mono text-[11px] space-y-1 p-2 rounded bg-black/40 border border-wxm-cloud/10 text-wxm-mist"
+
+      <span class="hidden md:block w-px self-stretch bg-wxm-cloud/15"></span>
+
+      <dl class="flex flex-wrap items-center gap-x-6 gap-y-2">
+        <div>
+          <dt class="text-[11px] text-wxm-mist">DevEUI</dt>
+          <dd class="flex items-center gap-1.5">
+            <span id="stat-deveui" class="text-xs font-bold text-white font-mono select-all">–</span>
+            <button
+              id="btn-copy-deveui"
+              type="button"
+              title="Copy DevEUI"
+              aria-label="Copy DevEUI"
+              class="p-1 rounded text-wxm-mist hover:text-white hover:bg-wxm-storm/60 transition-colors cursor-pointer"
+            >
+              <svg id="icon-copy-deveui" class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+              </svg>
+              <span id="label-copy-deveui" class="sr-only">Copy</span>
+            </button>
+          </dd>
+        </div>
+        <div>
+          <dt class="text-[11px] text-wxm-mist">Firmware</dt>
+          <dd id="stat-ver" class="text-xs font-bold text-white font-mono">–</dd>
+        </div>
+        <div>
+          <dt class="text-[11px] text-wxm-mist">Active network</dt>
+          <dd id="stat-mode" class="text-xs font-bold text-white">–</dd>
+        </div>
+        <div>
+          <dt class="text-[11px] text-wxm-mist">LoRaWAN</dt>
+          <dd id="stat-join" class="text-xs font-bold text-white">–</dd>
+        </div>
+        <div>
+          <dt class="text-[11px] text-wxm-mist">Region</dt>
+          <dd id="stat-band" class="text-xs font-bold text-white">–</dd>
+        </div>
+        <div>
+          <dt class="text-[11px] text-wxm-mist">Upload interval</dt>
+          <dd id="stat-interval" class="text-xs font-bold text-white">–</dd>
+        </div>
+        <div>
+          <dt class="text-[11px] text-wxm-mist">Battery</dt>
+          <dd id="stat-bat" class="text-xs font-bold text-white">–</dd>
+        </div>
+      </dl>
+
+      <div class="ml-auto flex items-center gap-2">
+        <button
+          id="btn-refresh"
+          type="button"
+          title="Read the station's configuration and status again"
+          class="px-3 py-2 rounded-control text-xs font-bold text-wxm-cloud border border-wxm-cloud/20 bg-wxm-midnight/80 hover:bg-wxm-storm/60 hover:text-white transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <svg id="icon-refresh" class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+          <span id="label-refresh">Refresh</span>
+        </button>
+        <button
+          id="btn-disconnect"
+          type="button"
+          title="Disconnect: the station restarts and rejoins its active network"
+          class="px-3.5 py-2 rounded-control text-xs font-bold text-wxm-cloud border border-wxm-cloud/20 bg-wxm-midnight/80 hover:bg-wxm-error/20 hover:border-wxm-error/40 hover:text-wxm-error transition-all flex items-center gap-1.5 cursor-pointer"
+        >
+          <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+          </svg>
+          <span>Disconnect</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Firmware strip -->
+    <div id="fw-strip" class="rounded-card border border-wxm-cloud/15 bg-wxm-storm/25 backdrop-blur-md shadow-card">
+      <div class="px-4 py-3 flex flex-wrap items-center gap-x-4 gap-y-3">
+        <div id="fw-strip-icon" class="w-9 h-9 shrink-0 rounded-control flex items-center justify-center bg-wxm-midnight/70 border border-wxm-cloud/20 text-wxm-mist">
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
+          </svg>
+        </div>
+        <div class="min-w-0 flex-1">
+          <p id="fw-strip-title" class="text-sm font-bold text-white">Checking for firmware updates...</p>
+          <p id="fw-strip-sub" class="text-xs text-wxm-mist leading-relaxed mt-0.5"></p>
+        </div>
+        <div class="flex items-center gap-2 shrink-0">
+          <button
+            id="btn-fw-options"
+            type="button"
+            aria-expanded="false"
+            aria-controls="fw-options"
+            class="px-3 py-2 rounded-control text-xs font-bold text-wxm-cloud border border-wxm-cloud/20 bg-wxm-midnight/80 hover:bg-wxm-storm/60 hover:text-white transition-all flex items-center gap-1.5 cursor-pointer"
+          >
+            <span>Other versions</span>
+            <svg id="fw-options-chevron" class="w-3.5 h-3.5 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          <button
+            id="btn-fw-update"
+            type="button"
+            disabled
+            class="px-4 py-2 rounded-control text-xs btn-primary-beacon flex items-center gap-1.5 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            Update firmware
+          </button>
+        </div>
+      </div>
+
+      <div id="fw-options" class="hidden px-4 pb-4 pt-3 border-t border-wxm-cloud/10 grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="space-y-2">
+          <label for="cfg-fw-version" class="block text-[11px] font-bold text-wxm-cloud uppercase tracking-wider">Firmware version</label>
+          <select
+            id="cfg-fw-version"
+            class="w-full bg-wxm-midnight border border-wxm-cloud/30 rounded-control py-2 px-3 text-xs text-white font-mono focus:outline-none focus:border-wxm-beacon"
+          >
+            <option value="latest">Latest release</option>
+            <option value="custom">Custom signed package (-ble-dfu.zip)...</option>
+          </select>
+          <div id="group-fw-custom" class="hidden space-y-1">
+            <label for="cfg-fw-file" class="block text-xs font-semibold text-wxm-cloud">Signed DFU package (<span class="font-mono">-ble-dfu.zip</span>)</label>
+            <input
+              id="cfg-fw-file"
+              type="file"
+              accept=".zip,application/zip"
+              class="w-full text-xs text-wxm-mist file:mr-3 file:py-1.5 file:px-3 file:rounded-control file:border file:border-wxm-cloud/20 file:text-xs file:font-semibold file:bg-wxm-storm/60 file:text-white hover:file:bg-wxm-storm cursor-pointer"
+            />
+          </div>
+        </div>
+        <div class="p-3 rounded-control bg-wxm-midnight/70 border border-wxm-cloud/10 text-[11px] text-wxm-mist leading-relaxed space-y-1.5">
+          <p id="fw-version-note">The update keeps the station's settings, both network profiles and the rain total.</p>
+          <p>The station's bootloader only accepts packages signed by WeatherXM and never installs an older version than the one it runs.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Network choice -->
+    <div>
+      <div class="mb-4 flex flex-wrap items-baseline gap-x-4 gap-y-1">
+        <span class="text-[11px] font-bold text-wxm-zenith uppercase tracking-wider">Step 2</span>
+        <h2 class="text-xl font-bold text-white tracking-tight">Choose which network this station reports to</h2>
+        <p class="text-xs text-wxm-mist">Both identities stay stored on the station. Switching takes a few seconds; the station then restarts and joins the chosen network.</p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-5 items-stretch">
+        <!-- WeatherXM network card -->
+        <div id="card-wxm" class="rounded-card border-2 border-wxm-cloud/15 bg-wxm-storm/30 p-5 flex flex-col justify-between transition-all shadow-card backdrop-blur-md">
+          <div>
+            <div class="flex flex-wrap-reverse sm:flex-nowrap items-start justify-between gap-3 mb-3">
+              <div class="flex items-center gap-3 min-w-0">
+                <div class="w-10 h-10 flex-shrink-0 rounded-control bg-wxm-beacon/15 border border-wxm-beacon/30 flex items-center justify-center text-wxm-zenith">
+                  <svg class="w-5 h-5" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+                    <path d="M7 16L12 9L17 16L22 9L27 16" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M7 23L12 16L17 23L22 16L27 23" stroke="#2F74DC" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </div>
+                <div class="min-w-0">
+                  <h3 class="text-lg font-bold text-white">WeatherXM Network</h3>
+                  <div class="flex flex-wrap items-center gap-2 mt-0.5">
+                    <span class="text-xs text-wxm-mist font-mono font-medium">Profile 0 · Helium</span>
+                    <span class="text-[11px] px-2 py-0.5 rounded bg-wxm-beacon/10 text-wxm-zenith border border-wxm-beacon/25 font-medium">Earns $WXM rewards</span>
+                  </div>
+                </div>
+              </div>
+              <span id="badge-wxm-status" class="px-2.5 py-1 text-xs font-semibold rounded-full bg-wxm-midnight/70 border border-wxm-cloud/20 text-wxm-mist whitespace-nowrap">–</span>
+            </div>
+
+            <p class="text-xs text-wxm-mist leading-relaxed">
+              The station's factory setup. It reports to WeatherXM over the Helium network with its provisioned keys, appears in the WeatherXM app and earns rewards. Nothing needs to be configured.
+            </p>
+
+            <div class="mt-3 pt-3 border-t border-wxm-cloud/10">
+              <span class="text-[10px] font-bold text-wxm-mist uppercase tracking-wider block mb-2 select-none">Included capabilities</span>
+              <ul class="space-y-1 text-xs text-wxm-cloud select-none">
+                <li class="flex items-center gap-2"><svg class="w-4 h-4 text-wxm-live flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg><span>WeatherXM app, network quality scoring and $WXM rewards</span></li>
+                <li class="flex items-center gap-2"><svg class="w-4 h-4 text-wxm-live flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg><span>Uploads every 3 minutes over Helium</span></li>
+                <li class="flex items-center gap-2"><svg class="w-4 h-4 text-wxm-live flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg><span>Data signed by the station's secure element</span></li>
+                <li class="flex items-center gap-2"><svg class="w-4 h-4 text-wxm-live flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg><span>Daily GNSS location check</span></li>
+              </ul>
+            </div>
+
+            <div class="mt-3 p-3 rounded-control bg-wxm-midnight/70 border border-wxm-cloud/10 text-[11px] leading-relaxed">
+              <p id="helium-status-title" class="font-bold text-white">–</p>
+              <p id="helium-status-desc" class="text-wxm-mist mt-0.5"></p>
+            </div>
+          </div>
+
+          <div class="mt-4 pt-4 border-t border-wxm-cloud/15">
+            <button
+              id="btn-switchback"
+              type="button"
+              class="w-full py-3 px-4 rounded-control text-sm btn-primary-beacon flex items-center justify-center gap-2 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Switch to WeatherXM
+            </button>
+          </div>
+        </div>
+
+        <!-- Open Edition card -->
+        <div id="card-open" class="rounded-card border-2 border-wxm-cloud/15 bg-wxm-storm/30 p-5 flex flex-col justify-between transition-all shadow-card backdrop-blur-md">
+          <div>
+            <div class="flex flex-wrap-reverse sm:flex-nowrap items-start justify-between gap-3 mb-3">
+              <div class="flex items-center gap-3 min-w-0">
+                <div class="w-10 h-10 flex-shrink-0 rounded-control bg-wxm-live/15 border border-wxm-live/30 flex items-center justify-center text-wxm-live">
+                  <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0" />
+                  </svg>
+                </div>
+                <div class="min-w-0">
+                  <h3 class="text-lg font-bold text-white">Open Edition · Your Own LoRaWAN</h3>
+                  <div class="flex flex-wrap items-center gap-2 mt-0.5">
+                    <span class="text-xs text-wxm-mist font-mono font-medium">Profile 1 · TTN · ChirpStack</span>
+                    <span class="text-[11px] px-2 py-0.5 rounded bg-wxm-live/10 text-wxm-live border border-wxm-live/25 font-medium">Your data, your server</span>
+                  </div>
+                </div>
+              </div>
+              <span id="badge-open-status" class="px-2.5 py-1 text-xs font-semibold rounded-full bg-wxm-midnight/70 border border-wxm-cloud/20 text-wxm-mist whitespace-nowrap">–</span>
+            </div>
+
+            <p class="text-xs text-wxm-mist leading-relaxed">
+              Sends the same WeatherXM 24-byte frame to The Things Network, ChirpStack or any LoRaWAN 1.0.4 network server you run. While it is on your network the station is off the WeatherXM network.
+            </p>
+
+            <div class="mt-3 pt-3 border-t border-wxm-cloud/10">
+              <span class="text-[10px] font-bold text-wxm-mist uppercase tracking-wider block mb-2 select-none">Included capabilities</span>
+              <ul class="space-y-1 text-xs text-wxm-cloud select-none">
+                <li class="flex items-center gap-2"><svg class="w-4 h-4 text-wxm-live flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg><span>Any LoRaWAN 1.0.4 network server, OTAA, Class A</span></li>
+                <li class="flex items-center gap-2"><svg class="w-4 h-4 text-wxm-live flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg><span>Wind gust and rain total, with a ready-made decoder</span></li>
+                <li class="flex items-center gap-2"><svg class="w-4 h-4 text-wxm-live flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg><span>One-click TTN import file, optional GNSS scans</span></li>
+                <li class="flex items-center gap-2"><svg class="w-4 h-4 text-wxm-live flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg><span>WeatherXM identity stays stored for switching back</span></li>
+              </ul>
+            </div>
+
+            <!-- Firmware too old for profiles -->
+            <div id="open-old-fw-banner" class="hidden mt-3 p-3.5 rounded-control bg-amber-500/15 border border-amber-400/40 text-xs space-y-2.5 leading-relaxed">
+              <p class="font-bold text-amber-300">Update the firmware first</p>
+              <p class="text-amber-200/90">
+                The station runs <span id="open-old-fw-ver" class="font-mono">V4.3</span>, which has a single network identity.
+                The update stores the WeatherXM identity as profile 0, so setting up your own network never overwrites it.
+              </p>
+              <button
+                id="btn-goto-flash-v49"
+                type="button"
+                class="w-full py-2.5 px-4 rounded-control text-xs font-bold text-white bg-amber-600 hover:bg-amber-500 cursor-pointer"
+              >
+                Update firmware now
+              </button>
+            </div>
+
+            <!-- Saved custom network -->
+            <div id="group-switch-open-stored" class="hidden mt-3 p-3.5 rounded-control bg-emerald-500/10 border border-emerald-500/30 text-xs space-y-2.5 leading-relaxed">
+              <p id="open-stored-title" class="font-bold text-emerald-300">Your network settings are saved on the station</p>
+              <p id="open-stored-desc" class="text-emerald-200/80">Switch to them in one click, or change them below.</p>
+              <button
+                id="btn-switch-open-stored"
+                type="button"
+                class="w-full py-2.5 rounded-control text-xs font-bold text-white bg-emerald-700/80 border border-emerald-500/40 hover:bg-emerald-600 cursor-pointer disabled:opacity-50 disabled:cursor-wait"
+              >
+                Switch to my saved network
+              </button>
+            </div>
+
+            <!-- Network settings form -->
+            <details id="open-form-details" class="mt-3 pt-3 border-t border-wxm-cloud/10 group" open>
+              <summary class="flex items-center justify-between cursor-pointer select-none list-none">
+                <span class="text-[11px] font-bold text-emerald-400 uppercase tracking-wider">Network settings</span>
+                <span class="text-[11px] text-wxm-mist flex items-center gap-1">
+                  LoRaWAN 1.0.4 · OTAA · FPort 99
+                  <svg class="w-3.5 h-3.5 transition-transform group-open:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
+                </span>
+              </summary>
+
+              <fieldset id="open-form" class="mt-3 space-y-3 disabled:opacity-40">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label for="cfg-band" class="block text-xs font-semibold text-wxm-cloud mb-1">Frequency region</label>
+                    <select id="cfg-band" class="w-full px-3 py-2 rounded-control bg-wxm-abyss border border-wxm-cloud/20 text-white text-xs font-semibold focus:outline-none focus:border-wxm-live">
+                      <option value="5">EU868 (Europe 868 MHz)</option>
+                      <option value="8">US915 (North America 915 MHz)</option>
+                      <option value="1">AU915 (Australia 915 MHz)</option>
+                      <option value="15">AS923-1 (Asia 923 MHz)</option>
+                      <option value="7">IN865 (India 865 MHz)</option>
+                      <option value="6">KR920 (Korea 920 MHz)</option>
+                      <option value="9">RU864 (Russia 864 MHz)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label for="cfg-interval" class="block text-xs font-semibold text-wxm-cloud mb-1">Upload interval</label>
+                    <select id="cfg-interval" class="w-full px-3 py-2 rounded-control bg-wxm-abyss border border-wxm-cloud/20 text-white text-xs font-semibold focus:outline-none focus:border-wxm-live">
+                      <option value="5" selected>5 minutes (recommended for TTN)</option>
+                      <option value="10">10 minutes (weak signal, SF9+)</option>
+                      <option value="15">15 minutes (battery saving)</option>
+                      <option value="30">30 minutes</option>
+                      <option value="3">3 minutes (private ChirpStack only)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div id="group-subband">
+                  <label for="cfg-subband" class="block text-xs font-semibold text-wxm-cloud mb-1">Channel sub-band (FSB)</label>
+                  <select id="cfg-subband" class="w-full px-3 py-2 rounded-control bg-wxm-abyss border border-wxm-cloud/20 text-white text-xs font-semibold focus:outline-none focus:border-wxm-live">
+                    <option value="1">Sub-band 2 (channels 8-15) — standard for TTN and ChirpStack</option>
+                    <option value="0">Sub-band 1 (channels 0-7)</option>
+                    <option value="2">Sub-band 3 (channels 16-23)</option>
+                    <option value="3">Sub-band 4 (channels 24-31)</option>
+                    <option value="4">Sub-band 5 (channels 32-39)</option>
+                    <option value="5">Sub-band 6 (channels 40-47)</option>
+                    <option value="6">Sub-band 7 (channels 48-55)</option>
+                    <option value="7">Sub-band 8 (channels 56-63)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <div class="flex items-center justify-between mb-1">
+                    <label for="cfg-joineui" class="text-xs font-semibold text-wxm-cloud">JoinEUI / AppEUI (16 hex)</label>
+                    <span class="text-[10px] text-wxm-mist font-mono">MSB</span>
+                  </div>
+                  <input id="cfg-joineui" type="text" maxlength="23" placeholder="0000000000000000" autocomplete="off" spellcheck="false"
+                    class="w-full px-3 py-2 rounded-control bg-wxm-abyss border border-wxm-cloud/20 text-white font-mono text-xs focus:outline-none focus:border-wxm-live uppercase" />
+                </div>
+
+                <div>
+                  <div class="flex items-center justify-between mb-1">
+                    <label for="cfg-appkey" class="text-xs font-semibold text-wxm-cloud">AppKey (32 hex)</label>
+                    <button id="btn-gen-appkey" type="button" class="text-[11px] font-semibold text-emerald-300 hover:text-white cursor-pointer">Generate random</button>
+                  </div>
+                  <input id="cfg-appkey" type="text" maxlength="47" placeholder="00112233445566778899AABBCCDDEEFF" autocomplete="off" spellcheck="false"
+                    class="w-full px-3 py-2 rounded-control bg-wxm-abyss border border-wxm-cloud/20 text-white font-mono text-xs focus:outline-none focus:border-wxm-live uppercase" />
+                </div>
+
+                <label class="flex items-start gap-2.5 text-[11px] text-wxm-mist leading-relaxed cursor-pointer select-none">
+                  <input id="cfg-gnss" type="checkbox" class="w-4 h-4 mt-0.5 rounded border-wxm-cloud/30 bg-wxm-abyss text-wxm-live focus:ring-0 cursor-pointer" />
+                  <span>
+                    <strong class="text-white">Send GNSS location scans</strong> (optional). About once a day a raw satellite scan
+                    (<span class="font-mono">0xF3</span> on FPort 99) that you can resolve later. Needs your server to answer LoRaWAN DeviceTimeReq (TTN and ChirpStack do).
+                    <span id="cfg-gnss-note" class="hidden text-amber-300">Needs the latest firmware: update the station first.</span>
+                  </span>
+                </label>
+
+                <p id="open-form-key-note" class="hidden text-[11px] text-amber-300 leading-relaxed">
+                  Saving replaces the network settings stored on the station. The AppKey above is new: register it on your network server, or paste the one you already use.
+                </p>
+                <p class="text-[11px] text-wxm-mist leading-relaxed">
+                  TTN allows 30 s of airtime per device per day; a 24-byte uplink takes about 82 ms at SF7, so use 5 minutes or more on TTN.
+                </p>
+              </fieldset>
+            </details>
+
+            <div class="mt-3 p-3 rounded-control bg-amber-500/10 border border-amber-500/30 text-[11px] text-amber-200/90 leading-relaxed">
+              <ul class="list-disc list-inside space-y-1">
+                <li>On your network the station earns no $WXM rewards and its data is not in the WeatherXM app.</li>
+                <li id="warn-keys">Checking whether this firmware can keep the WeatherXM keys...</li>
+              </ul>
+            </div>
+          </div>
+
+          <div id="open-apply-area" class="mt-4 pt-4 border-t border-wxm-cloud/15 space-y-2">
+            <button
+              id="btn-apply"
+              type="button"
+              class="w-full py-3 px-4 rounded-control text-sm btn-primary-green flex items-center justify-center gap-2 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0" /></svg>
+              <span id="btn-apply-label">Switch to My Network</span>
+            </button>
+            <button id="btn-ttn-export-form" type="button" title="The Things Network: End devices > Import end devices > The Things Stack JSON. The file holds your AppKey: keep it private."
+              class="w-full py-2 rounded-control text-xs font-bold text-white bg-wxm-storm/60 border border-wxm-cloud/20 hover:bg-wxm-storm hover:border-wxm-live/60 cursor-pointer inline-flex items-center justify-center gap-2">
+              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+              Download TTN import file (.json, includes the decoder)
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <p id="form-error" class="hidden mt-4 p-3 rounded-control bg-red-500/10 border border-red-500/30 text-xs text-red-300 leading-relaxed font-semibold" role="alert"></p>
+    </div>
+  </section>
+
+  <!-- ===================== 3. Operations in progress / results ===================== -->
+  <section class="max-w-2xl mx-auto px-4 sm:px-8">
+    <!-- Network switch progress -->
+    <div id="view-progress" class="hidden p-6 rounded-card bg-wxm-midnight/90 border-2 border-wxm-zenith/40 backdrop-blur-md shadow-card space-y-4">
+      <div class="flex items-center gap-3">
+        <div class="w-5 h-5 border-2 border-wxm-zenith border-t-transparent rounded-full animate-spin"></div>
+        <div>
+          <h3 class="text-sm font-bold text-white">Configuring the station...</h3>
+          <p id="progress-step-text" class="text-xs text-wxm-mist">Applying LoRaWAN parameters over Bluetooth</p>
+        </div>
+      </div>
+      <div class="w-full bg-wxm-abyss rounded-full h-2 overflow-hidden border border-wxm-cloud/10">
+        <div id="progress-bar" class="bg-wxm-zenith h-full transition-all duration-300 w-0"></div>
+      </div>
+    </div>
+
+    <!-- Firmware update -->
+    <div id="view-dfu" class="hidden p-6 rounded-card bg-wxm-midnight/90 border-2 border-wxm-zenith/40 backdrop-blur-md shadow-card space-y-4">
+      <div class="flex items-center gap-3">
+        <div id="dfu-spinner" class="w-5 h-5 border-2 border-wxm-zenith border-t-transparent rounded-full animate-spin shrink-0"></div>
+        <div class="min-w-0">
+          <h3 id="dfu-title" class="text-sm font-bold text-white">Updating firmware</h3>
+          <p id="dfu-step" class="text-xs text-wxm-mist leading-relaxed">Preparing...</p>
+        </div>
+      </div>
+      <div class="w-full bg-wxm-abyss rounded-full h-2 overflow-hidden border border-wxm-cloud/10">
+        <div id="dfu-bar" class="bg-wxm-zenith h-full transition-all duration-300 w-0"></div>
+      </div>
+      <p id="dfu-detail" class="text-[11px] text-wxm-mist leading-relaxed">Keep the station powered and this device within a few metres until the update finishes.</p>
+      <div id="dfu-name-hint" class="hidden p-3 rounded-control bg-wxm-abyss/80 border border-wxm-zenith/30 text-[11.5px] text-wxm-cloud leading-relaxed space-y-1">
+        <p class="font-bold text-white">Look for a different name in the Bluetooth list</p>
+        <p>
+          In update mode the station is a separate Bluetooth device called
+          <strong id="dfu-name-hint-value" class="font-mono text-wxm-zenith">DfuWX…</strong>
+          (or <span class="font-mono">DfuTarg</span>), <strong>not</strong> "WeatherXM WS2001 …". Only update-mode devices are listed.
+          It returns to its normal name after the update.
+        </p>
+      </div>
+      <button id="btn-dfu-pick" type="button" class="hidden w-full py-3 px-5 rounded-control text-sm btn-primary-beacon flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-wait">Continue: select the station's update mode</button>
+      <button id="btn-dfu-reconnect" type="button" class="hidden w-full py-3 px-5 rounded-control text-sm btn-primary-beacon flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-wait">Reconnect to the station</button>
+      <button id="btn-dfu-close" type="button" class="hidden w-full py-2.5 rounded-control text-xs font-bold text-white bg-wxm-storm/60 border border-wxm-cloud/20 hover:bg-wxm-storm cursor-pointer">Close</button>
+    </div>
+
+    <!-- Result -->
+    <div id="view-success" class="hidden p-6 rounded-card bg-wxm-midnight/90 border-2 border-emerald-500/50 backdrop-blur-md shadow-card space-y-4">
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400">
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" /></svg>
+        </div>
+        <div>
+          <h3 id="success-title" class="text-sm font-bold text-white">Connected to your network!</h3>
+          <p id="success-sub" class="text-xs text-emerald-300">Settings written to flash. The station has rebooted to join your network.</p>
+        </div>
+      </div>
+      <div id="success-steps" class="p-3.5 rounded-control bg-wxm-abyss/80 border border-wxm-cloud/10 text-xs text-wxm-mist space-y-2">
+        <p><strong>Next steps:</strong></p>
+        <ul class="list-disc pl-4 space-y-1">
+          <li>Register the station in your network server (LoRaWAN 1.0.4, OTAA, Class A). On TTN, import the file below: <strong>End devices &gt; Import end devices &gt; The Things Stack JSON</strong>. It already includes the payload decoder.</li>
+          <li>On ChirpStack, add the <strong>payload decoder</strong> below to the device profile.</li>
+          <li>Watch for the first Join-Request, typically within a minute after the restart. The station needs a reliable downlink to receive the Join-Accept.</li>
+        </ul>
+      </div>
+      <button id="btn-ttn-export-success" type="button" class="hidden w-full py-2.5 rounded-control text-xs font-bold text-white bg-wxm-storm/60 border border-wxm-cloud/20 hover:bg-wxm-storm hover:border-wxm-zenith cursor-pointer inline-flex items-center justify-center gap-2">
+        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+        Download TTN import file (.json)
+      </button>
+      <button id="btn-done" type="button" class="w-full py-2.5 rounded-control text-xs font-bold text-white bg-wxm-storm/60 border border-wxm-cloud/20 hover:bg-wxm-storm cursor-pointer">
+        Done
+      </button>
+    </div>
+  </section>
+
+  <!-- ===================== Payload decoder ===================== -->
+  <section class="max-w-7xl mx-auto px-4 sm:px-8 mt-6">
+    <div class="rounded-card border border-wxm-cloud/15 bg-wxm-storm/25 backdrop-blur-md shadow-card px-5 py-4 flex flex-col md:flex-row md:items-center gap-4">
+      <div class="flex items-start gap-3 min-w-0 flex-1">
+        <div class="w-10 h-10 shrink-0 rounded-control bg-wxm-midnight/70 border border-wxm-cloud/20 flex items-center justify-center text-wxm-zenith">
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" /></svg>
+        </div>
+        <div class="min-w-0">
+          <h3 class="text-sm font-bold text-white">Payload decoder</h3>
+          <p class="text-xs text-wxm-mist leading-relaxed">
+            One script for The Things Stack v3, ChirpStack v4 and v3. It decodes the 24-byte frame on FPort 99, labels the modem messages on FPort 199 and reads the legacy FPort 3 format.
+            Paste it into TTN (Payload formatters &gt; Uplink &gt; Custom Javascript) or ChirpStack (Device profile &gt; Codec).
+          </p>
+          <span id="decoder-copy-toast" class="hidden text-[11px] font-semibold text-emerald-300 block mt-1"></span>
+        </div>
+      </div>
+      <div class="flex flex-wrap gap-2 shrink-0">
+        <button id="btn-show-decoder" type="button" class="px-3 py-1.5 rounded-control text-xs font-bold bg-wxm-storm/60 border border-wxm-cloud/20 text-white hover:bg-wxm-storm hover:border-wxm-zenith transition-all cursor-pointer inline-flex items-center gap-1.5">Show</button>
+        <button id="btn-copy-decoder" type="button" class="px-3 py-1.5 rounded-control text-xs font-bold bg-wxm-storm/60 border border-wxm-cloud/20 text-white hover:bg-wxm-storm hover:border-wxm-zenith transition-all cursor-pointer inline-flex items-center gap-1.5">Copy decoder</button>
+        <a href="/decoders/ws2001_uplink_decoder.js" download="ws2001_uplink_decoder.js" class="px-3 py-1.5 rounded-control text-xs font-bold bg-wxm-storm/60 border border-wxm-cloud/20 text-white hover:bg-wxm-storm hover:border-wxm-zenith transition-all cursor-pointer inline-flex items-center gap-1.5">Download .js</a>
+      </div>
+      <dialog
+        id="decoder-dialog"
+        aria-labelledby="decoder-dialog-title"
+        class="m-auto w-[min(56rem,calc(100vw-2rem))] max-h-[85vh] rounded-card border border-wxm-cloud/20 bg-wxm-abyss p-0 text-white backdrop:bg-black/70"
       >
-        <div>[READY] Waiting for Bluetooth connection...</div>
+        <div class="flex items-center justify-between gap-3 px-4 py-3 border-b border-wxm-cloud/20">
+          <h3 id="decoder-dialog-title" class="text-sm font-bold">ws2001_uplink_decoder.js</h3>
+          <div class="flex items-center gap-2">
+            <button id="btn-dialog-copy-decoder" type="button" class="px-3 py-1.5 rounded-control text-xs font-bold bg-wxm-storm/60 border border-wxm-cloud/20 hover:bg-wxm-storm hover:border-wxm-zenith cursor-pointer">Copy</button>
+            <button id="btn-close-decoder" type="button" aria-label="Close" class="px-3 py-1.5 rounded-control text-xs font-bold bg-wxm-storm/60 border border-wxm-cloud/20 hover:bg-wxm-storm cursor-pointer">Close</button>
+          </div>
+        </div>
+        <div class="overflow-auto max-h-[calc(85vh-3.5rem)] text-xs [&_pre]:p-4 [&_pre]:m-0">
+          <Code code={WS2001_UPLINK_DECODER} lang="js" theme="github-dark" />
+        </div>
+      </dialog>
+    </div>
+  </section>
+
+  <!-- ===================== Bluetooth console ===================== -->
+  <section class="max-w-7xl mx-auto px-4 sm:px-8 mt-5">
+    <div class="rounded-card border border-wxm-cloud/15 bg-wxm-storm/25 backdrop-blur-md overflow-hidden shadow-card">
+      <div class="px-5 py-3.5 bg-wxm-midnight/60 border-b border-wxm-cloud/15 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div class="flex items-center gap-3 select-none">
+          <button id="btn-toggle-log" type="button" aria-expanded="true" aria-controls="log-content-wrapper" class="flex items-center gap-2 text-xs font-bold text-white hover:text-wxm-zenith transition-colors cursor-pointer">
+            <svg id="log-chevron" class="w-4 h-4 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
+            <span class="whitespace-nowrap">Bluetooth &amp; Flasher Console</span>
+          </button>
+          <span class="text-xs text-wxm-mist font-mono whitespace-nowrap">(<span id="log-count">0</span> events)</span>
+        </div>
+        <div class="flex items-center gap-2.5">
+          <button id="btn-clear-log" type="button" class="px-3 py-1.5 rounded-control text-xs font-bold text-wxm-mist hover:text-white border border-wxm-cloud/20 bg-wxm-storm/40 hover:bg-wxm-storm/80 transition-all flex items-center gap-1.5 cursor-pointer">
+            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+            <span>Clear</span>
+          </button>
+          <button id="btn-download-log" type="button" class="px-3.5 py-1.5 rounded-control text-xs font-bold text-white border border-wxm-beacon/40 bg-wxm-beacon hover:bg-wxm-horizon transition-all flex items-center gap-1.5 cursor-pointer">
+            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+            <span>Download .txt</span>
+          </button>
+        </div>
+      </div>
+      <div id="log-content-wrapper" class="p-4 bg-wxm-abyss/90">
+        <div id="term-log" class="h-48 overflow-y-auto font-mono text-[11px] leading-relaxed text-wxm-cloud space-y-1">
+          <div class="text-wxm-mist">[Ready] WS2001 Bluetooth configurator initialized. Waiting for a station connection...</div>
+        </div>
       </div>
     </div>
   </section>
@@ -736,7 +731,7 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
         const opt = document.createElement('option');
         opt.value = r.version;
         opt.textContent = r.version === m.latest
-          ? `${r.label} (Latest — Dual Network Profiles + Flash Preservation)`
+          ? `${r.label} (latest release)`
           : r.label;
         fwVersionSelect.appendChild(opt);
       }
@@ -752,41 +747,32 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
       console.warn('WS2001 firmware list unavailable', e);
     });
 
-  // Action mode switcher (Flash Firmware | Switch to Open LoRaWAN | Switch to Helium)
-  type ActionMode = 'flash' | 'open' | 'helium';
-  const modeButtons: Record<ActionMode, HTMLButtonElement> = {
-    flash: $<HTMLButtonElement>('btn-mode-flash'),
-    open: $<HTMLButtonElement>('btn-mode-open'),
-    helium: $<HTMLButtonElement>('btn-mode-helium'),
-  };
-  const modePanels: Record<ActionMode, HTMLElement> = {
-    flash: $('panel-flash'),
-    open: $('panel-open'),
-    helium: $('panel-helium'),
-  };
+  // Demo data for layout work (dev server only, never in production builds): /ws2001?demo=old|wxm|custom|stored
+  const demoMode = import.meta.env.DEV ? new URLSearchParams(location.search).get('demo') : null;
 
-  function selectActionMode(mode: ActionMode) {
-    ($('form-error') as HTMLElement).classList.add('hidden');
-    for (const m of ['flash', 'open', 'helium'] as ActionMode[]) {
-      const active = m === mode;
-      modeButtons[m].setAttribute('aria-selected', active ? 'true' : 'false');
-      modeButtons[m].className = active
-        ? 'p-3 rounded-control text-left border border-wxm-zenith bg-wxm-storm/60 hover:bg-wxm-storm/50 transition-all cursor-pointer space-y-1'
-        : 'p-3 rounded-control text-left border border-wxm-cloud/20 bg-wxm-abyss/60 hover:bg-wxm-storm/50 transition-all cursor-pointer space-y-1';
-      modePanels[m].classList.toggle('hidden', !active);
-    }
+  const clearFormError = () => $('form-error').classList.add('hidden');
+
+  // "Other versions" disclosure in the firmware strip
+  const fwOptions = $('fw-options');
+  const btnFwOptions = $<HTMLButtonElement>('btn-fw-options');
+  function setFwOptionsOpen(open: boolean) {
+    fwOptions.classList.toggle('hidden', !open);
+    btnFwOptions.setAttribute('aria-expanded', open ? 'true' : 'false');
+    $('fw-options-chevron').classList.toggle('rotate-180', open);
   }
+  btnFwOptions.addEventListener('click', () => setFwOptionsOpen(fwOptions.classList.contains('hidden')));
 
-  modeButtons.flash.addEventListener('click', () => selectActionMode('flash'));
-  modeButtons.open.addEventListener('click', () => selectActionMode('open'));
-  modeButtons.helium.addEventListener('click', () => selectActionMode('helium'));
+  // Open Edition card on old firmware: update to the latest release first
   $('btn-goto-flash-v49').addEventListener('click', () => {
     if (latest) fwVersionSelect.value = latest.version;
+    $('group-fw-custom').classList.add('hidden');
     if (currentConfig) updateFirmwarePanel(currentConfig);
-    selectActionMode('flash');
+    $<HTMLButtonElement>('btn-fw-update').click();
   });
 
   const termLog = $('term-log');
+  const logCount = $('log-count');
+  let logEvents = 0;
 
   const addLog = (msg: string, level = 'INFO') => {
     const row = document.createElement('div');
@@ -801,6 +787,7 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
     row.textContent = `[${time}] ${redactTelemetryString(msg)}`;
     termLog.appendChild(row);
     termLog.scrollTop = termLog.scrollHeight;
+    logCount.textContent = String(++logEvents);
   };
 
   // Setup decoders copy buttons
@@ -833,7 +820,26 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
   });
 
   $('btn-clear-log').addEventListener('click', () => {
-    termLog.innerHTML = '<div>[CLEARED]</div>';
+    termLog.innerHTML = '<div class="text-wxm-mist">[Cleared]</div>';
+    logEvents = 0;
+    logCount.textContent = '0';
+  });
+  // Lines are already redacted by addLog (no AppKey or session keys)
+  $('btn-download-log').addEventListener('click', () => {
+    const text = Array.from(termLog.children).map((el) => el.textContent ?? '').join('\n') + '\n';
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([text], { type: 'text/plain' }));
+    a.download = `ws2001_log_${new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  });
+  $('btn-toggle-log').addEventListener('click', () => {
+    const wrapper = $('log-content-wrapper');
+    const collapsed = wrapper.classList.toggle('hidden');
+    $('btn-toggle-log').setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+    $('log-chevron').classList.toggle('-rotate-90', collapsed);
   });
 
   // Frequency band change handler (toggles sub-band selector)
@@ -871,134 +877,221 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
     return allReleases.find((r) => r.version === val) ?? latest;
   }
 
+  const BADGE_BASE = 'px-2.5 py-1 text-xs font-semibold rounded-full whitespace-nowrap border ';
+  const BADGE = {
+    active: BADGE_BASE + 'bg-wxm-live/15 border-wxm-live/50 text-wxm-live',
+    ready: BADGE_BASE + 'bg-wxm-midnight/70 border-wxm-cloud/25 text-wxm-cloud',
+    warn: BADGE_BASE + 'bg-amber-500/15 border-amber-400/40 text-amber-300',
+    off: BADGE_BASE + 'bg-wxm-midnight/70 border-wxm-cloud/15 text-wxm-mist',
+  };
+  const CARD_BASE = 'rounded-card border-2 bg-wxm-storm/30 p-5 flex flex-col justify-between transition-all shadow-card backdrop-blur-md ';
+  const BTN_PRIMARY_BLUE = 'w-full py-3 px-4 rounded-control text-sm btn-primary-beacon flex items-center justify-center gap-2 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed';
+  const BTN_SECONDARY = 'w-full py-3 px-4 rounded-control text-sm font-bold text-white bg-wxm-midnight/80 border border-wxm-cloud/25 hover:bg-wxm-storm/70 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed';
+
+  function setBadge(id: string, text: string, tone: keyof typeof BADGE) {
+    const el = $(id);
+    el.textContent = text;
+    el.className = BADGE[tone];
+  }
+
   function updateModeDisplay(cfg: Ws2001DeviceConfig) {
+    const profiles = cfg.netProfile;
+    const onCustom = profiles ? profiles.active === 1 : cfg.testModeType === 1;
+    const wxmStored = Boolean(profiles && (profiles.weatherxmStored || profiles.active === 0));
+    const customStored = Boolean(profiles?.customStored);
+
+    // Header readout
     const modeEl = $('stat-mode');
-    const format = cfg.testModeType === 1 ? 'legacy FPort 3 format' : cfg.testModeType === 0 ? '24-byte frame' : 'format unknown';
-    const onCustom = cfg.netProfile ? cfg.netProfile.active === 1 : cfg.testModeType === 1;
-    const join = cfg.lorawanStatus === 'JOINED' ? ' · joined' : cfg.lorawanStatus === 'JOINING' ? ' · joining...' : '';
-    if (onCustom) {
-      modeEl.textContent = `Open LoRaWAN (${format})${join}`;
-      modeEl.className = 'font-bold text-emerald-400 inline-block text-[11px]';
-    } else if (cfg.netProfile || cfg.testModeType === 0) {
-      modeEl.textContent = `Helium / WeatherXM (${format})${join}`;
-      modeEl.className = 'font-bold text-amber-400 inline-block text-[11px]';
+    if (profiles || cfg.testModeType !== null) {
+      modeEl.textContent = onCustom ? 'Open Edition (your LoRaWAN)' : 'WeatherXM';
+      modeEl.className = `text-xs font-bold ${onCustom ? 'text-wxm-live' : 'text-wxm-zenith'}`;
     } else {
       modeEl.textContent = 'Unknown';
-      modeEl.className = 'font-bold text-zinc-400 inline-block text-[11px]';
+      modeEl.className = 'text-xs font-bold text-wxm-mist';
     }
+    if (cfg.testModeType === 1) modeEl.textContent += ' · legacy FPort 3';
+    const joinEl = $('stat-join');
+    const st = cfg.lorawanStatus;
+    joinEl.textContent = st === 'JOINED' ? 'Joined' : st === 'JOINING' ? 'Joining...' : st ? st.charAt(0) + st.slice(1).toLowerCase() : 'Unknown';
+    joinEl.className = `text-xs font-bold ${st === 'JOINED' ? 'text-wxm-live' : st === 'JOINING' ? 'text-amber-300' : 'text-wxm-mist'}`;
 
-    const keysText = cfg.netProfile
-      ? cfg.netProfile.weatherxmStored
-        ? 'Your network settings are stored as a separate profile (profile 1); the Helium (WeatherXM) settings on the station are preserved in profile 0.'
-        : 'Switching to your network will save the current Helium (WeatherXM) settings into profile 0 before activating profile 1.'
-      : 'This firmware (< V4.5) is too old for dual network profiles: flash V4.9 first (1. Flash Firmware tab above) so Helium keys are preserved.';
+    // Highlight the card of the active network
+    $('card-wxm').className = CARD_BASE + (onCustom ? 'border-wxm-cloud/15' : 'border-wxm-beacon/60');
+    $('card-open').className = CARD_BASE + (onCustom ? 'border-wxm-live/60' : 'border-wxm-cloud/15');
+
+    const keysText = profiles
+      ? profiles.weatherxmStored
+        ? 'The WeatherXM identity stays stored as profile 0; your settings go into profile 1.'
+        : 'Switching saves the current WeatherXM identity as profile 0 before profile 1 is activated.'
+      : 'This firmware has a single network identity: update it first so the WeatherXM identity is kept.';
     $('warn-keys').textContent = keysText;
     $('modal-warn-keys').textContent = keysText;
 
-    // Badges on the 3 action tabs
-    const hasStoredOpen = Boolean(cfg.netProfile?.customStored);
-    const hasStoredHelium = Boolean(cfg.netProfile && (cfg.netProfile.weatherxmStored || cfg.netProfile.active === 0));
-    $('badge-mode-open').classList.toggle('hidden', !hasStoredOpen);
-    $('badge-mode-helium').classList.toggle('hidden', !hasStoredHelium);
-
-    // Banner for < V4.5 (e.g. V4.3) in Open LoRaWAN tab
-    const isOldFw = !cfg.netProfile;
-    $('open-old-fw-ver').textContent = cfg.version || 'V4.3';
-    $('open-old-fw-banner').classList.toggle('hidden', !isOldFw);
-
-    // 1-click stored Open LoRaWAN card in Open LoRaWAN tab
-    $('group-switch-open-stored').classList.toggle('hidden', !hasStoredOpen);
-    const btnSwitchOpenStored = $<HTMLButtonElement>('btn-switch-open-stored');
-    btnSwitchOpenStored.disabled = !hasStoredOpen;
-    btnSwitchOpenStored.textContent = onCustom
-      ? 'Re-apply Stored Open LoRaWAN Profile & Reboot'
-      : 'Switch to Stored Open LoRaWAN Profile Now (No Config Needed)';
-
-    // Helium (WeatherXM) tab status & button
+    // --- WeatherXM card ---
     const btnSwitchBack = $<HTMLButtonElement>('btn-switchback');
-    if (!cfg.netProfile) {
-      $('helium-status-title').textContent = `Station is running ${cfg.version} (Single Profile)`;
-      $('helium-status-desc').textContent =
-        'Flash V4.9 first in the "1. Flash Firmware" tab so the station backs up its Helium (WeatherXM) credentials into Profile 0.';
+    const heliumTitle = $('helium-status-title');
+    const heliumDesc = $('helium-status-desc');
+    if (!profiles) {
+      setBadge('badge-wxm-status', onCustom ? 'Not stored' : 'Active on station', onCustom ? 'warn' : 'active');
+      heliumTitle.textContent = onCustom ? 'This station was moved with an older tool' : 'The station is on the WeatherXM network';
+      heliumDesc.textContent = onCustom
+        ? 'Its firmware keeps one network identity, so the WeatherXM keys may have been replaced. Update the firmware, then contact WeatherXM support if the WeatherXM profile is not available.'
+        : `Firmware ${cfg.version} keeps a single network identity. Update the firmware before trying your own network, so this identity is kept.`;
       btnSwitchBack.disabled = true;
-      btnSwitchBack.textContent = 'Flash V4.9 First to Enable Instant Helium Switching';
-    } else if (!hasStoredHelium) {
-      $('helium-status-title').textContent = 'No Stored Helium Profile Found';
-      $('helium-status-desc').textContent =
-        'Profile 0 does not have stored WeatherXM credentials on this station.';
+      btnSwitchBack.className = BTN_SECONDARY;
+      btnSwitchBack.textContent = onCustom ? 'Update the firmware first' : 'Active — nothing to do';
+    } else if (!wxmStored) {
+      setBadge('badge-wxm-status', 'Not stored', 'warn');
+      heliumTitle.textContent = 'No WeatherXM identity on this station';
+      heliumDesc.textContent = 'Profile 0 is empty. Contact WeatherXM support to provision the station again.';
       btnSwitchBack.disabled = true;
-      btnSwitchBack.textContent = 'Helium Profile Unavailable';
+      btnSwitchBack.className = BTN_SECONDARY;
+      btnSwitchBack.textContent = 'WeatherXM profile unavailable';
     } else if (onCustom) {
-      $('helium-status-title').textContent = 'Ready to Return to Helium (WeatherXM)';
-      $('helium-status-desc').textContent =
-        'This station is currently on Open LoRaWAN (Profile 1). Its original Helium (WeatherXM) keys and 3-minute interval are safely stored in Profile 0 — click below to switch back with zero configuration.';
+      setBadge('badge-wxm-status', 'Stored · ready', 'ready');
+      heliumTitle.textContent = 'Ready to switch back';
+      heliumDesc.textContent = 'The original WeatherXM keys and 3-minute interval are stored in profile 0. Nothing needs to be entered; your own network settings stay saved in profile 1.';
       btnSwitchBack.disabled = false;
-      btnSwitchBack.textContent = 'Switch Back to Helium (WeatherXM) — No Configuration Needed';
+      btnSwitchBack.className = BTN_PRIMARY_BLUE;
+      btnSwitchBack.textContent = 'Switch Back to WeatherXM';
     } else {
-      $('helium-status-title').textContent = 'Station is Currently on Helium (WeatherXM)';
-      $('helium-status-desc').textContent =
-        'Profile 0 (Helium / WeatherXM) is already active. You can click below to re-apply Profile 0 and reboot the station to send a fresh Helium Join-Request.';
+      setBadge('badge-wxm-status', 'Active on station', 'active');
+      heliumTitle.textContent = 'The station reports to WeatherXM';
+      heliumDesc.textContent = st === 'JOINED'
+        ? 'It has joined the network. Nothing to do here.'
+        : 'If it does not join, rejoin below: the station restarts and sends a fresh Join-Request.';
       btnSwitchBack.disabled = false;
-      btnSwitchBack.textContent = 'Re-apply Helium (WeatherXM) Profile & Reboot';
+      btnSwitchBack.className = BTN_SECONDARY;
+      btnSwitchBack.textContent = 'Rejoin the WeatherXM Network';
     }
+
+    // --- Open Edition card ---
+    const oldFw = !profiles;
+    $('open-old-fw-ver').textContent = cfg.version || 'this version';
+    $('open-old-fw-banner').classList.toggle('hidden', !oldFw);
+    $<HTMLFieldSetElement>('open-form').disabled = oldFw;
+    const formDetails = $<HTMLDetailsElement>('open-form-details');
+    $<HTMLButtonElement>('btn-apply').disabled = oldFw;
+    $<HTMLButtonElement>('btn-ttn-export-form').disabled = oldFw;
+
+    $('group-switch-open-stored').classList.toggle('hidden', !customStored);
+    const btnSwitchOpenStored = $<HTMLButtonElement>('btn-switch-open-stored');
+    btnSwitchOpenStored.disabled = !customStored;
+    if (oldFw) {
+      setBadge('badge-open-status', onCustom ? 'Active on station' : 'Needs update', onCustom ? 'active' : 'warn');
+      formDetails.open = false;
+    } else if (onCustom) {
+      setBadge('badge-open-status', 'Active on station', 'active');
+      $('open-stored-title').textContent = 'The station reports to your network';
+      $('open-stored-desc').textContent = 'Rejoin with the saved settings, or change them below and save.';
+      btnSwitchOpenStored.textContent = 'Rejoin My Network';
+      formDetails.open = false;
+    } else if (customStored) {
+      setBadge('badge-open-status', 'Settings saved', 'ready');
+      $('open-stored-title').textContent = 'Your network settings are saved on the station';
+      $('open-stored-desc').textContent = 'Switch to them in one click, or change them below.';
+      btnSwitchOpenStored.textContent = 'Switch to My Saved Network';
+      formDetails.open = false;
+    } else {
+      setBadge('badge-open-status', 'Ready to set up', 'off');
+      formDetails.open = true;
+    }
+    $('btn-apply-label').textContent = onCustom ? 'Save Settings & Rejoin My Network' : customStored ? 'Save New Settings & Switch' : 'Switch to My Network';
+    $('open-form-key-note').classList.toggle('hidden', !customStored);
+    syncApplyArea();
+  }
+
+  // With settings already saved on the station, the form's submit buttons appear only when the form is opened,
+  // so the one-click "saved network" button is never confused with replacing the saved keys.
+  function syncApplyArea() {
+    const customStored = Boolean(currentConfig?.netProfile?.customStored);
+    const open = $<HTMLDetailsElement>('open-form-details').open;
+    $('open-apply-area').classList.toggle('hidden', customStored && !open);
+  }
+  $('open-form-details').addEventListener('toggle', syncApplyArea);
+
+  const FW_STRIP_BASE = 'rounded-card border backdrop-blur-md shadow-card ';
+  const FW_ICON_BASE = 'w-9 h-9 shrink-0 rounded-control flex items-center justify-center border ';
+  function setFwStripTone(tone: 'update' | 'ok' | 'neutral') {
+    $('fw-strip').className = FW_STRIP_BASE + (tone === 'update'
+      ? 'border-amber-400/40 bg-amber-500/10'
+      : 'border-wxm-cloud/15 bg-wxm-storm/25');
+    $('fw-strip-icon').className = FW_ICON_BASE + (tone === 'update'
+      ? 'bg-amber-500/15 border-amber-400/40 text-amber-300'
+      : tone === 'ok'
+        ? 'bg-wxm-live/15 border-wxm-live/40 text-wxm-live'
+        : 'bg-wxm-midnight/70 border-wxm-cloud/20 text-wxm-mist');
   }
 
   function updateFirmwarePanel(cfg: Ws2001DeviceConfig) {
     const btn = $<HTMLButtonElement>('btn-fw-update');
-    const txt = $('fw-update-text');
+    const title = $('fw-strip-title');
+    const sub = $('fw-strip-sub');
     const note = $('fw-version-note');
+    const BTN_UPDATE = 'px-4 py-2 rounded-control text-xs btn-primary-beacon flex items-center gap-1.5 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed';
+    const BTN_QUIET = 'px-4 py-2 rounded-control text-xs font-bold text-white bg-wxm-midnight/80 border border-wxm-cloud/25 hover:bg-wxm-storm/70 flex items-center gap-1.5 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed';
 
-    const outdatedVsLatest = Boolean(latest && isOutdated(cfg.version, latest.version));
-    $('badge-mode-flash').classList.toggle('hidden', !outdatedVsLatest);
+    // Summary: the station against the latest published release
+    const vsLatest = latest ? compareStationVersion(cfg.version, latest.version) : 'unknown';
+    if (!latest) {
+      setFwStripTone('neutral');
+      title.textContent = `Firmware ${cfg.version}`;
+      sub.textContent = 'The list of published firmware could not be loaded. Check your connection and reload the page.';
+    } else if (vsLatest === 'older') {
+      setFwStripTone('update');
+      title.textContent = `Firmware update available: ${cfg.version} → ${latest.label}`;
+      sub.textContent = cfg.netProfile
+        ? 'Takes about a minute over Bluetooth. Settings, both network profiles and the rain total are kept.'
+        : 'Needed before using your own network: it stores the WeatherXM identity as profile 0. Takes about a minute; settings and the rain total are kept.';
+    } else if (vsLatest === 'equal') {
+      setFwStripTone('ok');
+      title.textContent = `Firmware ${cfg.version} is up to date`;
+      sub.textContent = 'The station runs the latest published release.';
+    } else if (vsLatest === 'newer') {
+      setFwStripTone('ok');
+      title.textContent = `Firmware ${cfg.version}`;
+      sub.textContent = `Newer than the published ${latest.label} (test build).`;
+    } else {
+      setFwStripTone('neutral');
+      title.textContent = 'Firmware version unknown';
+      sub.textContent = 'Click Refresh to read it again.';
+    }
 
+    // Action: whatever is selected under "Other versions" (the latest release by default)
     if (fwVersionSelect.value === 'custom') {
       const file = fwFileInput.files?.[0];
-      if (!file) {
-        txt.textContent = `Current: ${cfg.version} · Select a signed -ble-dfu.zip file below`;
-        txt.className = 'font-semibold block mt-0.5 text-xs text-amber-300';
-        btn.textContent = 'Select a .zip file first';
-        btn.disabled = true;
-      } else {
-        txt.textContent = `Current: ${cfg.version} → Custom package (${file.name})`;
-        txt.className = 'font-semibold block mt-0.5 text-xs text-emerald-300';
-        btn.textContent = `Flash ${file.name}`;
-        btn.disabled = false;
-      }
-      note.textContent = 'The custom package must be signed with the WS2001 DFU key and have a firmware version >= the station version.';
+      btn.className = BTN_UPDATE;
+      btn.textContent = file ? `Flash ${file.name}` : 'Choose a .zip file';
+      btn.disabled = !file;
+      note.textContent = 'A custom package must be signed with the WS2001 key and have a version equal to or higher than the station.';
       return;
     }
-
     const selected = getSelectedRelease();
     if (!selected) {
-      txt.textContent = 'Firmware list unavailable';
+      btn.className = BTN_QUIET;
+      btn.textContent = 'Update firmware';
       btn.disabled = true;
       return;
     }
-
     const cmp = compareStationVersion(cfg.version, selected.version);
     if (cmp === 'older') {
-      txt.textContent = `Current: ${cfg.version} → ${selected.label} ready to flash`;
-      txt.className = 'font-semibold block mt-0.5 text-xs text-amber-300';
-      btn.textContent = `Flash ${selected.label} Firmware`;
+      btn.className = BTN_UPDATE;
+      btn.textContent = `Update to ${selected.label}`;
       btn.disabled = false;
-      note.textContent =
-        'Flashing V4.9 preserves all existing station settings and automatically backs up factory Helium (WeatherXM) keys into Profile 0.';
+      note.textContent = 'The update keeps the station\'s settings, both network profiles and the rain total.';
     } else if (cmp === 'equal') {
-      txt.textContent = `Station is already on ${selected.label} (can reinstall)`;
-      txt.className = 'font-semibold block mt-0.5 text-xs text-emerald-300';
-      btn.textContent = `Reinstall ${selected.label} Firmware`;
+      btn.className = BTN_QUIET;
+      btn.textContent = `Reinstall ${selected.label}`;
       btn.disabled = false;
-      note.textContent = 'Reinstalling the same firmware version preserves all stored network profiles and rain counters.';
+      note.textContent = 'Reinstalling the same version keeps the network profiles and the rain total.';
     } else if (cmp === 'newer') {
-      txt.textContent = `Station runs ${cfg.version} (newer than ${selected.label})`;
-      txt.className = 'font-semibold block mt-0.5 text-xs text-amber-300';
-      btn.textContent = `Cannot downgrade (${cfg.version} → ${selected.label})`;
+      btn.className = BTN_QUIET;
+      btn.textContent = `${selected.label} is older`;
       btn.disabled = true;
-      note.textContent = 'The WS2001 secure bootloader blocks firmware downgrades to a lower version number.';
+      note.textContent = 'The bootloader does not install an older version than the one the station runs.';
     } else {
-      txt.textContent = `Station version unknown (selected ${selected.label}); click Refresh first`;
-      txt.className = 'font-semibold block mt-0.5 text-xs text-amber-300';
-      btn.textContent = `Flash ${selected.label}`;
+      btn.className = BTN_QUIET;
+      btn.textContent = `Update to ${selected.label}`;
       btn.disabled = true;
     }
   }
@@ -1038,7 +1131,7 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
 
     // Populate Device Status Card
     const devLabel = client?.deviceName || 'Station';
-    $('dev-name').textContent = cfg.deviceModel !== 'Unknown' ? `${cfg.deviceModel} (${devLabel})` : devLabel;
+    $('dev-name').textContent = devLabel;
     $('stat-deveui').textContent = cfg.formattedDevEui;
     $('stat-band').textContent = cfg.frequencyName;
     $('stat-ver').textContent = cfg.version;
@@ -1047,19 +1140,9 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
 
     updateModeDisplay(cfg);
 
-    // Choose initial action tab based on station state, while letting the user pick any of the 3 tabs
-    if (!cfg.netProfile) {
-      // Field station on V4.3: highlight Flash Firmware (V4.9) first
-      selectActionMode('flash');
-    } else if (cfg.netProfile.active === 1) {
-      // Currently on Open LoRaWAN: highlight Helium (or user can click Flash / Open)
-      selectActionMode('helium');
-    } else {
-      // On V4.5+ Helium: highlight Open LoRaWAN (or user can click Flash / Helium)
-      selectActionMode('open');
-    }
+    clearFormError();
 
-    trackTelemetry({
+    if (!demoMode) trackTelemetry({
       device_type: 'ws2001',
       serial_number: cfg.formattedDevEui || cfg.deviceEui,
       action: 'connected',
@@ -1320,7 +1403,7 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
     formError.classList.add('hidden');
 
     if (!currentConfig?.netProfile) {
-      formError.textContent = 'This station runs firmware that is too old for your own network. Flash V4.9 first in the "1. Flash Firmware" tab above, then apply your settings.';
+      formError.textContent = 'This station runs firmware that is too old for your own network. Update the firmware first (bar at the top), then apply your settings.';
       formError.classList.remove('hidden');
       return;
     }
@@ -1663,7 +1746,7 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
   // 1-Click Switch to Stored Open LoRaWAN Profile (firmware V4.5+ when customStored is true)
   $('btn-switch-open-stored').addEventListener('click', async () => {
     if (!client || !client.isConnected || !currentConfig?.netProfile?.customStored || operationInFlight) return;
-    if (!confirm('Switch this station to its stored Open LoRaWAN profile (Profile 1)? Its Helium (WeatherXM) keys stay preserved in Profile 0.')) return;
+    if (!confirm('Switch this station to your saved network (profile 1)? The WeatherXM identity stays stored in profile 0.')) return;
     operationInFlight = true;
     const btn = $<HTMLButtonElement>('btn-switch-open-stored');
     btn.disabled = true;
@@ -1683,8 +1766,8 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
       currentConfig = null;
       client = null;
       $('view-progress').classList.add('hidden');
-      $('success-title').textContent = 'Switched to Stored Open LoRaWAN Profile!';
-      $('success-sub').textContent = 'The station restarted with its stored Open LoRaWAN settings (Profile 1).';
+      $('success-title').textContent = 'Switched to your network!';
+      $('success-sub').textContent = 'The station restarted with your saved network settings (profile 1).';
       $('success-steps').classList.remove('hidden');
       $('btn-ttn-export-success').classList.add('hidden');
       $('view-success').classList.remove('hidden');
@@ -1715,7 +1798,9 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
   $('btn-switchback').addEventListener('click', async () => {
     const canSwitchHelium = Boolean(currentConfig?.netProfile && (currentConfig.netProfile.weatherxmStored || currentConfig.netProfile.active === 0));
     if (!client || !client.isConnected || !canSwitchHelium || operationInFlight) return;
-    if (!confirm('Switch this station to its Helium (WeatherXM) network profile (Profile 0)? Any custom Open LoRaWAN settings stay stored in Profile 1.')) return;
+    if (!confirm(currentConfig?.netProfile?.active === 1
+      ? 'Switch this station back to the WeatherXM network (profile 0)? Your own network settings stay saved in profile 1.'
+      : 'Restart the station on the WeatherXM network (profile 0)? It sends a fresh Join-Request.')) return;
     operationInFlight = true;
     const btn = $<HTMLButtonElement>('btn-switchback');
     btn.disabled = true;
@@ -1735,8 +1820,8 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
       currentConfig = null;
       client = null;
       $('view-progress').classList.add('hidden');
-      $('success-title').textContent = 'Back on the Helium (WeatherXM) network!';
-      $('success-sub').textContent = 'The station restarted with its factory Helium (WeatherXM) network settings (Profile 0).';
+      $('success-title').textContent = 'Back on the WeatherXM network!';
+      $('success-sub').textContent = 'The station restarted with its WeatherXM identity (profile 0). It shows up in the WeatherXM app once it has joined and sent data.';
       $('success-steps').classList.add('hidden');
       $('btn-ttn-export-success').classList.add('hidden');
       $('view-success').classList.remove('hidden');
@@ -1770,4 +1855,26 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
     $('view-connect').classList.remove('hidden');
     $('connect-steps').classList.remove('hidden');
   });
+
+  if (demoMode) {
+    const variants: Record<string, Partial<Ws2001DeviceConfig>> = {
+      old: { version: 'V4.3', netProfile: null, testModeType: 0, lorawanStatus: 'JOINED', uploadInterval: 3 },
+      wxm: { version: 'V4.7', netProfile: { active: 0, weatherxmStored: true, customStored: false }, lorawanStatus: 'JOINED', uploadInterval: 3 },
+      stored: { version: 'V4.9', netProfile: { active: 0, weatherxmStored: true, customStored: true }, lorawanStatus: 'JOINING', uploadInterval: 3 },
+      custom: { version: 'V4.9', netProfile: { active: 1, weatherxmStored: true, customStored: true }, lorawanStatus: 'JOINED', uploadInterval: 5, appEui: '70B3D57ED0000000' },
+    };
+    const demoCfg: Ws2001DeviceConfig = {
+      deviceModel: 'H2', deviceEui: '2CF7F1C06150000C', formattedDevEui: '2C:F7:F1:C0:61:50:00:0C', appEui: '0000000000000000',
+      version: 'V4.9', battery: '92%', uploadInterval: 3, frequencyBand: 5, frequencyName: 'EU868', subBand: null,
+      testModeType: 0, netProfile: null, lorawanStatus: 'JOINED', gnssSwitch: false, rawConfig: '', bleName: 'WeatherXM WS2001 50000C',
+      ...(variants[demoMode] ?? variants.wxm),
+    } as Ws2001DeviceConfig;
+    void latestReady.then(() => {
+      addLog(`Demo data (${demoMode}): no station is connected.`, 'WARN');
+      populateDeviceView(demoCfg);
+      $('dev-name').textContent = demoCfg.bleName ?? 'WeatherXM WS2001';
+      $('view-connect').classList.add('hidden');
+      $('view-device').classList.remove('hidden');
+    });
+  }
 </script>
