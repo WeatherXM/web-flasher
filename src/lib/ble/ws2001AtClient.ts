@@ -255,7 +255,11 @@ export function parseMeasurements(raw: string): StationMeasurements | null {
     const v = parseInt(m[2], 10);
     const rawValue = Math.trunc(v / mult);
     found = true;
-    if (MEA_SENTINELS.has(rawValue) || [0xff0d, 0xff0e, 0xff0f].includes(rawValue & 0xffff)) {
+    if (
+      MEA_SENTINELS.has(rawValue) ||
+      [0xff0d, 0xff0e, 0xff0f].includes(rawValue & 0xffff) ||
+      (key === 4101 && rawValue <= 0)
+    ) {
       out[name] = null;
       continue;
     }
