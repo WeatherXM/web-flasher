@@ -6,7 +6,8 @@
  * only handed to the user as a download and never sent anywhere.
  * Format: https://www.thethingsindustries.com/docs/hardware/devices/adding-devices/adding-devices-in-bulk/device-json/
  * The WS2001 uplink decoder is attached as the device's JavaScript uplink formatter, so imported devices
- * decode the 24-byte WeatherXM frame (FPort 99) without further setup.
+ * decode the weather frames on FPort 99 without further setup: the 16-byte Open Edition frame (V4.9+) and
+ * the 24-byte WeatherXM frame that earlier firmware sends on the custom profile.
  */
 
 import { WS2001_UPLINK_DECODER } from './ws2001UplinkDecoder';
@@ -66,7 +67,7 @@ export function buildTtnEndDevice(p: TtnExportParams): TtnEndDevice {
       join_eui: hex(p.joinEui, 8, 'JoinEUI'),
     },
     name: `WeatherXM H2 ${suffix}`,
-    description: 'WeatherXM H2 Open Edition (WS2001). WeatherXM 24-byte frame on FPort 99.',
+    description: 'WeatherXM H2 Open Edition (WS2001). 16-byte weather frame on FPort 99 (firmware V4.8 and earlier: 24-byte WeatherXM frame).',
     lorawan_version: 'MAC_V1_0_4',
     lorawan_phy_version: 'RP002_V1_0_3',
     frequency_plan_id: plan,

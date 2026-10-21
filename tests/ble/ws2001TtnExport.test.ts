@@ -18,6 +18,8 @@ describe('WS2001 TTN import JSON', () => {
     expect(d.frequency_plan_id).toBe('EU_863_870_TTN');
     expect(d.supports_join).toBe(true);
     expect(d.root_keys.app_key.key).toBe('00112233445566778899AABBCCDDEEFF');
+    expect(d.description).toMatch(/16-byte weather frame on FPort 99/);
+    expect(d.description).not.toMatch(/^[^(]*24-byte/);
   });
 
   it('maps regions and US/AU sub-bands to TTN frequency plans', () => {
@@ -40,8 +42,19 @@ describe('WS2001 TTN import JSON', () => {
     expect(d.formatters.up_formatter).toBe('FORMATTER_JAVASCRIPT');
     expect(d.formatters.up_formatter_parameter).toBe(WS2001_UPLINK_DECODER);
 
-    // The formatter survives the JSON round trip and decodes a 24-byte weather frame on FPort 99.
+    // The formatter survives the JSON round trip and decodes the 16-byte Open Edition frame (V4.9+) on FPort 99,
+    // here an uplink a station sent to TTN.
     const decodeUplink = new Function(`${d.formatters.up_formatter_parameter}; return decodeUplink;`)();
+    const open = Array.from(Buffer.from('a8c6be00000000006627000000003013', 'hex'));
+    const openDecoded = decodeUplink({ bytes: open, fPort: 99 }).data;
+    expect(openDecoded.frame).toBe('weather');
+    expect(openDecoded.humidity).toBe(84);
+    expect(openDecoded.wind_direction).toBe(198);
+    expect(openDecoded.temperature).toBe(19);
+    expect(openDecoded.rain_accumulated).toBe(1008.6);
+    expect(openDecoded.pressure).toBe(491.2);
+
+    // ...and the 24-byte WeatherXM frame that V4.8 and earlier send.
     const frame = new Array(24).fill(0);
     frame[0] = 0xf0;
     frame[1] = 0x49; // V4.9
