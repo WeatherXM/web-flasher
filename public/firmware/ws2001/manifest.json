@@ -9,13 +9,13 @@
       "label": "V4.9",
       "fw_version": 49,
       "file": "/firmware/ws2001/ws2001-application-v4.9-ble-dfu.zip",
-      "bytes": 231094,
-      "sha256": "a331b6ebe68339bd3503a4db21da0f78ef73eeb7652ae00eba876e8fc3faffec",
-      "image_bytes": 230428,
-      "image_sha256": "048b4d9cd7fb65651697f1ba8a7703a0b9e85328ee4551e9d0008931455dfecb",
+      "bytes": 231142,
+      "sha256": "2542c8c656b9d950cda117696a755e6f682bbb70ec060d41a37903488caf6afa",
+      "image_bytes": 230476,
+      "image_sha256": "c573cadb3cd533a15ea9662c541372864590bbaf2f2bf0c89c94e034d2f9f069",
       "source_repo": "WeatherXM/ws2001-firmware",
-      "git_commit": "b903375",
-      "built_at": "2026-10-21T17:47:58.671Z"
+      "git_commit": "d3555ca",
+      "built_at": "2026-10-21T22:53:23.714Z"
     }
   ]
 }

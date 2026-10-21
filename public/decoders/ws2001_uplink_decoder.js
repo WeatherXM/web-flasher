@@ -59,7 +59,7 @@ function wxmDecodeOpenWeather(bytes) {
   data.lux = lx === 0xffff ? null : lx * 10;                                               // lux (10 lux steps)
 
   var p = wxmU16le(bytes, 14);
-  data.pressure = p === 0xffff ? null : p / 10;                                            // hPa
+  data.pressure = (p === 0xffff || p === 0) ? null : p / 10;                               // hPa
 
   return { data: data };
 }
@@ -117,7 +117,7 @@ function wxmDecodeWeatherXM(bytes) {
   data.lux = lx === 0x7fffff ? null : lx;
 
   var p = wxmU16le(bytes, 22);
-  data.pressure = p === 0xffff ? null : p / 10;                                            // hPa
+  data.pressure = (p === 0xffff || p === 0) ? null : p / 10;                               // hPa
 
   if (tag === 0xf1 && bytes.length >= 88) data.signature = wxmHex(bytes, 24, 88);
   return { data: data };
