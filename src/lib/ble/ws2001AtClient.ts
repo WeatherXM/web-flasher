@@ -325,6 +325,10 @@ export class Ws2001AtClient {
   private commandInFlight = false;
 
   private readonly onNotificationBound = (ev: Event) => this.handleNotification(ev);
+  private readonly onDisconnectedBound = () => {
+    this.log('Bluetooth disconnected. Station reboots automatically and will send a fresh LoRaWAN Join-Request.', 'INFO');
+    this.cleanup();
+  };
 
   constructor(private readonly log: Ws2001LogFn = () => {}) {}
 
@@ -356,10 +360,7 @@ export class Ws2001AtClient {
       optionalServices: ALL_OPTIONAL_SERVICES,
     });
 
-    this.device.addEventListener('gattserverdisconnected', () => {
-      this.log('Bluetooth disconnected. Station reboots automatically and will send a fresh LoRaWAN Join-Request.', 'INFO');
-      this.cleanup();
-    });
+    this.device.addEventListener('gattserverdisconnected', this.onDisconnectedBound);
 
     this.log(`Connecting to ${this.device.name || 'Station'}...`, 'INFO');
     this.server = await withTimeout(this.device.gatt!.connect(), 20000, 'Bluetooth connection');
@@ -499,7 +500,29 @@ export class Ws2001AtClient {
     this.log('Disconnected.', 'INFO');
   }
 
+  /**
+   * Detach UART listeners before handing the GATT link over to buttonless DFU entry, so the expected
+   * reboot into the bootloader does not log a spurious application disconnect message.
+   */
+  detachForBootloader(): void {
+    try {
+      this.txChar?.removeEventListener('characteristicvaluechanged', this.onNotificationBound);
+    } catch {
+      // ignore
+    }
+    try {
+      this.device?.removeEventListener('gattserverdisconnected', this.onDisconnectedBound);
+    } catch {
+      // ignore
+    }
+  }
+
   private cleanup(): void {
+    try {
+      this.device?.removeEventListener('gattserverdisconnected', this.onDisconnectedBound);
+    } catch {
+      // ignore
+    }
     if (this.pendingRejecter) {
       this.pendingRejecter(new Error('Device disconnected during command execution'));
     }
@@ -857,7 +880,7 @@ export class Ws2001AtClient {
    * Each profile keeps its own upload interval, so the WeatherXM 3-minute rate comes back with it.
    */
   async switchBackToWeatherXm(onProgress?: (step: string, current: number, total: number) => void): Promise<void> {
-    onProgress?.('Selecting the WeatherXM network profile...', 1, 3);
+    onProgress?.('Selecting the WeatherXM (Helium) network profile...', 1, 3);
     await this.expectOk(`AT+NETPROFILE=${NET_PROFILE_WEATHERXM}`, 'select the WeatherXM network profile');
     onProgress?.('Selecting the WeatherXM payload format...', 2, 3);
     await this.setPayloadFormatWeatherXm();
@@ -865,9 +888,27 @@ export class Ws2001AtClient {
     if (!verified || verified.active !== NET_PROFILE_WEATHERXM || !verified.weatherxmStored) {
       throw new Error('Station did not confirm WeatherXM network profile activation; aborting before reboot.');
     }
-    onProgress?.('Rebooting to rejoin the WeatherXM network...', 3, 3);
+    onProgress?.('Rebooting to rejoin the WeatherXM (Helium) network...', 3, 3);
     await this.rebootToJoin();
-    this.log('Switched back to WeatherXM. The station is rebooting to rejoin.', 'INFO');
+    this.log('Switched back to WeatherXM (Helium). The station is rebooting to rejoin.', 'INFO');
+  }
+
+  /**
+   * Firmware V4.5+: reactivate a previously stored Open LoRaWAN profile (profile 1) without
+   * re-entering JoinEUI / AppKey / interval. WeatherXM (Helium) keys stay stored in profile 0.
+   */
+  async switchToStoredOpenLoRaWan(onProgress?: (step: string, current: number, total: number) => void): Promise<void> {
+    onProgress?.('Selecting the stored Open LoRaWAN network profile...', 1, 3);
+    await this.expectOk(`AT+NETPROFILE=${NET_PROFILE_CUSTOM}`, 'select the custom network profile');
+    onProgress?.('Selecting the WeatherXM 24-byte payload format (FPort 99)...', 2, 3);
+    await this.setPayloadFormatWeatherXm();
+    const verified = parseNetProfile(await this.sendCommand('AT+NETPROFILE=?'));
+    if (!verified || verified.active !== NET_PROFILE_CUSTOM || !verified.customStored) {
+      throw new Error('Station did not confirm custom network profile activation; aborting before reboot.');
+    }
+    onProgress?.('Rebooting to join your Open LoRaWAN network...', 3, 3);
+    await this.rebootToJoin();
+    this.log('Switched to stored Open LoRaWAN profile. The station is rebooting to join.', 'INFO');
   }
 }
 

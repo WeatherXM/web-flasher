@@ -271,6 +271,13 @@ export async function enterBootloader(server: BluetoothRemoteGATTServer, advName
   } catch (e) {
     if (e instanceof DfuError) throw e;
     // The link dropping during the write means the station already rebooted.
+  } finally {
+    await sleep(150);
+    try {
+      if (server.connected) server.disconnect();
+    } catch {
+      // ignore
+    }
   }
 }
 
@@ -296,6 +303,20 @@ export class SecureDfuTransfer {
   private disconnected = false;
   chunk = 244;
   pace = 0; // ms between packets; raised after CRC failures (host dropped packets)
+  /**
+   * Time (ms) to let the bootloader's 16-slot nrf_fstorage_sd queue drain after OP_EXECUTE on the
+   * init packet. Unlike data objects, on_cmd_obj_execute_request() queues 2 flash page erases
+   * (0xFE000 settings + 0xFF000 backup, up to ~85 ms each) + 2 writes and replies SUCCESS without
+   * waiting for nrf_fstorage_is_busy(). Starting offset 0 immediately overflows the 16-slot queue.
+   */
+  initFlashSettleMs = 500;
+  /**
+   * Time (ms) to let the 4 KB flash page erase queued by OP_CREATE(OBJ_DATA) finish before
+   * streaming 17 x 244 B write-without-response packets into the 16-slot nrf_fstorage_sd queue.
+   */
+  pageEraseSettleMs = 90;
+  /** Time (ms) to let any queued flash operations drain before re-erasing a page after a CRC mismatch. */
+  retryDrainSettleMs = 350;
 
   constructor(
     private readonly ctrl: BluetoothRemoteGATTCharacteristic,
@@ -395,13 +416,19 @@ export class SecureDfuTransfer {
   async sendInit(init: Uint8Array): Promise<void> {
     const sel = await this.select(OBJ_COMMAND);
     if (sel.offset === init.length && sel.crc === crc32(init)) {
-      try { await this.request(new Uint8Array([OP_EXECUTE])); return; } catch { /* resend below */ }
+      try {
+        await this.request(new Uint8Array([OP_EXECUTE]));
+        if (this.initFlashSettleMs > 0) await sleep(Math.min(150, this.initFlashSettleMs));
+        return;
+      } catch { /* resend below */ }
     }
     await this.create(OBJ_COMMAND, init.length);
     await this.stream(init, 0, 0, performance.now(), 'init');
     const c = await this.crc();
     if (c.offset !== init.length || c.crc !== crc32(init)) throw new DfuError('Init packet CRC mismatch');
     await this.request(new Uint8Array([OP_EXECUTE]), 20000); // signature + version checks happen here
+    // Wait for nrf_dfu_settings_write_and_backup() (2 page erases + 2 writes) to finish draining m_fifo
+    if (this.initFlashSettleMs > 0) await sleep(this.initFlashSettleMs);
   }
 
   async sendFirmware(fw: Uint8Array): Promise<void> {
@@ -416,22 +443,33 @@ export class SecureDfuTransfer {
       }
       if (start) this.log(`Resuming an interrupted update at ${start} of ${fw.length} bytes.`);
     }
+    const maxAttempts = 5;
     const t0 = performance.now() - 1;
     for (let objStart = start; objStart < fw.length; objStart += sel.maxSize) {
       const obj = fw.subarray(objStart, objStart + sel.maxSize);
       let ok = false;
-      for (let attempt = 1; attempt <= 3 && !ok; attempt++) {
+      for (let attempt = 1; attempt <= maxAttempts && !ok; attempt++) {
+        if (attempt > 1 && this.retryDrainSettleMs > 0) {
+          await sleep(this.retryDrainSettleMs);
+        }
         await this.create(OBJ_DATA, obj.length);
+        if (this.pageEraseSettleMs > 0) {
+          // Wait for the 4 KB page erase queued by OP_CREATE(OBJ_DATA) to finish before streaming 17 packets
+          await sleep(objStart === 0 || attempt > 1 ? Math.max(this.pageEraseSettleMs, 140) : this.pageEraseSettleMs);
+        }
         await this.stream(obj, objStart, fw.length, t0, 'firmware');
         await sleep(50); // let queued packets drain before asking for the CRC
         const c = await this.crc();
         ok = c.offset === objStart + obj.length && c.crc === crc32(fw.subarray(0, c.offset));
         if (!ok) {
           this.pace = Math.min(50, this.pace ? this.pace * 2 : 5);
-          this.log(`Checksum mismatch at ${objStart} (attempt ${attempt}/3); resending with ${this.pace} ms pacing`, 'WARN');
+          this.log(
+            `Checksum mismatch at ${objStart} (received ${c.offset}/${objStart + obj.length} B, attempt ${attempt}/${maxAttempts}); resending with ${this.pace} ms pacing`,
+            'WARN',
+          );
         }
       }
-      if (!ok) throw new DfuError(`Data at offset ${objStart} failed its checksum 3 times`);
+      if (!ok) throw new DfuError(`Data at offset ${objStart} failed its checksum ${maxAttempts} times`);
       const last = objStart + obj.length >= fw.length;
       try {
         await this.request(new Uint8Array([OP_EXECUTE]), 20000);

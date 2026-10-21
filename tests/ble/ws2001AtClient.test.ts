@@ -181,4 +181,40 @@ describe('Ws2001AtClient framing, serialization, and verification', () => {
     await expect(client.configureOpenLoRaWan(configureParams)).resolves.toBeUndefined();
     expect(commands.at(-1)).toBe('ATZ');
   });
+
+  it('switchToStoredOpenLoRaWan reactivates profile 1 without writing keys', async () => {
+    const server = { connected: true };
+    const { client, commands } = makeConfigureClient(server);
+    setTimeout(() => { server.connected = false; }, 50);
+    await expect(client.switchToStoredOpenLoRaWan()).resolves.toBeUndefined();
+    expect(commands).toEqual([
+      'AT+NETPROFILE',
+      'AT+TESTMODE_TYPE',
+      'AT+TESTMODE_TYPE',
+      'AT+NETPROFILE',
+      'ATZ',
+    ]);
+  });
+
+  it('switchBackToWeatherXm reactivates profile 0 without writing keys', async () => {
+    const server = { connected: true };
+    const client = new Ws2001AtClient() as any;
+    client.server = server;
+    client.rebootConfirmTimeoutMs = 300;
+    const commands: string[] = [];
+    client.sendCommand = async (command: string) => {
+      commands.push(command);
+      if (command === 'AT+TESTMODE_TYPE=?') return '0\r\nOK\r\n';
+      if (command === 'AT+NETPROFILE=?') return "{active: 0, weatherxm: 'stored', custom: 'stored'}\r\nOK\r\n";
+      return '\r\nOK\r\n';
+    };
+    await expect((client as Ws2001AtClient).switchBackToWeatherXm()).resolves.toBeUndefined();
+    expect(commands).toEqual([
+      'AT+NETPROFILE=0',
+      'AT+TESTMODE_TYPE=0',
+      'AT+TESTMODE_TYPE=?',
+      'AT+NETPROFILE=?',
+      'ATZ',
+    ]);
+  });
 });

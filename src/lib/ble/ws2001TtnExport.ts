@@ -5,7 +5,11 @@
  * Built in the browser from the values written to the station; it contains the AppKey, so it is
  * only handed to the user as a download and never sent anywhere.
  * Format: https://www.thethingsindustries.com/docs/hardware/devices/adding-devices/adding-devices-in-bulk/device-json/
+ * The WS2001 uplink decoder is attached as the device's JavaScript uplink formatter, so imported devices
+ * decode the 24-byte WeatherXM frame (FPort 99) without further setup.
  */
+
+import { WS2001_UPLINK_DECODER } from './ws2001UplinkDecoder';
 
 export interface TtnExportParams {
   devEui: string;   // 16 hex chars, separators allowed
@@ -24,6 +28,7 @@ export interface TtnEndDevice {
   frequency_plan_id: string;
   supports_join: true;
   root_keys: { app_key: { key: string } };
+  formatters: { up_formatter: 'FORMATTER_JAVASCRIPT'; up_formatter_parameter: string };
 }
 
 function hex(value: string, bytes: number, what: string): string {
@@ -67,6 +72,7 @@ export function buildTtnEndDevice(p: TtnExportParams): TtnEndDevice {
     frequency_plan_id: plan,
     supports_join: true,
     root_keys: { app_key: { key: hex(p.appKey, 16, 'AppKey') } },
+    formatters: { up_formatter: 'FORMATTER_JAVASCRIPT', up_formatter_parameter: WS2001_UPLINK_DECODER },
   };
 }
 

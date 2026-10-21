@@ -2,46 +2,20 @@
   "schema": 1,
   "hardware": "WS2001",
   "soc": "nRF52840",
-  "latest": "4.7",
+  "latest": "4.9",
   "releases": [
     {
-      "version": "4.7",
-      "label": "V4.7",
-      "fw_version": 47,
-      "file": "/firmware/ws2001/ws2001-application-v4.7-ble-dfu.zip",
-      "bytes": 225337,
-      "sha256": "0e551c4f15b7f88aeac93d6f8cd6e8430692dc7f4e6c812b1ff180a9331a0b54",
-      "image_bytes": 224664,
-      "image_sha256": "5d9a415ae3cad2284e5df01eaf29d0a4bd7159ad05d273820d9bbb83e1ec7403",
+      "version": "4.9",
+      "label": "V4.9",
+      "fw_version": 49,
+      "file": "/firmware/ws2001/ws2001-application-v4.9-ble-dfu.zip",
+      "bytes": 230646,
+      "sha256": "e32bfce1fb8c049e0e0e11b8561c32e66ad9a3a3fcb5355207990df61ec86776",
+      "image_bytes": 229980,
+      "image_sha256": "dc7f726039715fb86a7f43897ebcdf5441e54eb21a2a1a15d94fc6bd544ce8c1",
       "source_repo": "WeatherXM/ws2001-firmware",
-      "git_commit": "f5373b6",
-      "built_at": "2026-10-13T18:22:09.519Z"
-    },
-    {
-      "version": "4.6",
-      "label": "V4.6",
-      "fw_version": 46,
-      "file": "/firmware/ws2001/ws2001-application-v4.6-ble-dfu.zip",
-      "bytes": 225065,
-      "sha256": "8bc03e64d3e98dec20b8e114212a87dac82ff5c70e778d68fd4b0a05b06a871b",
-      "image_bytes": 224392,
-      "image_sha256": "fd8f831a820dca010dd55d2ec4a5bc64e5e5b045601bb747fa05e3c516f4de11",
-      "source_repo": "WeatherXM/ws2001-firmware",
-      "git_commit": "ea93178",
-      "built_at": "2026-10-13T17:17:14.775Z"
-    },
-    {
-      "version": "4.5",
-      "label": "V4.5",
-      "fw_version": 45,
-      "file": "/firmware/ws2001/ws2001-application-v4.5-ble-dfu.zip",
-      "bytes": 224953,
-      "sha256": "693ff3355c3045c5edfda41616ee566a13a4d0bc5144759b6516543aee9b9a06",
-      "image_bytes": 224280,
-      "image_sha256": "99b6ed7a8205c63b3d1a4c217d5d2bc7012ad52d16b93797e46d66a65b61937e",
-      "source_repo": "WeatherXM/ws2001-firmware",
-      "git_commit": "be7eefb",
-      "built_at": "2026-10-13T11:16:05.620Z"
+      "git_commit": "518d6ff",
+      "built_at": "2026-10-21T15:34:57.276Z"
     }
   ]
 }
