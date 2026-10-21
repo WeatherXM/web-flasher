@@ -135,9 +135,15 @@ export const DEFAULT_UPLOAD_INTERVAL_MIN = 5; // custom networks: keeps a 24-byt
 // The WeatherXM profile keeps its own 3-minute interval (per-profile in firmware V4.5+).
 export const MAX_AT_COMMAND_BYTES = 60; // firmware BLE UART rx buffer limit including CRLF
 
-/** True only when the buffer ends with a complete AT response line (`OK\r\n`, `AT_<ERR>\r\n`, or `ERROR\r\n`). */
+/**
+ * True only when the buffer contains a complete AT status line: `OK\r\n`, `ERROR\r\n` or `AT_<CODE>\r\n`.
+ * The firmware's codes do not all end in ERROR (AT_SAVE_FAILED, AT_READ_FAILED, AT_NO_NETWORK_JOINED,
+ * AT_DUTYCYCLE_RESTRICTED, AT_TEST_PARAM_OVERFLOW, AT_NO_CLASS_B_ENABLE), so any AT_ code terminates.
+ */
+export const AT_STATUS_LINE_RE = /(?:^|\r?\n)(?:OK|AT_[A-Z0-9_]+|ERROR)\r?\n/;
+export const AT_ERROR_LINE_RE = /(?:^|\r?\n)(?:AT_[A-Z0-9_]+|ERROR)\r?\n/;
 export function hasAtTerminator(buf: string): boolean {
-  return /(?:^|\r\n)(?:OK|AT_[A-Z0-9_]*ERROR|ERROR)\r\n/.test(buf);
+  return /(?:^|\r\n)(?:OK|AT_[A-Z0-9_]+|ERROR)\r\n/.test(buf);
 }
 
 /** Parse `{active: 1, weatherxm: 'stored', custom: 'empty'}`; null if the command is unsupported. */
@@ -720,7 +726,7 @@ export class Ws2001AtClient {
 
   private async expectOk(cmd: string, what: string, timeoutMs?: number): Promise<string> {
     const resp = await this.sendCommand(cmd, timeoutMs);
-    if (/(?:^|\r?\n)AT_[A-Z0-9_]*ERROR\r?\n/.test(resp) || !/(?:^|\r?\n)OK\r?\n/.test(resp)) {
+    if (AT_ERROR_LINE_RE.test(resp) || !/(?:^|\r?\n)OK\r?\n/.test(resp)) {
       throw new Error(`Failed to ${what}: ${redactAtLog(resp.trim())}`);
     }
     return resp;
@@ -737,21 +743,35 @@ export class Ws2001AtClient {
     }
   }
 
+  /** How long to wait for the Bluetooth link to drop after an unanswered ATZ (BLE supervision timeout is 4 s). */
+  rebootConfirmTimeoutMs = 6000;
+
   private async rebootToJoin(): Promise<void> {
     // Allow Nordic FDS flash operations to finalize before rebooting
     await new Promise((resolve) => setTimeout(resolve, 1500));
     this.log('Rebooting station to apply settings and send a LoRaWAN Join-Request (ATZ)...', 'INFO');
     try {
       const resp = await this.sendCommand('ATZ', 2000);
-      if (/(?:^|\r?\n)AT_[A-Z0-9_]*ERROR\r?\n/.test(resp)) {
+      if (AT_ERROR_LINE_RE.test(resp)) {
         throw new Error(`Station rejected reboot command (ATZ): ${redactAtLog(resp.trim())}`);
       }
+      return;
     } catch (err) {
-      // Station reboots after sending OK (or drops BLE link during reset); only ignore disconnect errors
       const msg = (err as Error).message || '';
-      if (!/disconnected|GATT Server is disconnected/i.test(msg)) {
-        throw err;
+      if (/rejected reboot command/.test(msg)) throw err;
+      if (/disconnected|GATT Server is disconnected/i.test(msg)) return; // link already dropped: it reset
+      // The firmware prints OK and resets 100 ms later; with a 100-200 ms connection interval the OK is
+      // often never transmitted, so a timeout here is the normal outcome, not a failure. The settings were
+      // verified before ATZ; confirm the reboot by the link dropping (the central notices after the 4 s
+      // supervision timeout).
+      const deadline = Date.now() + this.rebootConfirmTimeoutMs;
+      while (this.server?.connected && Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 250));
       }
+      if (this.server?.connected) {
+        throw new Error('Station did not reboot after ATZ (Bluetooth link still up). Settings were saved; reconnect and retry the reboot.');
+      }
+      this.log('Station reset confirmed: Bluetooth link dropped after ATZ.', 'INFO');
     }
   }
 
