@@ -96,6 +96,23 @@ describe('Ws2001AtClient framing, serialization, and verification', () => {
     expect(hasAtTerminator('\r\nOK\r\n')).toBe(true);
     expect(hasAtTerminator('1\r\nOK\r\n')).toBe(true);
     expect(hasAtTerminator('\r\nAT_PARAM_ERROR\r\n')).toBe(true);
+    // firmware status codes that do not end in ERROR (at_command.c ATError_description[])
+    expect(hasAtTerminator('\r\nAT_SAVE_FAILED\r\n')).toBe(true);
+    expect(hasAtTerminator('\r\nAT_NO_NETWORK_JOINED\r\n')).toBe(true);
+    expect(hasAtTerminator('\r\nAT_SAVE_')).toBe(false);
+  });
+
+  it('treats AT_SAVE_FAILED as a failed setter without waiting for the timeout', async () => {
+    const client = makeMockClient() as any;
+    client.rxChar.writeValueWithoutResponse = async () => {
+      setTimeout(() => notifyClient(client, '\r\nAT_SAVE_FAILED\r\n'), 5);
+    };
+    client.rebootConfirmTimeoutMs = 100;
+    const started = Date.now();
+    await expect(
+      client.configureOpenLoRaWan({ band: 5, joinEui: '0000000000000001', appKey: '11'.repeat(16), intervalMinutes: 5, gnss: false })
+    ).rejects.toThrow(/AT_SAVE_FAILED/);
+    expect(Date.now() - started).toBeLessThan(2000);
   });
 
   it('waits for complete error line across BLE fragments', async () => {
@@ -135,26 +152,33 @@ describe('Ws2001AtClient framing, serialization, and verification', () => {
     expect(second).toBe('0\r\nOK\r\n');
   });
 
-  it('verifies AT+NETPROFILE=? readback and requires confirmed reboot in configureOpenLoRaWan', async () => {
-    const client = new Ws2001AtClient();
+  function makeConfigureClient(server: { connected: boolean }) {
+    const client = new Ws2001AtClient() as any;
+    client.server = server;
+    client.rebootConfirmTimeoutMs = 300;
     const commands: string[] = [];
     client.sendCommand = async (command: string) => {
       commands.push(command.split('=')[0]);
       if (command === 'AT+TESTMODE_TYPE=?') return '0\r\nOK\r\n';
       if (command === 'AT+NETPROFILE=?') return "{active: 1, weatherxm: 'stored', custom: 'stored'}\r\nOK\r\n";
-      if (command === 'ATZ') throw new Error('simulated timeout, reboot not confirmed');
+      if (command === 'ATZ') throw new Error('Command timed out after 2000ms: "ATZ"');
       return '\r\nOK\r\n';
     };
+    return { client: client as Ws2001AtClient, commands };
+  }
+  const configureParams = { band: 5, joinEui: '0000000000000001', appKey: '11'.repeat(16), intervalMinutes: 5, gnss: false };
 
-    await expect(
-      client.configureOpenLoRaWan({
-        band: 5,
-        joinEui: '0000000000000001',
-        appKey: '11'.repeat(16),
-        intervalMinutes: 5,
-        gnss: false,
-      })
-    ).rejects.toThrow(/simulated timeout/);
+  it('verifies AT+NETPROFILE=? readback and fails when the station stays connected after an unanswered ATZ', async () => {
+    const { client, commands } = makeConfigureClient({ connected: true });
+    await expect(client.configureOpenLoRaWan(configureParams)).rejects.toThrow(/did not reboot after ATZ/);
     expect(commands.filter((c) => c === 'AT+NETPROFILE')).toEqual(['AT+NETPROFILE', 'AT+NETPROFILE']);
+  });
+
+  it('accepts an unanswered ATZ when the Bluetooth link drops (the OK is often lost in the reset)', async () => {
+    const server = { connected: true };
+    const { client, commands } = makeConfigureClient(server);
+    setTimeout(() => { server.connected = false; }, 50);
+    await expect(client.configureOpenLoRaWan(configureParams)).resolves.toBeUndefined();
+    expect(commands.at(-1)).toBe('ATZ');
   });
 });
