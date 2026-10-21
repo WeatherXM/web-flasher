@@ -180,7 +180,9 @@ export type Ws2001LogFn = (message: string, level?: 'INFO' | 'CMD' | 'RESP' | 'W
 export function redactAtLog(text: string): string {
   return text
     .replace(/(AT\+(?:APPKEY|NWKKEY|NWKSKEY|APPSKEY|DKEY)=)[0-9A-Fa-f:]+/g, '$1<hidden>')
-    .replace(/((?:nwkSkey|appSkey|devKey|appKey|nwkKey)\s*:\s*)'?[0-9A-Fa-f:]+'?/g, "$1'<hidden>'");
+    .replace(/((?:nwkSkey|appSkey|devKey|appKey|nwkKey)\s*:\s*)'?[0-9A-Fa-f:]+'?/g, "$1'<hidden>'")
+    // Bare 16-byte keys, e.g. the reply to AT+APPKEY=? ('2B:7E:...:3C')
+    .replace(/\b(?:[0-9A-Fa-f]{2}:){15}[0-9A-Fa-f]{2}\b/g, '<hidden>');
 }
 
 export function formatHexWithColons(hexStr: string, expectedBytes: number): string {
@@ -195,6 +197,72 @@ export function formatHexWithColons(hexStr: string, expectedBytes: number): stri
     parts.push(clean.slice(i, i + 2));
   }
   return parts.join(':');
+}
+
+/** AT+LW_MODEM_STATUS=? flags (LoRa Basics Modem status bits), one per line. */
+export type LoRaWanState = 'joined' | 'joining' | 'idle' | 'unknown';
+export interface LoRaWanStatus {
+  state: LoRaWanState;
+  flags: string[];
+}
+
+/** Parse AT+LW_MODEM_STATUS=?: JOINED / JOINING / MUTE / SUSPEND / ... ; no flag with OK = not joining. */
+export function parseLoRaWanStatus(raw: string): LoRaWanStatus {
+  const flags = Array.from(new Set(raw.match(/\b(BROWNOUT|CRASH|MUTE|JOINED|SUSPEND|UPLOAD|JOINING|STREAM)\b/g) ?? []));
+  if (flags.includes('JOINED')) return { state: 'joined', flags };
+  if (flags.includes('JOINING')) return { state: 'joining', flags };
+  if (/(?:^|\r?\n)OK\r?\n/.test(raw) && !AT_ERROR_LINE_RE.test(raw)) return { state: 'idle', flags };
+  return { state: 'unknown', flags };
+}
+
+/** Live sensor values from AT+MEA=? (null = sensor reported an error code). */
+export interface StationMeasurements {
+  temperature?: number | null;    // °C
+  humidity?: number | null;       // %RH
+  windSpeed?: number | null;      // m/s, 12 s average
+  windDirection?: number | null;  // degrees
+  windGust?: number | null;       // m/s
+  light?: number | null;          // lux
+  rainRate?: number | null;       // mm/h
+  pressure?: number | null;       // hPa
+  uvIndex?: number | null;
+}
+
+// AT+MEA=? keys follow the SenseCAP measurement-ID convention: value / 1000 = unit value
+// (pressure: / 100000 for hPa). `mult` is what the firmware multiplied the raw sensor field by.
+const MEA_FIELDS: Record<number, [keyof StationMeasurements, number]> = {
+  4097: ['temperature', 100],
+  4098: ['humidity', 1000],
+  4105: ['windSpeed', 100],
+  4104: ['windDirection', 1000],
+  4191: ['windGust', 100],
+  4099: ['light', 1000],
+  4113: ['rainRate', 1],
+  4101: ['pressure', 10000],
+  4190: ['uvIndex', 100],
+};
+const MEA_SENTINELS = new Set([0x7ffd, 0x7ffe, 0x7fff, 0xffff, 0x7ffffffd, 0x7ffffffe, 0x7fffffff]);
+
+/** Decode an AT+MEA=? response (same rules as tools/ws2001_dev_tui.py decode_mea); null if it holds no values. */
+export function parseMeasurements(raw: string): StationMeasurements | null {
+  const out: StationMeasurements = {};
+  let found = false;
+  for (const m of raw.matchAll(/(\d{4}):(-?\d+)/g)) {
+    const key = parseInt(m[1], 10);
+    const field = MEA_FIELDS[key];
+    if (!field) continue;
+    const [name, mult] = field;
+    const v = parseInt(m[2], 10);
+    const rawValue = Math.trunc(v / mult);
+    found = true;
+    if (MEA_SENTINELS.has(rawValue) || [0xff0d, 0xff0e, 0xff0f].includes(rawValue & 0xffff)) {
+      out[name] = null;
+      continue;
+    }
+    const value = key === 4101 ? v / 100000 : v / 1000;
+    out[name] = Math.round(value * 1000) / 1000;
+  }
+  return found ? out : null;
 }
 
 /**
@@ -301,10 +369,14 @@ const PAIRING_WAIT_MS = 35000;
  * Web Bluetooth GATT calls can wait forever when the OS is stuck mid-pairing (seen on Windows);
  * bound every step so the page reports an error instead of hanging on "Discovering...".
  */
+class GattTimeoutError extends Error {
+  name = 'GattTimeoutError';
+}
+
 function withTimeout<T>(p: Promise<T>, ms: number, what: string): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const t = setTimeout(
-      () => reject(new Error(`${what} timed out after ${ms / 1000}s. Disconnect, wait a few seconds and connect again ` +
+      () => reject(new GattTimeoutError(`${what} timed out after ${ms / 1000}s. Disconnect, wait a few seconds and connect again ` +
         '(if Windows shows a pairing prompt, accept it).')),
       ms,
     );
@@ -312,8 +384,21 @@ function withTimeout<T>(p: Promise<T>, ms: number, what: string): Promise<T> {
   });
 }
 
+/** Shown when the station's services do not arrive quickly: the computer is usually pairing. */
+export const DISCOVERY_SLOW_HINT =
+  'Still waiting for the station. If your computer shows a pairing request, accept it. ' +
+  'Otherwise click Cancel, press the station\'s RESET button once (do not hold it), wait 10 seconds and connect again.';
+
+/** Thrown when service discovery stalls for the whole wait (pairing stuck or an old pairing on the computer). */
+export const DISCOVERY_STALLED_MESSAGE =
+  'The station did not answer within 35 seconds. The computer is probably still pairing or holds an old pairing. ' +
+  'Press the station\'s RESET button once (do not hold it), wait 10 seconds and connect again within 5 minutes. ' +
+  'If it keeps happening, remove the station from your computer\'s Bluetooth settings and connect again.';
+
 export class Ws2001AtClient {
   private device: BluetoothDevice | null = null;
+  /** The station picked in the chooser; kept across its restarts so reconnect() needs no new chooser. */
+  private lastDevice: BluetoothDevice | null = null;
   private server: BluetoothRemoteGATTServer | null = null;
   private rxChar: BluetoothRemoteGATTCharacteristic | null = null;
   private txChar: BluetoothRemoteGATTCharacteristic | null = null;
@@ -329,6 +414,12 @@ export class Ws2001AtClient {
     this.log('Bluetooth disconnected. Station reboots automatically and will send a fresh LoRaWAN Join-Request.', 'INFO');
     this.cleanup();
   };
+
+  /** Called with a hint while service discovery is slow, and with null once it ends. */
+  onHint: ((text: string | null) => void) | null = null;
+  /** Service discovery: hint after this many ms, give up after one wait of this many ms. */
+  discoveryHintMs = 8000;
+  discoveryTimeoutMs = GATT_STEP_TIMEOUT_MS;
 
   constructor(private readonly log: Ws2001LogFn = () => {}) {}
 
@@ -359,51 +450,99 @@ export class Ws2001AtClient {
       filters: WS2001_DEVICE_FILTERS,
       optionalServices: ALL_OPTIONAL_SERVICES,
     });
+    this.lastDevice = this.device;
+    await this.attachGatt();
+  }
 
-    this.device.addEventListener('gattserverdisconnected', this.onDisconnectedBound);
+  /**
+   * Reconnect to the same station after it restarted (e.g. after ATZ), without the Bluetooth chooser:
+   * the browser already has permission for this device and the link is bonded. Retries until the
+   * station advertises again or `timeoutMs` passes.
+   */
+  async reconnect(opts: { timeoutMs?: number; retryDelayMs?: number; onAttempt?: (attempt: number) => void } = {}): Promise<void> {
+    const device = this.lastDevice;
+    if (!device?.gatt) throw new Error('No station to reconnect to. Connect to it again.');
+    const deadline = Date.now() + (opts.timeoutMs ?? 60000);
+    for (let attempt = 1; ; attempt++) {
+      opts.onAttempt?.(attempt);
+      try {
+        this.device = device;
+        await this.attachGatt();
+        return;
+      } catch (e) {
+        try { device.gatt.disconnect(); } catch { /* ignore */ }
+        this.cleanup();
+        if (Date.now() >= deadline) {
+          throw new Error(`Could not reconnect to the station: ${(e as Error).message}`);
+        }
+        await new Promise((res) => setTimeout(res, opts.retryDelayMs ?? 2000));
+      }
+    }
+  }
 
-    this.log(`Connecting to ${this.device.name || 'Station'}...`, 'INFO');
-    this.server = await withTimeout(this.device.gatt!.connect(), 20000, 'Bluetooth connection');
+  /** Open the GATT link to `this.device`, find the UART service and subscribe to its notifications. */
+  private async attachGatt(): Promise<void> {
+    const device = this.device;
+    if (!device?.gatt) throw new Error('No Bluetooth device selected.');
+    this.rxChar = null;
+    this.txChar = null;
+    device.addEventListener('gattserverdisconnected', this.onDisconnectedBound);
+
+    this.log(`Connecting to ${device.name || 'Station'}...`, 'INFO');
+    this.server = await withTimeout(device.gatt.connect(), 20000, 'Bluetooth connection');
 
     this.log('Discovering UART Service...', 'INFO');
     let service: BluetoothRemoteGATTService | null = null;
-
-    for (const serviceUuid of CANDIDATE_UART_SERVICES) {
-      try {
-        service = await withTimeout(this.server.getPrimaryService(serviceUuid), GATT_STEP_TIMEOUT_MS, 'UART service discovery');
-        if (service) {
-          this.log(`Found UART Service: ${service.uuid}`, 'INFO');
-          break;
-        }
-      } catch {
-        // try next candidate
-      }
-    }
-
-    if (!service) {
-      try {
-        const services = await withTimeout(this.server.getPrimaryServices(), GATT_STEP_TIMEOUT_MS, 'GATT service discovery');
-        const availableUuids = services.map((s) => s.uuid);
-        this.log(`Available GATT services: [${availableUuids.join(', ')}]`, 'INFO');
-
-        for (const s of services) {
-          if (CANDIDATE_UART_SERVICES.some((c) => c.toLowerCase() === s.uuid.toLowerCase())) {
-            service = s;
-            this.log(`Selected service from available list: ${s.uuid}`, 'INFO');
+    const server = this.server;
+    const hintTimer = setTimeout(() => {
+      this.log(DISCOVERY_SLOW_HINT, 'WARN');
+      this.onHint?.(DISCOVERY_SLOW_HINT);
+    }, this.discoveryHintMs);
+    try {
+      // A missing service is rejected at once; a stall means pairing is stuck, and waiting again for
+      // every other candidate would only multiply the wait. So one stalled wait ends the attempt.
+      for (const serviceUuid of CANDIDATE_UART_SERVICES) {
+        try {
+          service = await withTimeout(server.getPrimaryService(serviceUuid), this.discoveryTimeoutMs, 'UART service discovery');
+          if (service) {
+            this.log(`Found UART Service: ${service.uuid}`, 'INFO');
             break;
           }
+        } catch (e) {
+          if (e instanceof GattTimeoutError) throw new Error(DISCOVERY_STALLED_MESSAGE);
+          // not present on this station: try the next candidate
         }
-
-        if (!service && services.length > 0) {
-          const customService = services.find((s) => s.uuid.length > 8 && !s.uuid.startsWith('000018'));
-          if (customService) {
-            service = customService;
-            this.log(`Probing custom vendor service: ${service.uuid}`, 'WARN');
-          }
-        }
-      } catch (e) {
-        this.log(`Could not inspect all primary services: ${(e as Error).message}`, 'WARN');
       }
+
+      if (!service) {
+        try {
+          const services = await withTimeout(server.getPrimaryServices(), this.discoveryTimeoutMs, 'GATT service discovery');
+          const availableUuids = services.map((s) => s.uuid);
+          this.log(`Available GATT services: [${availableUuids.join(', ')}]`, 'INFO');
+
+          for (const s of services) {
+            if (CANDIDATE_UART_SERVICES.some((c) => c.toLowerCase() === s.uuid.toLowerCase())) {
+              service = s;
+              this.log(`Selected service from available list: ${s.uuid}`, 'INFO');
+              break;
+            }
+          }
+
+          if (!service && services.length > 0) {
+            const customService = services.find((s) => s.uuid.length > 8 && !s.uuid.startsWith('000018'));
+            if (customService) {
+              service = customService;
+              this.log(`Probing custom vendor service: ${service.uuid}`, 'WARN');
+            }
+          }
+        } catch (e) {
+          if (e instanceof GattTimeoutError) throw new Error(DISCOVERY_STALLED_MESSAGE);
+          this.log(`Could not inspect all primary services: ${(e as Error).message}`, 'WARN');
+        }
+      }
+    } finally {
+      clearTimeout(hintTimer);
+      this.onHint?.(null);
     }
 
     if (!service) {
@@ -485,7 +624,8 @@ export class Ws2001AtClient {
     if (this.txChar) {
       try {
         this.txChar.removeEventListener('characteristicvaluechanged', this.onNotificationBound);
-        await this.txChar.stopNotifications();
+        // On a link that is already dying this can wait forever; the disconnect below releases it anyway
+        if (this.server?.connected) await withTimeout(this.txChar.stopNotifications(), 2000, 'Stopping notifications');
       } catch {
         // ignore
       }
@@ -497,6 +637,7 @@ export class Ws2001AtClient {
       try { this.device?.gatt?.disconnect(); } catch { /* ignore */ }
     }
     this.cleanup();
+    this.lastDevice = null;
     this.log('Disconnected.', 'INFO');
   }
 
@@ -747,6 +888,32 @@ export class Ws2001AtClient {
     };
   }
 
+  /** LoRaWAN join state (AT+LW_MODEM_STATUS=?). Cheap; also keeps the Bluetooth session alive. */
+  async readLoRaWanStatus(): Promise<LoRaWanStatus> {
+    return parseLoRaWanStatus(await this.sendCommand('AT+LW_MODEM_STATUS=?', 3000));
+  }
+
+  /** Live sensor readings (AT+MEA=?, a fresh sensor read on the station: poll it sparingly). */
+  async readMeasurements(): Promise<StationMeasurements | null> {
+    return parseMeasurements(await this.sendCommand('AT+MEA=?', 5000));
+  }
+
+  /**
+   * JoinEUI of the active network profile (AT+APPEUI=?). The station never reveals its AppKey:
+   * AT+APPKEY=? is disabled in the firmware's command table, and AT+CONFIG=? leaves it out.
+   */
+  async readActiveJoinEui(): Promise<string> {
+    const resp = await this.sendCommand('AT+APPEUI=?', 3000);
+    const joinEui = (resp.match(/(?:[0-9A-Fa-f]{2}:){7}[0-9A-Fa-f]{2}/) ?? [''])[0].replace(/:/g, '').toUpperCase();
+    if (joinEui.length !== 16) throw new Error('Could not read the JoinEUI from the station.');
+    return joinEui;
+  }
+
+  /** Restart the station (ATZ) so it sends a fresh Join-Request; resolves once the link dropped. */
+  async restartStation(): Promise<void> {
+    await this.rebootToJoin();
+  }
+
   private async expectOk(cmd: string, what: string, timeoutMs?: number): Promise<string> {
     const resp = await this.sendCommand(cmd, timeoutMs);
     if (AT_ERROR_LINE_RE.test(resp) || !/(?:^|\r?\n)OK\r?\n/.test(resp)) {
@@ -773,29 +940,35 @@ export class Ws2001AtClient {
     // Allow Nordic FDS flash operations to finalize before rebooting
     await new Promise((resolve) => setTimeout(resolve, 1500));
     this.log('Rebooting station to apply settings and send a LoRaWAN Join-Request (ATZ)...', 'INFO');
+    let answeredOk = false;
     try {
       const resp = await this.sendCommand('ATZ', 2000);
       if (AT_ERROR_LINE_RE.test(resp)) {
         throw new Error(`Station rejected reboot command (ATZ): ${redactAtLog(resp.trim())}`);
       }
-      return;
+      answeredOk = true;
     } catch (err) {
       const msg = (err as Error).message || '';
       if (/rejected reboot command/.test(msg)) throw err;
       if (/disconnected|GATT Server is disconnected/i.test(msg)) return; // link already dropped: it reset
       // The firmware prints OK and resets 100 ms later; with a 100-200 ms connection interval the OK is
-      // often never transmitted, so a timeout here is the normal outcome, not a failure. The settings were
-      // verified before ATZ; confirm the reboot by the link dropping (the central notices after the 4 s
-      // supervision timeout).
-      const deadline = Date.now() + this.rebootConfirmTimeoutMs;
-      while (this.server?.connected && Date.now() < deadline) {
-        await new Promise((resolve) => setTimeout(resolve, 250));
-      }
-      if (this.server?.connected) {
+      // often never transmitted, so a timeout here is the normal outcome, not a failure.
+    }
+    // Either way the station is resetting, but the browser keeps the link until the 4 s supervision
+    // timeout. Wait for the drop so a reconnect never reuses the dying link.
+    const deadline = Date.now() + this.rebootConfirmTimeoutMs;
+    while (this.server?.connected && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+    if (this.server?.connected) {
+      if (!answeredOk) {
         throw new Error('Station did not reboot after ATZ (Bluetooth link still up). Settings were saved; reconnect and retry the reboot.');
       }
-      this.log('Station reset confirmed: Bluetooth link dropped after ATZ.', 'INFO');
+      // It confirmed the reset; release the stale link (a disconnect restarts the station anyway).
+      try { this.server.disconnect(); } catch { /* ignore */ }
+      this.cleanup();
     }
+    this.log('Station reset confirmed: Bluetooth link dropped after ATZ.', 'INFO');
   }
 
   /**

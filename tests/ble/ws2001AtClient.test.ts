@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatHexWithColons, hasAtTerminator, parseAtConfig, REGION_NAMES, Ws2001AtClient } from '../../src/lib/ble/ws2001AtClient';
+import { formatHexWithColons, hasAtTerminator, parseAtConfig, parseLoRaWanStatus, parseMeasurements, redactAtLog, REGION_NAMES, Ws2001AtClient } from '../../src/lib/ble/ws2001AtClient';
 
 describe('Ws2001AtClient helpers', () => {
   it('formats hex strings with colons correctly for 8-byte DevEUI/JoinEUI', () => {
@@ -216,5 +216,191 @@ describe('Ws2001AtClient framing, serialization, and verification', () => {
       'AT+NETPROFILE=?',
       'ATZ',
     ]);
+  });
+});
+
+describe('Join tracker reads', () => {
+  it('parses AT+LW_MODEM_STATUS=? into joined / joining / idle / unknown', () => {
+    expect(parseLoRaWanStatus('JOINED \r\n\r\nOK\r\n')).toEqual({ state: 'joined', flags: ['JOINED'] });
+    expect(parseLoRaWanStatus('JOINING \r\n\r\nOK\r\n').state).toBe('joining');
+    expect(parseLoRaWanStatus('MUTE \r\nJOINING \r\n\r\nOK\r\n')).toEqual({ state: 'joining', flags: ['MUTE', 'JOINING'] });
+    expect(parseLoRaWanStatus('\r\nOK\r\n').state).toBe('idle');
+    expect(parseLoRaWanStatus('\r\nAT_ERROR\r\n').state).toBe('unknown');
+  });
+
+  it('decodes AT+MEA=? like the dev TUI, with sensor error codes as null', () => {
+    const raw = '{4097:23500,4098:56000,4105:3100,4104:270000,4191:5200,4099:12345000,4113:12,4101:101320000,4190:300}\r\n\r\nOK\r\n';
+    expect(parseMeasurements(raw)).toEqual({
+      temperature: 23.5, humidity: 56, windSpeed: 3.1, windDirection: 270, windGust: 5.2,
+      light: 12345, rainRate: 0.012, pressure: 1013.2, uvIndex: 0.3,
+    });
+    expect(parseMeasurements(`{4097:${0x7fff * 100},4098:56000}\r\nOK\r\n`)).toEqual({ temperature: null, humidity: 56 });
+    expect(parseMeasurements('\r\nAT_ERROR\r\n')).toBeNull();
+  });
+
+  it('reconnects to the same station after it restarted, without the chooser', async () => {
+    const tx = Object.assign(new EventTarget(), {
+      uuid: '49535354-1e4d-4bd9-ba61-23c647249616', properties: { notify: true, write: false, writeWithoutResponse: false },
+      startNotifications: async () => tx, stopNotifications: async () => tx,
+    });
+    const rx = { uuid: '49535354-8841-43f4-a8d4-ecbe34729bb3', properties: { notify: false, write: true, writeWithoutResponse: true } };
+    const service = { uuid: '49535354-fe7d-4ae5-8fa9-9fafd205e455', getCharacteristics: async () => [tx, rx] };
+    let attempts = 0;
+    const server = { connected: false, getPrimaryService: async () => service, getPrimaryServices: async () => [service], disconnect: () => { server.connected = false; } };
+    const device = Object.assign(new EventTarget(), {
+      name: 'WeatherXM WS2001 50000C',
+      gatt: {
+        // The station is still booting for the first two attempts
+        connect: async () => {
+          attempts++;
+          if (attempts < 3) throw new Error('Connection attempt failed.');
+          server.connected = true;
+          return server;
+        },
+        disconnect: () => { server.connected = false; },
+      },
+    });
+    const client = new Ws2001AtClient() as any;
+    client.lastDevice = device;
+    const seen: number[] = [];
+    await client.reconnect({ timeoutMs: 5000, retryDelayMs: 10, onAttempt: (n: number) => seen.push(n) });
+    expect(attempts).toBe(3);
+    expect(seen).toEqual([1, 2, 3]);
+    expect(client.isConnected).toBe(true);
+    expect(client.deviceName).toBe('WeatherXM WS2001 50000C');
+  });
+
+  it('gives up reconnecting after the timeout', async () => {
+    const device = Object.assign(new EventTarget(), {
+      gatt: { connect: async () => { throw new Error('Connection attempt failed.'); }, disconnect: () => {} },
+    });
+    const client = new Ws2001AtClient() as any;
+    client.lastDevice = device;
+    await expect(client.reconnect({ timeoutMs: 50, retryDelayMs: 10 })).rejects.toThrow(/Could not reconnect/);
+  });
+
+  it('forgets the station on an explicit disconnect', async () => {
+    const client = new Ws2001AtClient() as any;
+    client.lastDevice = { gatt: {} };
+    await client.disconnect();
+    await expect(client.reconnect({ timeoutMs: 10 })).rejects.toThrow(/No station to reconnect to/);
+  });
+});
+
+describe('TTN import file from the station', () => {
+  const key = '2B:7E:15:16:28:AE:D2:A6:AB:F7:15:88:09:CF:4F:3C';
+
+  it('reads the active JoinEUI back from the station (the AppKey is never readable)', async () => {
+    const client = new Ws2001AtClient();
+    const sent: string[] = [];
+    client.sendCommand = async (cmd: string) => {
+      sent.push(cmd);
+      if (cmd === 'AT+APPEUI=?') return "'70:B3:D5:7E:D0:00:00:01'\r\nOK\r\n";
+      return '\r\nAT_ERROR\r\n';
+    };
+    await expect(client.readActiveJoinEui()).resolves.toBe('70B3D57ED0000001');
+    expect(sent).toEqual(['AT+APPEUI=?']);
+  });
+
+  it('fails clearly when the station does not return the JoinEUI', async () => {
+    const client = new Ws2001AtClient();
+    client.sendCommand = async () => '\r\nAT_ERROR\r\n';
+    await expect(client.readActiveJoinEui()).rejects.toThrow(/Could not read the JoinEUI/);
+  });
+
+  it('hides a bare AppKey reply in the AT log but keeps the 8-byte DevEUI', () => {
+    expect(redactAtLog(`'${key}' OK`)).toBe("'<hidden>' OK");
+    expect(redactAtLog("'2C:F7:F1:C0:61:50:00:0C' OK")).toBe("'2C:F7:F1:C0:61:50:00:0C' OK");
+  });
+});
+
+describe('Service discovery while pairing stalls', () => {
+  function stationWith(getPrimaryService: (uuid: string) => Promise<unknown>) {
+    const calls: string[] = [];
+    const server = {
+      connected: true,
+      getPrimaryService: (uuid: string) => { calls.push(uuid); return getPrimaryService(uuid); },
+      getPrimaryServices: async () => [],
+      disconnect: () => { server.connected = false; },
+    };
+    const device = Object.assign(new EventTarget(), {
+      name: 'WeatherXM WS2001 50000C',
+      gatt: { connect: async () => server, disconnect: () => { server.connected = false; } },
+    });
+    return { device, calls };
+  }
+
+  it('shows a hint, waits once and fails clearly instead of trying every candidate', async () => {
+    const st = stationWith(() => new Promise(() => {})); // the OS never answers (stuck pairing)
+    const client = new Ws2001AtClient() as any;
+    client.discoveryHintMs = 20;
+    client.discoveryTimeoutMs = 80;
+    const hints: Array<string | null> = [];
+    client.onHint = (t: string | null) => hints.push(t);
+    client.device = st.device;
+    await expect(client.attachGatt()).rejects.toThrow(/did not answer within 35 seconds/);
+    expect(st.calls).toHaveLength(1);
+    expect(hints[0]).toMatch(/pairing request/);
+    expect(hints.at(-1)).toBeNull();
+  });
+
+  it('still tries the next candidate when a service is simply missing', async () => {
+    const tx = Object.assign(new EventTarget(), {
+      uuid: '6e400003-b5a3-f393-e0a9-e50e24dcca9e', properties: { notify: true, write: false, writeWithoutResponse: false },
+      startNotifications: async () => tx,
+    });
+    const rx = { uuid: '6e400002-b5a3-f393-e0a9-e50e24dcca9e', properties: { notify: false, write: true, writeWithoutResponse: true } };
+    let n = 0;
+    const st = stationWith(async () => {
+      n++;
+      if (n < 3) throw Object.assign(new Error('No Services matching UUID found in Device.'), { name: 'NotFoundError' });
+      return { uuid: '6e400001-b5a3-f393-e0a9-e50e24dcca9e', getCharacteristics: async () => [tx, rx] };
+    });
+    const client = new Ws2001AtClient() as any;
+    const hints: Array<string | null> = [];
+    client.onHint = (t: string | null) => hints.push(t);
+    client.device = st.device;
+    await client.attachGatt();
+    expect(st.calls).toHaveLength(3);
+    expect(client.isConnected).toBe(true);
+    expect(hints).toEqual([null]); // no hint for a fast discovery, only the final clear
+  });
+});
+
+describe('Restart before a reconnect', () => {
+  it('waits for the link to drop even when the station answers OK to ATZ', async () => {
+    const server = { connected: true, disconnect: () => { server.connected = false; } };
+    const client = new Ws2001AtClient() as any;
+    client.server = server;
+    client.sendCommand = async () => '\r\nOK\r\n';
+    setTimeout(() => { server.connected = false; }, 1800); // the browser notices the reset later
+    const t0 = Date.now();
+    await client.restartStation();
+    expect(Date.now() - t0).toBeGreaterThanOrEqual(1800);
+    expect(server.connected).toBe(false);
+  });
+
+  it('releases the stale link itself when the station confirmed the reset but the link stays up', async () => {
+    let released = false;
+    const server = { connected: true, disconnect: () => { released = true; server.connected = false; } };
+    const client = new Ws2001AtClient() as any;
+    client.server = server;
+    client.rebootConfirmTimeoutMs = 300;
+    client.sendCommand = async () => '\r\nOK\r\n';
+    await expect(client.restartStation()).resolves.toBeUndefined();
+    expect(released).toBe(true);
+    expect(client.server).toBeNull();
+  });
+
+  it('does not hang disconnecting when the dying link never confirms stopNotifications', async () => {
+    const tx = Object.assign(new EventTarget(), { stopNotifications: () => new Promise(() => {}) });
+    const server = { connected: true, disconnect: () => { server.connected = false; } };
+    const client = new Ws2001AtClient() as any;
+    client.server = server;
+    client.txChar = tx;
+    const t0 = Date.now();
+    await client.disconnect();
+    expect(Date.now() - t0).toBeLessThan(3000);
+    expect(server.connected).toBe(false);
   });
 });

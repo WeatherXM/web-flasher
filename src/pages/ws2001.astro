@@ -78,6 +78,7 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
           <input id="chk-auto-update" type="checkbox" class="w-4 h-4 mt-0.5 rounded border-wxm-cloud/30 bg-wxm-abyss text-wxm-beacon focus:ring-0 cursor-pointer" />
           <span><strong class="text-white">Update to the latest firmware as soon as I connect.</strong> Leave unchecked to review the station first and choose.</span>
         </label>
+        <p id="connect-hint" class="hidden p-3 rounded-control bg-amber-500/10 border border-amber-400/40 text-xs text-amber-200 leading-relaxed" role="status"></p>
         <p id="connect-error" class="hidden text-xs text-red-300 leading-relaxed" role="alert"></p>
       </div>
     </div>
@@ -118,9 +119,9 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
         <img src="/h2.webp" alt="WS2001 (H2)" width="388" height="228" class="w-14 h-auto object-contain select-none" />
         <div class="space-y-1 min-w-0">
           <h2 id="dev-name" class="text-sm font-bold text-white leading-none truncate">WeatherXM WS2001 (H2)</h2>
-          <span class="badge-status-green inline-flex items-center space-x-1.5">
-            <span class="indicator-dot-green animate-pulse"></span>
-            <span>Connected over Bluetooth</span>
+          <span id="dev-link-pill" class="badge-status-green inline-flex items-center space-x-1.5">
+            <span id="dev-link-dot" class="indicator-dot-green animate-pulse"></span>
+            <span id="dev-link-text">Connected over Bluetooth</span>
           </span>
         </div>
       </div>
@@ -261,15 +262,103 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
       </div>
     </div>
 
+    <!-- Network setup tracker (Open Edition active, or right after switching to it) -->
+    <div id="net-tracker" class="hidden rounded-card border-2 border-wxm-live/40 bg-wxm-storm/30 backdrop-blur-md shadow-card p-5" aria-live="polite">
+      <div class="flex flex-wrap items-start justify-between gap-3 mb-4">
+        <div class="min-w-0">
+          <span class="text-[11px] font-bold text-emerald-400 uppercase tracking-wider">Open Edition</span>
+          <h2 class="text-xl font-bold text-white tracking-tight">Your network setup</h2>
+          <p id="tracker-sub" class="text-xs text-wxm-mist mt-0.5">–</p>
+        </div>
+        <span id="tracker-link" class="px-2.5 py-1 text-xs font-semibold rounded-full whitespace-nowrap border bg-wxm-live/15 border-wxm-live/50 text-wxm-live">Live over Bluetooth</span>
+      </div>
+
+      <p id="tracker-welcome" class="hidden mb-4 p-3 rounded-control bg-wxm-beacon/10 border border-wxm-beacon/30 text-xs text-wxm-cloud leading-relaxed"></p>
+
+      <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,17rem)_minmax(0,1fr)] gap-6">
+        <ol id="tracker-steps" class="space-y-1">
+          <li class="flex items-start gap-3 py-1.5"><span class="tstep-dot">1</span><div class="min-w-0"><p class="text-sm font-semibold text-white">Registered on your server</p><p class="tstep-sub text-[11px] text-wxm-mist">–</p></div></li>
+          <li class="flex items-start gap-3 py-1.5"><span class="tstep-dot">2</span><div class="min-w-0"><p class="text-sm font-semibold text-white">Settings saved on the station</p><p class="tstep-sub text-[11px] text-wxm-mist">–</p></div></li>
+          <li class="flex items-start gap-3 py-1.5"><span class="tstep-dot">3</span><div class="min-w-0"><p class="text-sm font-semibold text-white">Station restarted</p><p class="tstep-sub text-[11px] text-wxm-mist">–</p></div></li>
+          <li class="flex items-start gap-3 py-1.5"><span class="tstep-dot">4</span><div class="min-w-0"><p class="text-sm font-semibold text-white">Joining your network</p><p class="tstep-sub text-[11px] text-wxm-mist">–</p></div></li>
+          <li class="flex items-start gap-3 py-1.5"><span class="tstep-dot">5</span><div class="min-w-0"><p class="text-sm font-semibold text-white">Joined</p><p class="tstep-sub text-[11px] text-wxm-mist">–</p></div></li>
+          <li class="flex items-start gap-3 py-1.5"><span class="tstep-dot">6</span><div class="min-w-0"><p class="text-sm font-semibold text-white">Data on your server</p><p class="tstep-sub text-[11px] text-wxm-mist">–</p></div></li>
+        </ol>
+
+        <div class="min-w-0">
+          <div class="flex items-center gap-3">
+            <div id="tracker-icon" class="w-9 h-9 shrink-0 rounded-full flex items-center justify-center border bg-wxm-beacon/15 border-wxm-beacon/40 text-wxm-zenith">
+              <div id="tracker-spinner" class="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
+              <svg id="tracker-ok" class="hidden w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" /></svg>
+              <svg id="tracker-warn" class="hidden w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+            </div>
+            <div class="min-w-0">
+              <h3 id="tracker-title" class="text-base font-bold text-white">–</h3>
+              <p id="tracker-elapsed" class="text-xs text-wxm-mist">–</p>
+            </div>
+          </div>
+
+          <div id="tracker-register" class="hidden mt-3 p-3.5 rounded-control bg-wxm-live/10 border border-wxm-live/40 space-y-2.5">
+            <p class="text-sm font-bold text-white">Register the station on your network server</p>
+            <p class="text-xs text-wxm-cloud leading-relaxed">
+              The import file holds the settings you just saved on the station: DevEUI, JoinEUI, AppKey, LoRaWAN 1.0.4, the
+              <span id="tracker-register-plan">frequency plan</span> and the payload decoder. In TTN open your application,
+              <strong class="text-white">End devices &gt; Import end devices</strong>, choose <strong class="text-white">The Things Stack JSON</strong> and select the file.
+              It joins as soon as it is registered. <span class="text-amber-300">The file holds your AppKey: keep it private.</span>
+            </p>
+            <button id="btn-tracker-register-ttn" type="button" class="px-4 py-2.5 rounded-control text-xs btn-primary-green inline-flex items-center gap-2 cursor-pointer disabled:opacity-40 disabled:cursor-wait">
+              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+              Download TTN import file
+            </button>
+          </div>
+
+          <p id="tracker-hint" class="mt-3 p-3 rounded-control bg-wxm-midnight/70 border border-wxm-cloud/10 text-xs text-wxm-cloud leading-relaxed">–</p>
+
+          <dl class="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-2">
+            <div class="p-2.5 rounded-control bg-wxm-abyss/60 border border-wxm-cloud/10"><dt class="text-[10px] uppercase tracking-wider text-wxm-mist font-semibold">LoRaWAN</dt><dd id="tm-lorawan" class="text-xs font-bold text-white mt-0.5">–</dd></div>
+            <div class="p-2.5 rounded-control bg-wxm-abyss/60 border border-wxm-cloud/10"><dt id="tm-time-label" class="text-[10px] uppercase tracking-wider text-wxm-mist font-semibold">Since restart</dt><dd id="tm-time" class="text-xs font-bold text-white mt-0.5">–</dd></div>
+            <div class="p-2.5 rounded-control bg-wxm-abyss/60 border border-wxm-cloud/10"><dt class="text-[10px] uppercase tracking-wider text-wxm-mist font-semibold">Battery</dt><dd id="tm-bat" class="text-xs font-bold text-white mt-0.5">–</dd></div>
+            <div class="p-2.5 rounded-control bg-wxm-abyss/60 border border-wxm-cloud/10"><dt class="text-[10px] uppercase tracking-wider text-wxm-mist font-semibold">Region</dt><dd id="tm-region" class="text-xs font-bold text-white mt-0.5">–</dd></div>
+            <div class="p-2.5 rounded-control bg-wxm-abyss/60 border border-wxm-cloud/10"><dt class="text-[10px] uppercase tracking-wider text-wxm-mist font-semibold">Upload interval</dt><dd id="tm-interval" class="text-xs font-bold text-white mt-0.5">–</dd></div>
+            <div class="p-2.5 rounded-control bg-wxm-abyss/60 border border-wxm-cloud/10"><dt class="text-[10px] uppercase tracking-wider text-wxm-mist font-semibold">Firmware</dt><dd id="tm-fw" class="text-xs font-bold text-white mt-0.5 font-mono">–</dd></div>
+          </dl>
+          <p id="tracker-readings" class="mt-2 text-[11px] text-wxm-mist">Live readings: waiting for the station...</p>
+
+          <div class="mt-4 flex flex-wrap gap-2">
+            <button id="btn-tracker-data-ok" type="button" class="hidden px-3.5 py-2 rounded-control text-xs btn-primary-green flex items-center gap-1.5 cursor-pointer">I see data on my server</button>
+            <button id="btn-tracker-reconnect" type="button" class="hidden px-3.5 py-2 rounded-control text-xs btn-primary-beacon flex items-center gap-1.5 cursor-pointer disabled:opacity-40 disabled:cursor-wait">Reconnect</button>
+            <button id="btn-tracker-retry" type="button" class="px-3 py-2 rounded-control text-xs font-bold text-white bg-wxm-midnight/80 border border-wxm-cloud/25 hover:bg-wxm-storm/70 flex items-center gap-1.5 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">Restart and retry join</button>
+            <button id="btn-tracker-ttn" type="button" class="hidden px-3 py-2 rounded-control text-xs font-bold text-white bg-wxm-midnight/80 border border-wxm-cloud/25 hover:bg-wxm-storm/70 flex items-center gap-1.5 cursor-pointer">TTN import file</button>
+            <a href="https://console.cloud.thethings.network/" target="_blank" rel="noopener noreferrer" class="px-3 py-2 rounded-control text-xs font-bold text-white bg-wxm-midnight/80 border border-wxm-cloud/25 hover:bg-wxm-storm/70 flex items-center gap-1.5">TTN console <span aria-hidden="true">&#8599;</span></a>
+            <button id="btn-tracker-finish" type="button" class="px-3 py-2 rounded-control text-xs font-bold text-wxm-cloud bg-wxm-midnight/80 border border-wxm-cloud/25 hover:bg-wxm-error/20 hover:border-wxm-error/40 hover:text-wxm-error flex items-center gap-1.5 cursor-pointer">Finish</button>
+          </div>
+        </div>
+      </div>
+      <p class="mt-4 pt-3 border-t border-wxm-cloud/10 text-[11px] text-wxm-mist leading-relaxed">
+        This page stays connected over Bluetooth and checks the station every 10 seconds. Finishing or closing the page restarts the station once, as every Bluetooth session does; it then joins your network again by itself.
+      </p>
+    </div>
+
     <!-- Network choice -->
-    <div>
+    <div id="network-choice">
       <div class="mb-4 flex flex-wrap items-baseline gap-x-4 gap-y-1">
         <span class="text-[11px] font-bold text-wxm-zenith uppercase tracking-wider">Step 2</span>
         <h2 class="text-xl font-bold text-white tracking-tight">Choose which network this station reports to</h2>
-        <p class="text-xs text-wxm-mist">Both identities stay stored on the station. Switching takes a few seconds; the station then restarts and joins the chosen network.</p>
+        <p id="network-choice-desc" class="text-xs text-wxm-mist">Both identities stay stored on the station. Switching takes a few seconds; the station then restarts and joins the chosen network.</p>
+        <p id="network-choice-collapsed-note" class="hidden text-xs text-wxm-mist">Your own network is active. Open the options to rejoin, change its settings or switch back to WeatherXM.</p>
+        <button
+          id="btn-toggle-network-choice"
+          type="button"
+          aria-expanded="true"
+          aria-controls="network-choice-body"
+          class="hidden ml-auto self-center px-3 py-1.5 rounded-control text-xs font-bold text-wxm-cloud border border-wxm-cloud/20 bg-wxm-midnight/80 hover:bg-wxm-storm/60 hover:text-white transition-all items-center gap-1.5 cursor-pointer"
+        >
+          <span id="network-choice-toggle-label">Hide options</span>
+          <svg id="network-choice-chevron" class="w-3.5 h-3.5 transition-transform rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
+        </button>
       </div>
 
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-5 items-stretch">
+      <div id="network-choice-body" class="grid grid-cols-1 md:grid-cols-2 gap-5 items-stretch">
         <!-- WeatherXM network card -->
         <div id="card-wxm" class="rounded-card border-2 border-wxm-cloud/15 bg-wxm-storm/30 p-5 flex flex-col justify-between transition-all shadow-card backdrop-blur-md">
           <div>
@@ -384,6 +473,15 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
                 class="w-full py-2.5 rounded-control text-xs font-bold text-white bg-emerald-700/80 border border-emerald-500/40 hover:bg-emerald-600 cursor-pointer disabled:opacity-50 disabled:cursor-wait"
               >
                 Switch to my saved network
+              </button>
+              <button
+                id="btn-open-stored-ttn"
+                type="button"
+                title="Builds the The Things Stack import file from the saved settings and the AppKey you enter. The file holds your AppKey: keep it private."
+                class="hidden w-full py-2 rounded-control text-xs font-bold text-white bg-wxm-storm/60 border border-wxm-cloud/20 hover:bg-wxm-storm hover:border-wxm-live/60 cursor-pointer inline-flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-wait"
+              >
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                Download TTN import file (saved settings)
               </button>
             </div>
 
@@ -601,6 +699,41 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
   </section>
 
   <dialog
+    id="ttn-key-dialog"
+    aria-labelledby="ttn-key-title"
+    class="m-auto w-[min(32rem,calc(100vw-2rem))] rounded-card border border-wxm-cloud/20 bg-wxm-midnight p-0 text-white backdrop:bg-black/70"
+  >
+    <form id="ttn-key-form" method="dialog" class="p-5 space-y-4">
+      <div>
+        <h3 id="ttn-key-title" class="text-base font-bold">TTN import file for the saved settings</h3>
+        <p class="text-xs text-wxm-mist leading-relaxed mt-1">
+          The station never reveals its AppKey, so the file needs the AppKey you registered on your network server
+          (in TTN: your end device &gt; Overview &gt; AppKey). Nothing is written to the station.
+        </p>
+      </div>
+      <div>
+        <label for="ttn-key-joineui" class="block text-xs font-semibold text-wxm-cloud mb-1">JoinEUI (read from the station)</label>
+        <input id="ttn-key-joineui" type="text" maxlength="23" autocomplete="off" spellcheck="false"
+          class="w-full px-3 py-2 rounded-control bg-wxm-abyss border border-wxm-cloud/20 text-white font-mono text-xs focus:outline-none focus:border-wxm-live uppercase" />
+      </div>
+      <div>
+        <label for="ttn-key-appkey" class="block text-xs font-semibold text-wxm-cloud mb-1">AppKey (32 hex)</label>
+        <input id="ttn-key-appkey" type="text" maxlength="47" autocomplete="off" spellcheck="false" placeholder="00112233445566778899AABBCCDDEEFF"
+          class="w-full px-3 py-2 rounded-control bg-wxm-abyss border border-wxm-cloud/20 text-white font-mono text-xs focus:outline-none focus:border-wxm-live uppercase" />
+        <p id="ttn-key-error" class="hidden text-xs text-red-300 mt-1" role="alert"></p>
+      </div>
+      <p class="text-[11px] text-wxm-mist leading-relaxed">
+        Don't have it any more? <button id="btn-ttn-key-new" type="button" class="font-semibold text-emerald-300 hover:text-white underline underline-offset-2 cursor-pointer">Set a new AppKey instead</button>:
+        the network settings form saves a new key on the station, and its import file carries the new key.
+      </p>
+      <div class="flex justify-end gap-2 pt-1">
+        <button id="btn-ttn-key-cancel" type="button" class="px-4 py-2 rounded-control text-xs font-semibold text-wxm-cloud border border-wxm-cloud/20 bg-wxm-storm/50 hover:bg-wxm-storm cursor-pointer">Cancel</button>
+        <button id="btn-ttn-key-download" type="submit" class="px-4 py-2 rounded-control text-xs btn-primary-green cursor-pointer">Download file</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog
     id="decoder-dialog"
     aria-labelledby="decoder-dialog-title"
     class="m-auto w-[min(56rem,calc(100vw-2rem))] max-h-[85vh] rounded-card border border-wxm-cloud/20 bg-wxm-abyss p-0 text-white backdrop:bg-black/70"
@@ -705,7 +838,7 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
 </SiteLayout>
 
 <script>
-  import { Ws2001AtClient, formatHexWithColons, type Ws2001DeviceConfig } from '../lib/ble/ws2001AtClient';
+  import { Ws2001AtClient, formatHexWithColons, type Ws2001DeviceConfig, type LoRaWanStatus, type StationMeasurements } from '../lib/ble/ws2001AtClient';
   import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
   import { trackTelemetry, redactTelemetryString } from '../lib/telemetry';
   import { ttnImportJson, ttnImportFileName, type TtnExportParams } from '../lib/ble/ws2001TtnExport';
@@ -992,13 +1125,13 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
     } else if (onCustom) {
       setBadge('badge-open-status', 'Active on station', 'active');
       $('open-stored-title').textContent = 'The station reports to your network';
-      $('open-stored-desc').textContent = 'Rejoin with the saved settings, or change them below and save.';
+      $('open-stored-desc').textContent = 'Rejoin with the saved settings, or change them below and save. You can download the TTN import file again: the station keeps its AppKey secret, so you enter it.';
       btnSwitchOpenStored.textContent = 'Rejoin My Network';
       formDetails.open = false;
     } else if (customStored) {
       setBadge('badge-open-status', 'Settings saved', 'ready');
       $('open-stored-title').textContent = 'Your network settings are saved on the station';
-      $('open-stored-desc').textContent = 'Switch to them in one click, or change them below.';
+      $('open-stored-desc').textContent = 'Switch to them in one click, or change them below. After the switch you can download the TTN import file again by entering your AppKey.';
       btnSwitchOpenStored.textContent = 'Switch to My Saved Network';
       formDetails.open = false;
     } else {
@@ -1006,6 +1139,7 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
       formDetails.open = true;
     }
     $('btn-apply-label').textContent = onCustom ? 'Save Settings & Rejoin My Network' : customStored ? 'Save New Settings & Switch' : 'Switch to My Network';
+    $('btn-open-stored-ttn').classList.toggle('hidden', !(onCustom && customStored));
     $('open-form-key-note').classList.toggle('hidden', !customStored);
     syncApplyArea();
   }
@@ -1151,6 +1285,12 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
 
     clearFormError();
 
+    // Open Edition active: show the live network setup tracker (revisit); otherwise stop it
+    const onOpenEdition = cfg.netProfile?.active === 1;
+    if (onOpenEdition && tracker.phase === 'off') startTracker('revisit');
+    else if (!onOpenEdition && tracker.phase !== 'off') stopTracker();
+    else if (tracker.phase !== 'off') renderTracker();
+
     if (!demoMode) trackTelemetry({
       device_type: 'ws2001',
       serial_number: cfg.formattedDevEui || cfg.deviceEui,
@@ -1231,6 +1371,11 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
     btnCancelConnect.classList.remove('hidden');
 
     client = new Ws2001AtClient((msg, lvl) => addLog(msg, lvl));
+    const connectHint = $('connect-hint');
+    client.onHint = (text) => {
+      connectHint.textContent = text ?? '';
+      connectHint.classList.toggle('hidden', !text);
+    };
     const cancelled = new Promise<never>((_, reject) => {
       cancelConnect = () => reject(new Error('Connection cancelled. Wait a few seconds, then connect again.'));
     });
@@ -1265,6 +1410,7 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
       client = null;
     } finally {
       cancelConnect = null;
+      $('connect-hint').classList.add('hidden');
       btnCancelConnect.classList.add('hidden');
       btnConnect.disabled = false;
       $('btn-connect-label').textContent = 'Connect to WS2001 (H2)';
@@ -1324,6 +1470,8 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
 
   // Disconnect button handler
   $('btn-disconnect').addEventListener('click', async () => {
+    stopTracker();
+    operationInFlight = false;
     addLog('Disconnecting Bluetooth... Station will reboot and send a fresh LoRaWAN Join-Request.', 'INFO');
     if (client) {
       await client.disconnect();
@@ -1357,6 +1505,8 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
     a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
     addLog(`Saved ${a.download} for The Things Network import (contains the AppKey).`, 'INFO');
+    saveSetup(params.devEui, { ttnFileAt: Date.now() });
+    if (tracker.phase !== 'off') renderTracker();
   }
   function ttnExportFromForm(): TtnExportParams {
     const devEui = currentConfig?.deviceEui || currentConfig?.formattedDevEui;
@@ -1378,6 +1528,72 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
       formError.classList.remove('hidden');
     }
   });
+  /**
+   * TTN import file for the network settings the station runs now (profile 1). Uses this visit's form
+   * values when they belong to this station. Otherwise (e.g. after "Rejoin my network", which writes
+   * no keys) the JoinEUI comes from the station and the user enters the AppKey: the firmware never
+   * reveals it (AT+APPKEY=? is disabled).
+   */
+  const ttnKeyDialog = $<HTMLDialogElement>('ttn-key-dialog');
+  const ttnKeyError = $('ttn-key-error');
+  async function downloadTtnImportFromStation(btn: HTMLButtonElement) {
+    const devEui = currentConfig?.deviceEui;
+    if (!devEui || devEui === 'Unknown') return;
+    if (lastTtnExport && lastTtnExport.devEui.replace(/[^0-9a-fA-F]/g, '').toUpperCase() === devEui.toUpperCase()) {
+      downloadTtnImport(lastTtnExport);
+      return;
+    }
+    if (currentConfig?.netProfile?.active !== 1) {
+      addLog('Switch the station to your network first: the file describes the settings it runs.', 'WARN');
+      return;
+    }
+    let joinEui = (currentConfig.appEui ?? '').replace(/[^0-9a-fA-F]/g, '').toUpperCase();
+    if (joinEui.length !== 16 && client?.isConnected && !operationInFlight) {
+      operationInFlight = true;
+      btn.disabled = true;
+      try {
+        joinEui = await client.readActiveJoinEui();
+      } catch (e) {
+        addLog(`${(e as Error).message} Enter it below.`, 'WARN');
+      } finally {
+        operationInFlight = false;
+        btn.disabled = false;
+      }
+    }
+    $<HTMLInputElement>('ttn-key-joineui').value = joinEui.length === 16 ? joinEui : '';
+    $<HTMLInputElement>('ttn-key-appkey').value = '';
+    ttnKeyError.classList.add('hidden');
+    ttnKeyDialog.showModal();
+    $<HTMLInputElement>('ttn-key-appkey').focus();
+  }
+  $('ttn-key-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const devEui = currentConfig?.deviceEui;
+    if (!devEui || !currentConfig) { ttnKeyDialog.close(); return; }
+    const joinEui = $<HTMLInputElement>('ttn-key-joineui').value.replace(/[^0-9a-fA-F]/g, '').toUpperCase();
+    const appKey = $<HTMLInputElement>('ttn-key-appkey').value.replace(/[^0-9a-fA-F]/g, '').toUpperCase();
+    const fail = (msg: string) => { ttnKeyError.textContent = msg; ttnKeyError.classList.remove('hidden'); };
+    if (joinEui.length !== 16) return fail('The JoinEUI needs 16 hexadecimal characters.');
+    if (appKey.length !== 32) return fail('The AppKey needs 32 hexadecimal characters.');
+    lastTtnExport = { devEui, joinEui, appKey, band: currentConfig.frequencyBand ?? parseInt(bandSelect.value, 10), subBand: currentConfig.subBand ?? 1 };
+    ttnKeyDialog.close();
+    downloadTtnImport(lastTtnExport);
+  });
+  for (const id of ['ttn-key-joineui', 'ttn-key-appkey']) {
+    $(id).addEventListener('input', () => ttnKeyError.classList.add('hidden'));
+  }
+  $('btn-ttn-key-cancel').addEventListener('click', () => ttnKeyDialog.close());
+  ttnKeyDialog.addEventListener('click', (e) => { if (e.target === ttnKeyDialog) ttnKeyDialog.close(); });
+  $('btn-ttn-key-new').addEventListener('click', () => {
+    ttnKeyDialog.close();
+    setNetworkChoiceCollapsed(false);
+    const details = $<HTMLDetailsElement>('open-form-details');
+    details.open = true;
+    details.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    $<HTMLInputElement>('cfg-appkey').focus({ preventScroll: true });
+  });
+  $('btn-open-stored-ttn').addEventListener('click', (e) => void downloadTtnImportFromStation(e.currentTarget as HTMLButtonElement));
+
   $('btn-ttn-export-success').addEventListener('click', () => {
     if (lastTtnExport) downloadTtnImport(lastTtnExport);
   });
@@ -1517,22 +1733,15 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
         // V4.5+ only (older firmware is blocked above): the keys go into the custom profile
         { useProfiles: true, allowOverwrite: false },
       );
-      $('success-title').textContent = 'Connected to your network!';
-      $('success-sub').textContent = 'Settings written to flash. The station has rebooted to join your network.';
-      $('success-steps').classList.remove('hidden');
       try {
         lastTtnExport = ttnExportFromForm();
-        $('btn-ttn-export-success').classList.remove('hidden');
       } catch {
         lastTtnExport = null;
-        $('btn-ttn-export-success').classList.add('hidden');
       }
-
-      currentConfig = null;
-      client = null;
       progressBar.style.width = '100%';
       $('view-progress').classList.add('hidden');
-      $('view-success').classList.remove('hidden');
+      // Stay with the station: it restarts now; the tracker reconnects and shows the join progress
+      openTracker('apply');
 
       trackTelemetry({
         device_type: 'ws2001',
@@ -1623,6 +1832,7 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
       if (cmp !== 'older' && cmp !== 'equal') return;
     }
 
+    stopTracker();
     operationInFlight = true;
     dfuTargetLabel = customFile ? customFile.name : targetRel!.label;
     dfuFrom = currentConfig.version;
@@ -1772,14 +1982,9 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
         $('progress-bar').style.width = `${Math.round((current / total) * 100)}%`;
         addLog(`[${current}/${total}] ${stepDesc}`, 'RESP');
       });
-      currentConfig = null;
-      client = null;
       $('view-progress').classList.add('hidden');
-      $('success-title').textContent = 'Switched to your network!';
-      $('success-sub').textContent = 'The station restarted with your saved network settings (profile 1).';
-      $('success-steps').classList.remove('hidden');
-      $('btn-ttn-export-success').classList.add('hidden');
-      $('view-success').classList.remove('hidden');
+      lastTtnExport = null;
+      openTracker('stored');
       trackTelemetry({ device_type: 'ws2001', serial_number: serialNum, action: 'network_switch_completed', firmware_target: 'open_lorawan',
         firmware_source: fwVer, status: 'success', details: { ...openDetails, storedProfile: true } });
     } catch (err) {
@@ -1829,6 +2034,7 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
       currentConfig = null;
       client = null;
       $('view-progress').classList.add('hidden');
+      stopTracker();
       $('success-title').textContent = 'Back on the WeatherXM network!';
       $('success-sub').textContent = 'The station restarted with its WeatherXM identity (profile 0). It shows up in the WeatherXM app once it has joined and sent data.';
       $('success-steps').classList.add('hidden');
@@ -1859,10 +2065,428 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
 
   // Done button
   $('btn-done').addEventListener('click', () => {
+    stopTracker();
     currentConfig = null;
     $('view-success').classList.add('hidden');
     $('view-connect').classList.remove('hidden');
     $('connect-steps').classList.remove('hidden');
+  });
+
+  // ===================== Open Edition join tracker =====================
+  // After switching to the customer's network the station restarts (ATZ). The page reconnects to the
+  // same station without the chooser, then polls AT+LW_MODEM_STATUS=? every 10 s (which also keeps the
+  // Bluetooth session alive; the station drops a session after 10 min without commands) and AT+MEA=?
+  // once a minute. Progress per station (dates only, never keys) is remembered in this browser so a
+  // later visit shows where the setup stands.
+  type TrackerPhase = 'off' | 'restarting' | 'reconnecting' | 'live' | 'lost';
+  type TrackerOrigin = 'apply' | 'stored' | 'retry' | 'revisit';
+  type StepState = 'done' | 'active' | 'warn' | 'todo';
+  interface SetupRecord { configuredAt?: number; ttnFileAt?: number; joinedAt?: number; dataConfirmedAt?: number }
+  const SETUP_KEY = 'ws2001-open-setup';
+  const JOIN_SLOW_MS = 5 * 60 * 1000;
+  const POLL_MS = 10000;
+  const MEA_EVERY_POLLS = 6;
+
+  const tracker = {
+    phase: 'off' as TrackerPhase,
+    origin: 'revisit' as TrackerOrigin,
+    devEui: '',
+    restartAt: 0,
+    liveAt: 0,
+    reconnectedIn: 0,
+    joinedAt: 0,
+    attempt: 0,
+    polls: 0,
+    status: null as LoRaWanStatus | null,
+    readings: null as StationMeasurements | null,
+    pollTimer: 0,
+    tickTimer: 0,
+  };
+
+  const euiKey = (eui: string | undefined) => (eui ?? '').replace(/[^0-9a-fA-F]/g, '').toUpperCase();
+  function loadSetup(devEui: string): SetupRecord {
+    try { return (JSON.parse(localStorage.getItem(SETUP_KEY) || '{}') as Record<string, SetupRecord>)[euiKey(devEui)] ?? {}; } catch { return {}; }
+  }
+  function saveSetup(devEui: string, patch: Partial<SetupRecord>) {
+    const key = euiKey(devEui);
+    if (!key) return;
+    try {
+      const all = JSON.parse(localStorage.getItem(SETUP_KEY) || '{}') as Record<string, SetupRecord>;
+      all[key] = { ...(all[key] ?? {}), ...patch };
+      localStorage.setItem(SETUP_KEY, JSON.stringify(all));
+    } catch { /* storage unavailable: the tracker still works for this visit */ }
+  }
+  function fmtDuration(ms: number): string {
+    const sec = Math.max(0, Math.round(ms / 1000));
+    if (sec < 60) return `${sec} s`;
+    const min = Math.floor(sec / 60);
+    if (min < 60) return `${min} min ${sec % 60} s`;
+    return `${Math.floor(min / 60)} h ${min % 60} min`;
+  }
+  const fmtDate = (t: number) => new Date(t).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+
+  /** Step 2 collapses while the setup tracker is shown; the toggle opens it on demand. */
+  function setNetworkChoiceCollapsed(collapsed: boolean) {
+    $('network-choice-body').classList.toggle('hidden', collapsed);
+    $('network-choice-desc').classList.toggle('hidden', collapsed);
+    $('network-choice-collapsed-note').classList.toggle('hidden', !collapsed);
+    $('btn-toggle-network-choice').setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+    $('network-choice-toggle-label').textContent = collapsed ? 'Show options' : 'Hide options';
+    $('network-choice-chevron').classList.toggle('rotate-180', !collapsed);
+  }
+  function setNetworkChoiceToggleAvailable(available: boolean) {
+    const btn = $('btn-toggle-network-choice');
+    btn.classList.toggle('hidden', !available);
+    btn.classList.toggle('inline-flex', available);
+    if (!available) setNetworkChoiceCollapsed(false);
+  }
+  $('btn-toggle-network-choice').addEventListener('click', () => {
+    setNetworkChoiceCollapsed(!$('network-choice-body').classList.contains('hidden'));
+  });
+
+  function setDeviceSectionsVisible(visible: boolean) {
+    $('fw-strip').classList.toggle('hidden', !visible);
+    $('network-choice').classList.toggle('hidden', !visible);
+  }
+
+  function startTracker(origin: TrackerOrigin) {
+    tracker.origin = origin;
+    tracker.devEui = euiKey(currentConfig?.deviceEui) || tracker.devEui;
+    tracker.joinedAt = 0;
+    tracker.attempt = 0;
+    tracker.polls = 0;
+    tracker.status = null;
+    tracker.readings = null;
+    if (origin === 'revisit') {
+      tracker.phase = 'live';
+      tracker.restartAt = 0;
+      tracker.liveAt = Date.now();
+    } else {
+      tracker.phase = 'restarting';
+      tracker.restartAt = Date.now();
+      tracker.liveAt = 0;
+    }
+    if (origin === 'apply' || origin === 'stored') {
+      const rec = loadSetup(tracker.devEui);
+      saveSetup(tracker.devEui, { configuredAt: Date.now(), ttnFileAt: origin === 'stored' ? rec.ttnFileAt : rec.ttnFileAt && Date.now() - rec.ttnFileAt < 3600000 ? rec.ttnFileAt : undefined, joinedAt: undefined, dataConfirmedAt: undefined });
+    }
+    $('net-tracker').classList.remove('hidden');
+    setNetworkChoiceToggleAvailable(true);
+    setNetworkChoiceCollapsed(true);
+    window.clearInterval(tracker.tickTimer);
+    tracker.tickTimer = window.setInterval(renderTracker, 1000);
+    renderTracker();
+    if (tracker.phase === 'live') schedulePoll(0);
+  }
+
+  function stopTracker() {
+    if (tracker.phase === 'off') return;
+    tracker.phase = 'off';
+    $('dev-link-pill').className = 'badge-status-green inline-flex items-center space-x-1.5';
+    $('dev-link-dot').classList.remove('hidden');
+    $('dev-link-text').textContent = 'Connected over Bluetooth';
+    window.clearInterval(tracker.tickTimer);
+    window.clearTimeout(tracker.pollTimer);
+    $('net-tracker').classList.add('hidden');
+    setNetworkChoiceToggleAvailable(false);
+    setDeviceSectionsVisible(true);
+  }
+
+  /** After a network switch: show the dashboard with the tracker while the station restarts, then reconnect. */
+  function openTracker(origin: TrackerOrigin) {
+    $('view-device').classList.remove('hidden');
+    setDeviceSectionsVisible(false);
+    startTracker(origin);
+    // Let the calling handler finish (it clears operationInFlight) before the reconnect takes over
+    window.setTimeout(() => void reconnectAfterRestart(), 0);
+  }
+
+  async function reconnectAfterRestart() {
+    if (!client || demoMode || tracker.phase === 'off') return;
+    const station = client;
+    window.clearTimeout(tracker.pollTimer);
+    tracker.phase = 'reconnecting';
+    renderTracker();
+    operationInFlight = true;
+    // The station may drop the first link again while it finishes booting: keep trying until the deadline.
+    const deadline = Date.now() + 60000;
+    let lastError: Error | null = null;
+    try {
+      while (tracker.phase === 'reconnecting' && Date.now() < deadline) {
+        try {
+          await station.reconnect({ timeoutMs: Math.max(1000, deadline - Date.now()), onAttempt: (n) => { tracker.attempt = n; renderTracker(); } });
+          const cfg = await station.readFullConfig();
+          if (tracker.phase !== 'reconnecting') {
+            // Stopped meanwhile (Finish, Disconnect): don't leave a link open behind the start screen
+            if (client !== station) void station.disconnect().catch(() => {});
+            return;
+          }
+          tracker.reconnectedIn = tracker.restartAt ? Date.now() - tracker.restartAt : 0;
+          addLog(tracker.restartAt ? `Reconnected to the station ${fmtDuration(tracker.reconnectedIn)} after its restart.` : 'Reconnected to the station.', 'INFO');
+          tracker.phase = 'live';
+          tracker.liveAt = Date.now();
+          operationInFlight = false;
+          populateDeviceView(cfg);
+          setDeviceSectionsVisible(true);
+          schedulePoll(0);
+          return;
+        } catch (e) {
+          lastError = e as Error;
+          if (tracker.phase !== 'reconnecting') return;
+          if (Date.now() < deadline) {
+            addLog(`Reconnect attempt failed (${lastError.message}); trying again...`, 'WARN');
+            await new Promise((r) => setTimeout(r, 2000));
+          }
+        }
+      }
+      if (tracker.phase === 'reconnecting') {
+        tracker.phase = 'lost';
+        addLog(`${lastError?.message ?? 'Could not reconnect to the station'}. The station joins on its own; reconnect to watch it.`, 'WARN');
+      }
+    } finally {
+      operationInFlight = false;
+      renderTracker();
+    }
+  }
+
+  function schedulePoll(ms: number) {
+    window.clearTimeout(tracker.pollTimer);
+    tracker.pollTimer = window.setTimeout(() => void pollTracker(), ms);
+  }
+
+  async function pollTracker() {
+    if (tracker.phase !== 'live') return;
+    if (demoMode) { renderTracker(); return; }
+    if (operationInFlight) { schedulePoll(POLL_MS); return; }
+    if (!client || !client.isConnected) {
+      tracker.phase = 'lost';
+      setDeviceSectionsVisible(false);
+      renderTracker();
+      return;
+    }
+    try {
+      tracker.status = await client.readLoRaWanStatus();
+      if (tracker.polls % MEA_EVERY_POLLS === 0) {
+        tracker.readings = await client.readMeasurements().catch(() => tracker.readings);
+      }
+      tracker.polls++;
+    } catch {
+      if (!client?.isConnected) {
+        tracker.phase = 'lost';
+        setDeviceSectionsVisible(false);
+        renderTracker();
+        return;
+      }
+    }
+    if (tracker.status?.state === 'joined' && !tracker.joinedAt) {
+      tracker.joinedAt = Date.now();
+      const rec = loadSetup(tracker.devEui);
+      if (!rec.joinedAt || (rec.configuredAt && rec.joinedAt < rec.configuredAt)) saveSetup(tracker.devEui, { joinedAt: tracker.joinedAt });
+      addLog(tracker.restartAt ? `Joined your network ${fmtDuration(tracker.joinedAt - tracker.restartAt)} after the restart.` : 'The station is joined to your network.', 'INFO');
+    }
+    renderTracker();
+    schedulePoll(POLL_MS);
+  }
+
+  const STEP_DOT: Record<StepState, string> = {
+    done: 'tstep-dot w-6 h-6 shrink-0 rounded-full flex items-center justify-center text-[11px] font-bold border bg-wxm-live/15 border-wxm-live/50 text-wxm-live',
+    active: 'tstep-dot w-6 h-6 shrink-0 rounded-full flex items-center justify-center text-[11px] font-bold border bg-wxm-beacon/20 border-wxm-zenith text-wxm-zenith animate-pulse',
+    warn: 'tstep-dot w-6 h-6 shrink-0 rounded-full flex items-center justify-center text-[11px] font-bold border bg-amber-500/15 border-amber-400/50 text-amber-300',
+    todo: 'tstep-dot w-6 h-6 shrink-0 rounded-full flex items-center justify-center text-[11px] font-bold border bg-wxm-midnight/70 border-wxm-cloud/20 text-wxm-mist',
+  };
+  const CHECK_SVG = '<svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" /></svg>';
+
+  function readingsText(r: StationMeasurements | null): string {
+    if (!r) return 'Live readings: waiting for the station...';
+    const parts: string[] = [];
+    if (r.temperature != null) parts.push(`${r.temperature.toFixed(1)} °C`);
+    if (r.humidity != null) parts.push(`${Math.round(r.humidity)} % RH`);
+    if (r.windSpeed != null) parts.push(`wind ${r.windSpeed.toFixed(1)} m/s${r.windDirection != null ? ` from ${Math.round(r.windDirection)}°` : ''}`);
+    if (r.windGust != null) parts.push(`gust ${r.windGust.toFixed(1)} m/s`);
+    if (r.pressure != null) parts.push(`${r.pressure.toFixed(1)} hPa`);
+    return parts.length ? `Live readings: ${parts.join(' · ')}` : 'Live readings: the sensor is not answering right now.';
+  }
+
+  function renderTracker() {
+    if (tracker.phase === 'off') return;
+    $('net-tracker').classList.remove('hidden');
+    const cfg = currentConfig;
+    const rec = loadSetup(tracker.devEui);
+    const now = Date.now();
+    const st = tracker.status?.state ?? null;
+    const live = tracker.phase === 'live';
+    const joined = live && st === 'joined';
+    const since = tracker.restartAt || tracker.liveAt;
+    const elapsed = since ? now - since : 0;
+    const slow = live && st === 'joining' && elapsed > JOIN_SLOW_MS;
+    const afterConfig = (t?: number) => Boolean(t && (!rec.configuredAt || t >= rec.configuredAt));
+    const registered = joined || afterConfig(rec.ttnFileAt) || afterConfig(rec.joinedAt);
+    const dataOk = afterConfig(rec.dataConfirmedAt);
+    const interval = cfg?.uploadInterval;
+    // Keys from this visit's form (switch to my network): the TTN file can be built without asking
+    const ttnReady = Boolean(lastTtnExport && euiKey(lastTtnExport.devEui) === tracker.devEui);
+
+    $('tracker-sub').textContent = `${client?.deviceName || cfg?.bleName || 'Station'} · ${cfg?.frequencyName ?? '–'} · DevEUI ${cfg?.formattedDevEui ?? '–'}`;
+    const link = $('tracker-link');
+    const LINK = 'px-2.5 py-1 text-xs font-semibold rounded-full whitespace-nowrap border ';
+    if (live) { link.textContent = 'Live over Bluetooth'; link.className = LINK + 'bg-wxm-live/15 border-wxm-live/50 text-wxm-live'; }
+    else if (tracker.phase === 'lost') { link.textContent = 'Not connected'; link.className = LINK + 'bg-wxm-midnight/70 border-wxm-cloud/20 text-wxm-mist'; }
+    else { link.textContent = 'Reconnecting...'; link.className = LINK + 'bg-amber-500/15 border-amber-400/40 text-amber-300'; }
+
+    const welcome = $('tracker-welcome');
+    if (tracker.origin === 'revisit') {
+      welcome.textContent = rec.configuredAt
+        ? `Welcome back. You set up this station for your network on ${fmtDate(rec.configuredAt)}. Its status is read live while this page is connected.`
+        : 'This station reports to your own network. Its status is read live while this page is connected.';
+      welcome.classList.remove('hidden');
+    } else {
+      welcome.classList.add('hidden');
+    }
+
+    // Steps
+    const restartStep: [StepState, string] = tracker.origin === 'revisit'
+      ? (tracker.phase === 'lost' ? ['warn', 'Bluetooth link lost'] : ['done', rec.configuredAt ? `Earlier, ${fmtDate(rec.configuredAt)}` : 'Earlier'])
+      : tracker.phase === 'restarting' ? ['active', 'Waiting for the station']
+      : tracker.phase === 'reconnecting' ? ['active', `Reconnecting, attempt ${tracker.attempt || 1}`]
+      : tracker.phase === 'lost' ? ['warn', 'Could not reconnect']
+      : ['done', tracker.reconnectedIn ? `Reconnected in ${fmtDuration(tracker.reconnectedIn)}` : 'Reconnected'];
+    const joinStep: [StepState, string] = !live ? ['todo', tracker.phase === 'lost' ? 'Status unknown while disconnected' : 'Starts right after the restart']
+      : joined ? ['done', tracker.joinedAt && tracker.restartAt ? `Joined in ${fmtDuration(tracker.joinedAt - tracker.restartAt)}` : 'Joined']
+      : st === 'joining' ? (slow ? ['warn', `No Join-Accept after ${fmtDuration(elapsed)}`] : ['active', 'Sending Join-Requests'])
+      : st === 'idle' ? ['warn', 'Not joining'] : ['active', 'Checking...'];
+    const steps: Array<[StepState, string]> = [
+      registered ? ['done', joined || afterConfig(rec.joinedAt) ? 'Your server accepted the join' : 'TTN import file downloaded']
+        : [slow ? 'warn' : ttnReady ? 'active' : 'todo', ttnReady ? 'Download the TTN import file' : 'Add DevEUI, JoinEUI and AppKey'],
+      ['done', rec.configuredAt ? `Profile 1 · ${fmtDate(rec.configuredAt)}` : 'Profile 1 active'],
+      restartStep,
+      joinStep,
+      joined ? ['done', 'Keys and downlink work'] : ['todo', 'Waits for the Join-Accept'],
+      dataOk ? ['done', 'You confirmed data arrives'] : joined ? ['active', 'Check Live data on your server'] : ['todo', 'After joining'],
+    ];
+    document.querySelectorAll<HTMLLIElement>('#tracker-steps > li').forEach((li, i) => {
+      const [state, sub] = steps[i];
+      const dot = li.querySelector<HTMLElement>('.tstep-dot')!;
+      dot.className = STEP_DOT[state];
+      dot.innerHTML = state === 'done' ? CHECK_SVG : state === 'warn' ? '!' : String(i + 1);
+      li.querySelector<HTMLElement>('.tstep-sub')!.textContent = sub;
+    });
+
+    // Status panel
+    let tone: 'busy' | 'ok' | 'warn' = 'busy';
+    let title = '';
+    let sub = '';
+    let hint = '';
+    if (tracker.phase === 'restarting' || tracker.phase === 'reconnecting') {
+      title = tracker.phase === 'restarting' ? 'Restarting the station' : `Reconnecting (attempt ${tracker.attempt || 1})`;
+      sub = `Settings saved ${fmtDuration(elapsed)} ago`;
+      hint = 'Your settings are saved. The station restarts to load them and starts joining right away. This page reconnects by itself, usually within 15 seconds: keep it open.';
+    } else if (tracker.phase === 'lost') {
+      tone = 'warn';
+      title = 'Not connected to the station';
+      sub = since ? `${fmtDuration(elapsed)} since ${tracker.restartAt ? 'the restart' : 'connecting'}` : '';
+      hint = 'The station runs on its own and keeps trying to join your network. Reconnect to watch its status, or close this page: nothing else is needed.';
+    } else if (joined) {
+      tone = 'ok';
+      title = 'Joined your network';
+      sub = tracker.joinedAt && tracker.restartAt ? `Joined ${fmtDuration(tracker.joinedAt - tracker.restartAt)} after the restart` : 'The station is joined';
+      hint = dataOk
+        ? 'Done: your server receives the station\'s data. You can finish now; the station restarts once and joins again by itself.'
+        : `Your server accepted the station. It sends a weather uplink right after joining and then every ${interval ?? '?'} min on FPort 99. Open Live data on your server: you should see decoded values such as temperature and wind (the TTN import file includes the decoder). Then confirm below.`;
+    } else if (st === 'joining' && slow) {
+      tone = 'warn';
+      title = `Not joined after ${fmtDuration(elapsed)}`;
+      sub = 'The station keeps retrying';
+      hint = `Check on your server that DevEUI ${cfg?.formattedDevEui ?? ''}, the JoinEUI and the AppKey match this station, the frequency plan matches ${cfg?.frequencyName ?? 'its region'}, and the LoRaWAN version is 1.0.4. If the server shows Join requests and accepts them, the Join-Accept does not reach the station: move it closer to a gateway or outdoors. Retries slow down over time; Restart and retry join starts a fresh cycle.`;
+    } else if (st === 'joining') {
+      title = 'Joining your network';
+      sub = `${fmtDuration(elapsed)} since ${tracker.restartAt ? 'the restart' : 'connecting'}`;
+      hint = (registered || ttnReady ? '' : 'Not registered yet? Add the station to your network server now (on TTN the import file does it in one step); it keeps retrying. ')
+        + 'The station sends a Join-Request and listens for the Join-Accept 5 seconds later. On TTN, open Live data in your application: each request appears as a Join request event; nothing there means no gateway hears the station.';
+    } else if (st === 'idle') {
+      tone = 'warn';
+      title = 'The station is not joining';
+      sub = `${fmtDuration(elapsed)} since ${tracker.restartAt ? 'the restart' : 'connecting'}`;
+      hint = 'Its LoRaWAN modem reports neither joining nor joined. Restart and retry join; if it stays like this, check the network settings below.';
+    } else {
+      title = 'Checking the LoRaWAN status...';
+      sub = 'Reading from the station';
+      hint = 'Reading the join status from the station over Bluetooth.';
+    }
+    const ICON = 'w-9 h-9 shrink-0 rounded-full flex items-center justify-center border ';
+    $('tracker-icon').className = ICON + (tone === 'ok' ? 'bg-wxm-live/15 border-wxm-live/50 text-wxm-live'
+      : tone === 'warn' ? 'bg-amber-500/15 border-amber-400/50 text-amber-300' : 'bg-wxm-beacon/15 border-wxm-beacon/40 text-wxm-zenith');
+    $('tracker-spinner').classList.toggle('hidden', tone !== 'busy');
+    $('tracker-ok').classList.toggle('hidden', tone !== 'ok');
+    $('tracker-warn').classList.toggle('hidden', tone !== 'warn');
+    $('tracker-title').textContent = title;
+    $('tracker-elapsed').textContent = sub;
+    $('tracker-hint').textContent = hint;
+
+    // Header follows the link and the live status
+    const pill = $('dev-link-pill');
+    pill.className = `${live ? 'badge-status-green' : 'badge-status-warn'} inline-flex items-center space-x-1.5`;
+    $('dev-link-dot').classList.toggle('hidden', !live);
+    $('dev-link-text').textContent = live ? 'Connected over Bluetooth' : tracker.phase === 'lost' ? 'Not connected' : 'Reconnecting...';
+    if (!live) {
+      const joinEl = $('stat-join');
+      joinEl.textContent = tracker.phase === 'lost' ? 'Unknown' : 'Restarting...';
+      joinEl.className = 'text-xs font-bold text-wxm-mist';
+    }
+    if (live && st && st !== 'unknown') {
+      if (cfg) cfg.lorawanStatus = st === 'joined' ? 'JOINED' : st === 'joining' ? 'JOINING' : cfg.lorawanStatus;
+      const joinEl = $('stat-join');
+      joinEl.textContent = st === 'joined' ? 'Joined' : st === 'joining' ? 'Joining...' : 'Not joining';
+      joinEl.className = `text-xs font-bold ${st === 'joined' ? 'text-wxm-live' : st === 'joining' ? 'text-amber-300' : 'text-wxm-mist'}`;
+    }
+
+    // Readout
+    const flags = (tracker.status?.flags ?? []).filter((f) => f === 'MUTE' || f === 'SUSPEND');
+    $('tm-lorawan').textContent = !live ? '–' : (st === 'joined' ? 'Joined' : st === 'joining' ? 'Joining...' : st === 'idle' ? 'Not joining' : '...') + (flags.length ? ` · ${flags.join(', ').toLowerCase()}` : '');
+    $('tm-time-label').textContent = joined ? 'Time to join' : tracker.restartAt ? 'Since restart' : 'Watching for';
+    $('tm-time').textContent = joined ? (tracker.joinedAt && tracker.restartAt ? fmtDuration(tracker.joinedAt - tracker.restartAt) : 'Before this visit') : since ? fmtDuration(elapsed) : '–';
+    $('tm-bat').textContent = cfg?.battery ?? '–';
+    $('tm-region').textContent = cfg ? `${cfg.frequencyName}${cfg.subBand != null && (cfg.frequencyBand === 8 || cfg.frequencyBand === 1) ? ` · FSB ${cfg.subBand + 1}` : ''}` : '–';
+    $('tm-interval').textContent = interval != null ? `${interval} min` : '–';
+    $('tm-fw').textContent = cfg?.version ?? '–';
+    $('tracker-readings').textContent = readingsText(tracker.readings);
+
+    // Actions
+    $('btn-tracker-data-ok').classList.toggle('hidden', !(joined && !dataOk));
+    $('btn-tracker-reconnect').classList.toggle('hidden', !(tracker.phase === 'lost' && client));
+    $<HTMLButtonElement>('btn-tracker-retry').disabled = !live;
+    $('btn-tracker-ttn').classList.toggle('hidden', !(ttnReady || (live && client)));
+    // Right after a successful configuration: the TTN file is the user's next step until it is downloaded or the station joined
+    $('tracker-register').classList.toggle('hidden', !(ttnReady && !registered));
+    if (ttnReady && lastTtnExport) {
+      $('tracker-register-plan').textContent = `${cfg?.frequencyName ?? 'region'} frequency plan`;
+    }
+  }
+
+  $('btn-tracker-data-ok').addEventListener('click', () => {
+    saveSetup(tracker.devEui, { dataConfirmedAt: Date.now() });
+    addLog('You confirmed that your server receives the station\'s data.', 'INFO');
+    renderTracker();
+  });
+  $('btn-tracker-reconnect').addEventListener('click', () => void reconnectAfterRestart());
+  $('btn-tracker-ttn').addEventListener('click', (e) => void downloadTtnImportFromStation(e.currentTarget as HTMLButtonElement));
+  $('btn-tracker-register-ttn').addEventListener('click', (e) => void downloadTtnImportFromStation(e.currentTarget as HTMLButtonElement));
+  $('btn-tracker-finish').addEventListener('click', () => $<HTMLButtonElement>('btn-disconnect').click());
+  $('btn-tracker-retry').addEventListener('click', async () => {
+    if (!client || !client.isConnected || operationInFlight || tracker.phase !== 'live') return;
+    if (!confirm('Restart the station? It sends a fresh Join-Request right away; this page reconnects by itself.')) return;
+    operationInFlight = true;
+    try {
+      addLog('Restarting the station to retry the join...', 'INFO');
+      await client.restartStation();
+    } catch (e) {
+      operationInFlight = false;
+      addLog(`Restart failed: ${redactTelemetryString((e as Error).message)}`, 'ERROR');
+      return;
+    }
+    operationInFlight = false;
+    setDeviceSectionsVisible(false);
+    startTracker('retry');
+    void reconnectAfterRestart();
   });
 
   if (demoMode) {
@@ -1872,6 +2496,9 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
       stored: { version: 'V4.9', netProfile: { active: 0, weatherxmStored: true, customStored: true }, lorawanStatus: 'JOINING', uploadInterval: 3 },
       custom: { version: 'V4.9', netProfile: { active: 1, weatherxmStored: true, customStored: true }, lorawanStatus: 'JOINED', uploadInterval: 5, appEui: '70B3D57ED0000000' },
     };
+    // Tracker states: ?demo=tracker-restart | tracker-joining | tracker-stuck | tracker-joined | custom (revisit)
+    const trackerDemo = demoMode.startsWith('tracker-') ? demoMode.slice(8) : demoMode === 'custom' ? 'revisit' : null;
+    if (trackerDemo) variants[demoMode] = variants.custom;
     const demoCfg: Ws2001DeviceConfig = {
       deviceModel: 'H2', deviceEui: '2CF7F1C06150000C', formattedDevEui: '2C:F7:F1:C0:61:50:00:0C', appEui: '0000000000000000',
       version: 'V4.9', battery: '92%', uploadInterval: 3, frequencyBand: 5, frequencyName: 'EU868', subBand: null,
@@ -1884,6 +2511,26 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
       $('dev-name').textContent = demoCfg.bleName ?? 'WeatherXM WS2001';
       $('view-connect').classList.add('hidden');
       $('view-device').classList.remove('hidden');
+      if (!trackerDemo) return;
+      const demoReadings = { temperature: 23.4, humidity: 56, windSpeed: 3.1, windDirection: 270, windGust: 5.2, pressure: 1013.2 };
+      if (trackerDemo === 'revisit') {
+        tracker.status = { state: 'joined', flags: ['JOINED'] };
+        tracker.readings = demoReadings;
+      } else {
+        lastTtnExport = { devEui: demoCfg.deviceEui, joinEui: '0000000000000000', appKey: '00'.repeat(16), band: 5 };
+        startTracker('apply');
+        if (trackerDemo === 'restart') { setDeviceSectionsVisible(false); tracker.phase = 'reconnecting'; tracker.attempt = 2; }
+        else {
+          tracker.phase = 'live';
+          tracker.restartAt = Date.now() - (trackerDemo === 'stuck' ? 400000 : trackerDemo === 'joined' ? 140000 : 102000);
+          tracker.reconnectedIn = 9000;
+          tracker.liveAt = tracker.restartAt + 9000;
+          tracker.readings = demoReadings;
+          tracker.status = { state: trackerDemo === 'joined' ? 'joined' : 'joining', flags: [trackerDemo === 'joined' ? 'JOINED' : 'JOINING'] };
+          if (trackerDemo === 'joined') tracker.joinedAt = tracker.restartAt + 130000;
+        }
+      }
+      renderTracker();
     });
   }
 </script>
