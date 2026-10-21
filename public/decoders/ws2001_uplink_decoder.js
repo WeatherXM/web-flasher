@@ -176,7 +176,7 @@ function wxmDecode(bytes, fPort) {
   if (fPort === 99 || bytes[0] === 0xf0 || bytes[0] === 0xf1 || bytes[0] === 0xf2 || bytes[0] === 0xf3) {
     return wxmDecodeWeatherXM(bytes);
   }
-  return { data: {}, warnings: ["Unexpected FPort " + fPort] };
+  return { data: {}, warnings: ["Unexpected FPort " + fPort + ". WS2001 weather data arrives on FPort 99; use FPort 99 when testing or simulating an uplink."] };
 }
 
 // The Things Stack v3 and ChirpStack v4
