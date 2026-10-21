@@ -1,12 +1,13 @@
-// WeatherXM WS2001 / WS2000 uplink decoder (WeatherXM firmware V3.x - V4.5+)
+// WeatherXM WS2001 / WS2000 uplink decoder (WeatherXM firmware V3.x - V4.9+)
 //
 // Paste this whole file as-is into:
 //   - The Things Stack v3:  Application > Payload formatters > Uplink > Custom JavaScript
 //   - ChirpStack v4:        Device profile > Codec > JavaScript functions
 //   - ChirpStack v3:        Device profile > Codec > Custom JavaScript (uses Decode() below)
 //
-// Frames on FPort 99 (WeatherXM format, AT+TESTMODE_TYPE=0, the default):
-//   0xF0  24-byte weather frame (1 Helium data credit)
+// Frames on FPort 99 (AT+TESTMODE_TYPE=0, the default):
+//   16-byte Open Edition weather frame (AT+NETPROFILE=1, V4.9+)
+//   0xF0  24-byte WeatherXM weather frame (AT+NETPROFILE=0, 1 Helium data credit)
 //   0xF1  same, followed by a 64-byte ECDSA P-256 signature from the station's secure element
 //   0xF2  12-byte boot frame (firmware/hardware version, sensor protocol version)
 //   0xF3  GNSS scan (raw LR1110 NAV message; resolve with a GNSS solver)
@@ -29,9 +30,47 @@ function wxmU16le(b, i) { return b[i] | (b[i + 1] << 8); }
 function wxmU24le(b, i) { return b[i] | (b[i + 1] << 8) | (b[i + 2] << 16); }
 function wxmU32le(b, i) { return (b[i] | (b[i + 1] << 8) | (b[i + 2] << 16) | (b[i + 3] << 24)) >>> 0; }
 
+function wxmDecodeOpenWeather(bytes) {
+  var data = { frame: "weather" };
+
+  var hd = (bytes[0] << 8) | bytes[1];
+  data.humidity = (hd >> 9) === 0x7f ? null : hd >> 9;                                     // %RH
+  data.wind_direction = (hd & 0x1ff) === 0x1ff ? null : hd & 0x1ff;                        // degrees
+
+  var t = wxmU16le(bytes, 2);
+  data.temperature = t === 0x7fff ? null : (t & 0x8000 ? t - 0x10000 : t) / 10;            // °C
+
+  var buw = (bytes[4] << 8) | bytes[5];
+  data.battery_low = (buw & 0x8000) !== 0;
+  var uv = (buw >> 11) & 0x0f;
+  data.uv_index = uv === 0x0f ? null : uv;
+  data.wind_speed = (buw & 0x7ff) === 0x7ff ? null : (buw & 0x7ff) / 10;                   // m/s, mean of 12 s averages
+
+  var g = wxmU16le(bytes, 6);
+  data.wind_gust = g === 0xffff ? null : g / 10;                                           // m/s, max of 12 s peaks
+
+  var r = wxmU16le(bytes, 8);
+  data.rain_accumulated = r === 0xffff ? null : r / 10;                                    // mm, 0.1 mm rolling counter
+
+  var rr = wxmU16le(bytes, 10);
+  data.rain_rate = rr === 0xffff ? null : rr / 10;                                         // mm/h, max over the interval
+
+  var lx = wxmU16le(bytes, 12);
+  data.lux = lx === 0xffff ? null : lx * 10;                                               // lux (10 lux steps)
+
+  var p = wxmU16le(bytes, 14);
+  data.pressure = p === 0xffff ? null : p / 10;                                            // hPa
+
+  return { data: data };
+}
+
 function wxmDecodeWeatherXM(bytes) {
   var data = {};
   var tag = bytes[0];
+  if (tag !== 0xf0 && tag !== 0xf1 && tag !== 0xf2 && tag !== 0xf3) {
+    if (bytes.length === 16) return wxmDecodeOpenWeather(bytes);
+    return { errors: ["unknown frame tag 0x" + wxmHex(bytes, 0, 1)] };
+  }
   if (bytes.length < 3) return { errors: ["frame too short"] };
   data.firmware_version = (bytes[1] >> 4) + "." + (bytes[1] & 0x0f);
   var hw = (bytes[2] >> 5) & 0x07;
@@ -49,7 +88,6 @@ function wxmDecodeWeatherXM(bytes) {
   if (tag === 0xf3) {
     return { data: { frame: "gnss_scan", gnss_status: bytes[1], gnss_length: bytes[2], gnss_raw: wxmHex(bytes, 3, bytes.length) } };
   }
-  if (tag !== 0xf0 && tag !== 0xf1) return { errors: ["unknown frame tag 0x" + wxmHex(bytes, 0, 1)] };
   if (bytes.length < 24) return { errors: ["weather frame must be 24 bytes, got " + bytes.length] };
 
   data.frame = tag === 0xf1 ? "weather_signed" : "weather";
@@ -80,7 +118,6 @@ function wxmDecodeWeatherXM(bytes) {
 
   var p = wxmU16le(bytes, 22);
   data.pressure = p === 0xffff ? null : p / 10;                                            // hPa
-  data.pressure_pa = p === 0xffff ? null : p * 10;
 
   if (tag === 0xf1 && bytes.length >= 88) data.signature = wxmHex(bytes, 24, 88);
   return { data: data };
@@ -106,7 +143,6 @@ function wxmDecodeLegacyTlv(bytes) {
       data.rain_rate = rawRain / 1000;
       var rawPress = (bytes[i + 6] << 8) | bytes[i + 7];
       data.pressure = rawPress / 10;
-      data.pressure_pa = rawPress * 10;
       i += 8;
     } else if (id === 0x03 && i + 1 <= bytes.length) {
       data.battery = bytes[i++];
