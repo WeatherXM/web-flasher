@@ -22,6 +22,29 @@ export interface TelemetryPayload {
   details?: Record<string, any>;
 }
 
+const FORBIDDEN_DETAIL_KEYS = new Set(['appkey', 'appskey', 'nwkskey', 'devkey']);
+
+export function redactTelemetryString(value: string): string {
+  return value
+    .replace(/(AT\+(?:APPKEY|APPSKEY|NWKSKEY|DEVKEY)=)[^\s"']+/gi, '$1<redacted>')
+    .replace(/(?:[0-9a-fA-F]{2}:){15}[0-9a-fA-F]{2}/g, '<redacted-key>')
+    .replace(/\b[0-9a-fA-F]{32}\b/g, '<redacted-key>');
+}
+
+export function sanitizeTelemetryDetails(details?: Record<string, any>): Record<string, any> | undefined {
+  if (!details || typeof details !== 'object') return details;
+  const out: Record<string, any> = {};
+  for (const [k, v] of Object.entries(details)) {
+    if (FORBIDDEN_DETAIL_KEYS.has(k.toLowerCase())) continue;
+    if (typeof v === 'string') {
+      out[k] = redactTelemetryString(v);
+    } else {
+      out[k] = v;
+    }
+  }
+  return out;
+}
+
 /**
  * Tracks device operations by:
  * 1. Storing the detailed audit record (including hardware serial / DevEUI / MAC)
@@ -30,6 +53,9 @@ export interface TelemetryPayload {
  *    any serial numbers or PII.
  */
 export function trackTelemetry(payload: TelemetryPayload): void {
+  const safePayload: TelemetryPayload = payload.details
+    ? { ...payload, details: sanitizeTelemetryDetails(payload.details) }
+    : payload;
   // 1. Same-origin Cloudflare D1 audit log (includes serial number)
   try {
     fetch('/api/telemetry', {
@@ -37,7 +63,7 @@ export function trackTelemetry(payload: TelemetryPayload): void {
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(safePayload),
       keepalive: true,
     }).catch(() => {
       // Fire-and-forget: network errors must never interrupt flasher UX

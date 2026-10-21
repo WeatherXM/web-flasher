@@ -592,10 +592,10 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
 <script>
   import { Ws2001AtClient, formatHexWithColons, type Ws2001DeviceConfig } from '../lib/ble/ws2001AtClient';
   import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
-  import { trackTelemetry } from '../lib/telemetry';
+  import { trackTelemetry, redactTelemetryString } from '../lib/telemetry';
   import { ttnImportJson, ttnImportFileName, type TtnExportParams } from '../lib/ble/ws2001TtnExport';
   import { enterBootloader, requestBootloaderDevice, SecureDfuTransfer, makeBootloaderName, type Ws2001DfuPackage } from '../lib/ble/ws2001Dfu';
-  import { fetchWs2001Manifest, latestRelease, downloadWs2001Release, isOutdated, type Ws2001Release } from '../lib/ble/ws2001Firmware';
+  import { fetchWs2001Manifest, latestRelease, downloadWs2001Release, isOutdated, compareStationVersion, type Ws2001Release } from '../lib/ble/ws2001Firmware';
 
   const $ = <T extends HTMLElement = HTMLElement>(id: string): T => {
     const el = document.getElementById(id);
@@ -605,6 +605,7 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
 
   let client: Ws2001AtClient | null = null;
   let currentConfig: Ws2001DeviceConfig | null = null;
+  let operationInFlight = false;
 
   // Latest published firmware (public/firmware/ws2001/manifest.json)
   let latest: Ws2001Release | null = null;
@@ -624,7 +625,7 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
     if (level === 'ERROR') color = 'text-red-400 font-bold';
 
     row.className = color;
-    row.textContent = `[${time}] ${msg}`;
+    row.textContent = `[${time}] ${redactTelemetryString(msg)}`;
     termLog.appendChild(row);
     termLog.scrollTop = termLog.scrollHeight;
   };
@@ -701,11 +702,15 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
     }
 
     const keysText = cfg.netProfile
-      ? 'Your network settings are stored as a separate profile; the WeatherXM settings on the station are not overwritten.'
-      : 'This firmware is too old for your own network: update the station to the latest firmware first (Update button above).';
+      ? cfg.netProfile.weatherxmStored
+        ? 'Your network settings are stored as a separate profile; the WeatherXM settings on the station are preserved in profile 0.'
+        : 'Switching to your network will save the current WeatherXM settings into profile 0 before activating profile 1.'
+      : 'This firmware (< V4.5) is too old for dual network profiles: update the station to the latest firmware first (Update button above).';
     $('warn-keys').textContent = keysText;
     $('modal-warn-keys').textContent = keysText;
-    $('group-switchback').classList.toggle('hidden', !(cfg.netProfile && cfg.netProfile.active === 1 && cfg.netProfile.weatherxmStored));
+    const canSwitchBack = Boolean(cfg.netProfile && cfg.netProfile.active === 1 && cfg.netProfile.weatherxmStored);
+    $('group-switchback').classList.toggle('hidden', !canSwitchBack);
+    $<HTMLButtonElement>('btn-switchback').disabled = !canSwitchBack;
   }
 
   function updateFirmwarePanel(cfg: Ws2001DeviceConfig) {
@@ -716,11 +721,28 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
       btn.disabled = true;
       return;
     }
-    const outdated = isOutdated(cfg.version, latest.version);
-    txt.textContent = outdated ? `${cfg.version} → ${latest.label} available` : `Up to date (${latest.label})`;
-    txt.className = `font-semibold block mt-0.5 text-[11px] ${outdated ? 'text-amber-300' : 'text-emerald-300'}`;
-    btn.textContent = outdated ? `Update to ${latest.label}` : `Reinstall ${latest.label}`;
-    btn.disabled = false;
+    const cmp = compareStationVersion(cfg.version, latest.version);
+    if (cmp === 'older') {
+      txt.textContent = `${cfg.version} → ${latest.label} available`;
+      txt.className = 'font-semibold block mt-0.5 text-[11px] text-amber-300';
+      btn.textContent = `Update to ${latest.label}`;
+      btn.disabled = false;
+    } else if (cmp === 'equal') {
+      txt.textContent = `Up to date (${latest.label})`;
+      txt.className = 'font-semibold block mt-0.5 text-[11px] text-emerald-300';
+      btn.textContent = `Reinstall ${latest.label}`;
+      btn.disabled = false;
+    } else if (cmp === 'newer') {
+      txt.textContent = `Running ${cfg.version} (newer than published ${latest.label})`;
+      txt.className = 'font-semibold block mt-0.5 text-[11px] text-emerald-300';
+      btn.textContent = `Up to date (${cfg.version})`;
+      btn.disabled = true;
+    } else {
+      txt.textContent = `Station version unknown (latest is ${latest.label}); click Refresh first`;
+      txt.className = 'font-semibold block mt-0.5 text-[11px] text-amber-300';
+      btn.textContent = 'Update';
+      btn.disabled = true;
+    }
   }
 
   // What the WeatherXM backend needs to unprovision / re-provision the station on its LNS
@@ -739,15 +761,17 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
       hardwareVersion: cfg?.hardwareVersion,
       lorawanVersion: cfg?.lorawanVersion,
       firmwareVersion: cfg?.version,
-      keysKept: Boolean(cfg?.netProfile),
+      keysKept: Boolean(cfg?.netProfile && (cfg.netProfile.weatherxmStored || cfg.netProfile.active === 0)),
       fromNetwork: wxmActive ? 'weatherxm' : 'open_lorawan',
       wxmJoinEui: wxmActive ? cfg?.appEui ?? null : null,
     };
   }
 
-  // GNSS on a customer network needs V4.7 (DeviceTimeReq, no FPort 199 services)
+  // GNSS on a customer network needs V4.7+ (DeviceTimeReq, no FPort 199 services)
   function gnssAllowed(): boolean {
-    return Boolean(currentConfig) && !isOutdated(currentConfig!.version, '4.7');
+    if (!currentConfig) return false;
+    const cmp = compareStationVersion(currentConfig.version, '4.7');
+    return cmp === 'equal' || cmp === 'newer';
   }
 
   function populateDeviceView(cfg: Ws2001DeviceConfig) {
@@ -812,7 +836,8 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
       if (!hasOption) {
         const customOpt = document.createElement('option');
         customOpt.value = val;
-        customOpt.textContent = `${cfg.uploadInterval} minutes (current)`;
+        const fairUseNote = cfg.uploadInterval < 5 ? ' — exceeds TTN fair use' : '';
+        customOpt.textContent = `${cfg.uploadInterval} minutes (current${fairUseNote})`;
         intervalSelect.appendChild(customOpt);
       }
       intervalSelect.value = val;
@@ -908,7 +933,8 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
 
   // Refresh button handler
   $('btn-refresh').addEventListener('click', async () => {
-    if (!client || !client.isConnected) return;
+    if (!client || !client.isConnected || operationInFlight) return;
+    operationInFlight = true;
     const btnRefresh = $<HTMLButtonElement>('btn-refresh');
     const iconRefresh = $('icon-refresh');
     const labelRefresh = $('label-refresh');
@@ -925,6 +951,7 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
     } catch (err) {
       addLog(`Failed to refresh station info: ${(err as Error).message}`, 'WARN');
     } finally {
+      operationInFlight = false;
       btnRefresh.disabled = false;
       iconRefresh.classList.remove('animate-spin');
       labelRefresh.textContent = 'Refresh';
@@ -938,6 +965,7 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
       await client.disconnect();
       client = null;
     }
+    currentConfig = null;
     $('view-device').classList.add('hidden');
     $('view-connect').classList.remove('hidden');
     $('connect-steps').classList.remove('hidden');
@@ -1012,7 +1040,7 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
 
   // Apply button clicked -> validate and show confirmation modal
   btnApply.addEventListener('click', () => {
-    if (!client || !client.isConnected) {
+    if (!client || !client.isConnected || operationInFlight) {
       alert('Station is not connected.');
       return;
     }
@@ -1076,11 +1104,12 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
 
   // Final confirmation proceed -> execute migration
   btnConfirmProceed.addEventListener('click', async () => {
-    if (!pendingMigrationParams || !client || !client.isConnected) {
+    if (!pendingMigrationParams || !client || !client.isConnected || operationInFlight) {
       modalConfirm.classList.add('hidden');
       return;
     }
 
+    operationInFlight = true;
     modalConfirm.classList.add('hidden');
 
     // Begin progress view
@@ -1093,6 +1122,7 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
     pendingMigrationParams = null;
 
     const serialNum = currentConfig?.formattedDevEui || currentConfig?.deviceEui;
+    const fwVer = currentConfig?.version;
     const switchDetails = {
       ...networkSwitchDetails(currentConfig),
       band: params.band,
@@ -1106,7 +1136,7 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
       serial_number: serialNum,
       action: 'network_switch_started',
       firmware_target: 'open_lorawan',
-      firmware_source: currentConfig?.version,
+      firmware_source: fwVer,
       status: 'in_progress',
       details: switchDetails,
     });
@@ -1134,6 +1164,8 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
         $('btn-ttn-export-success').classList.add('hidden');
       }
 
+      currentConfig = null;
+      client = null;
       progressBar.style.width = '100%';
       $('view-progress').classList.add('hidden');
       $('view-success').classList.remove('hidden');
@@ -1143,15 +1175,22 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
         serial_number: serialNum,
         action: 'network_switch_completed',
         firmware_target: 'open_lorawan',
-        firmware_source: currentConfig?.version,
+        firmware_source: fwVer,
         status: 'success',
         details: switchDetails,
       });
     } catch (err) {
-      addLog(`Configuration failed: ${(err as Error).message}`, 'ERROR');
+      const safeErr = redactTelemetryString((err as Error).message);
+      addLog(`Configuration failed: ${safeErr}`, 'ERROR');
+      if (client?.isConnected) {
+        const refreshed = await client.readFullConfig().catch(() => null);
+        if (refreshed) populateDeviceView(refreshed);
+      } else {
+        currentConfig = null;
+      }
       $('view-progress').classList.add('hidden');
       $('view-device').classList.remove('hidden');
-      formError.textContent = (err as Error).message;
+      formError.textContent = safeErr;
       formError.classList.remove('hidden');
 
       trackTelemetry({
@@ -1159,10 +1198,12 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
         serial_number: serialNum,
         action: 'network_switch_failed',
         firmware_target: 'open_lorawan',
-        firmware_source: currentConfig?.version,
+        firmware_source: fwVer,
         status: 'failed',
-        details: { ...switchDetails, error: (err as Error).message },
+        details: { ...switchDetails, error: safeErr },
       });
+    } finally {
+      operationInFlight = false;
     }
   });
 
@@ -1196,7 +1237,7 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
     $('dfu-name-hint').classList.toggle('hidden', !which.includes('pick'));
   }
   function dfuFailed(err: unknown, canResume: boolean) {
-    const msg = (err as Error).message;
+    const msg = redactTelemetryString((err as Error).message);
     addLog(`Firmware update failed: ${msg}`, 'ERROR');
     setDfu(msg, 0, 'Firmware update failed');
     $('dfu-detail').textContent = canResume
@@ -1209,7 +1250,10 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
   }
 
   async function runFirmwareUpdate(trigger: 'auto' | 'manual') {
-    if (!client || !client.gattServer || !latest || !currentConfig) return;
+    if (!client || !client.gattServer || !latest || !currentConfig || operationInFlight) return;
+    const cmp = compareStationVersion(currentConfig.version, latest.version);
+    if (cmp !== 'older' && cmp !== 'equal') return;
+    operationInFlight = true;
     dfuRelease = latest;
     dfuFrom = currentConfig.version;
     dfuSerial = currentConfig.formattedDevEui || currentConfig.deviceEui;
@@ -1224,6 +1268,7 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
       dfuPackage = await downloadWs2001Release(dfuRelease);
       addLog(`${dfuRelease.label} verified: signed for the WS2001 bootloader (${dfuPackage.firmware.length} bytes).`);
     } catch (e) {
+      operationInFlight = false;
       dfuFailed(e, false);
       return;
     }
@@ -1231,11 +1276,15 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
       dfuName = makeBootloaderName();
       setDfu('Restarting the station into update mode...', 3);
       await enterBootloader(client.gattServer, dfuName, addLog);
+      currentConfig = null;
+      client = null;
       await new Promise((r) => setTimeout(r, 2500));
     } catch (e) {
+      operationInFlight = false;
       dfuFailed(e, false);
       return;
     }
+    operationInFlight = false;
     // Browsers need a click to connect to the bootloader, which is a new Bluetooth device.
     setDfu(`The station is in update mode. Click Continue and pick "${dfuName}" in the Bluetooth list.`, 5);
     $('btn-dfu-pick').textContent = `Continue: select "${dfuName}"`;
@@ -1243,9 +1292,10 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
   }
 
   $('btn-fw-update').addEventListener('click', () => {
-    if (!latest || !currentConfig) return;
-    const outdated = isOutdated(currentConfig.version, latest.version);
-    const question = outdated
+    if (!latest || !currentConfig || operationInFlight) return;
+    const cmp = compareStationVersion(currentConfig.version, latest.version);
+    if (cmp !== 'older' && cmp !== 'equal') return;
+    const question = cmp === 'older'
       ? `Update this station from ${currentConfig.version} to ${latest.label}? It takes about a minute; settings and keys are kept.`
       : `Reinstall ${latest.label} on this station? It takes about a minute; settings and keys are kept.`;
     if (confirm(question)) void runFirmwareUpdate('manual');
@@ -1315,22 +1365,26 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
 
   // Switch back to WeatherXM (firmware V4.5+)
   $('btn-switchback').addEventListener('click', async () => {
-    if (!client || !client.isConnected || !currentConfig?.netProfile) return;
+    if (!client || !client.isConnected || !currentConfig?.netProfile || currentConfig.netProfile.active !== 1 || !currentConfig.netProfile.weatherxmStored || operationInFlight) return;
     if (!confirm('Switch this station back to its WeatherXM network settings? Your network settings stay stored on the station. If it does not rejoin the WeatherXM network, contact WeatherXM support.')) return;
+    operationInFlight = true;
     const btn = $<HTMLButtonElement>('btn-switchback');
     btn.disabled = true;
     $('view-device').classList.add('hidden');
     $('view-progress').classList.remove('hidden');
     const serialNum = currentConfig.formattedDevEui || currentConfig.deviceEui;
+    const fwVer = currentConfig.version;
     const backDetails = networkSwitchDetails(currentConfig);
     trackTelemetry({ device_type: 'ws2001', serial_number: serialNum, action: 'network_switch_started', firmware_target: 'weatherxm',
-      firmware_source: currentConfig.version, status: 'in_progress', details: backDetails });
+      firmware_source: fwVer, status: 'in_progress', details: backDetails });
     try {
       await client.switchBackToWeatherXm((stepDesc, current, total) => {
         $('progress-step-text').textContent = stepDesc;
         $('progress-bar').style.width = `${Math.round((current / total) * 100)}%`;
         addLog(`[${current}/${total}] ${stepDesc}`, 'RESP');
       });
+      currentConfig = null;
+      client = null;
       $('view-progress').classList.add('hidden');
       $('success-title').textContent = 'Back on the WeatherXM network!';
       $('success-sub').textContent = 'The station restarted with its WeatherXM network settings. If it does not rejoin the WeatherXM network, contact WeatherXM support.';
@@ -1338,22 +1392,31 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
       $('btn-ttn-export-success').classList.add('hidden');
       $('view-success').classList.remove('hidden');
       trackTelemetry({ device_type: 'ws2001', serial_number: serialNum, action: 'network_switch_completed', firmware_target: 'weatherxm',
-        firmware_source: currentConfig.version, status: 'success', details: backDetails });
+        firmware_source: fwVer, status: 'success', details: backDetails });
     } catch (err) {
-      addLog(`Switch back failed: ${(err as Error).message}`, 'ERROR');
+      const safeErr = redactTelemetryString((err as Error).message);
+      addLog(`Switch back failed: ${safeErr}`, 'ERROR');
+      if (client?.isConnected) {
+        const refreshed = await client.readFullConfig().catch(() => null);
+        if (refreshed) populateDeviceView(refreshed);
+      } else {
+        currentConfig = null;
+      }
       trackTelemetry({ device_type: 'ws2001', serial_number: serialNum, action: 'network_switch_failed', firmware_target: 'weatherxm',
-        firmware_source: currentConfig.version, status: 'failed', details: { ...backDetails, error: (err as Error).message } });
+        firmware_source: fwVer, status: 'failed', details: { ...backDetails, error: safeErr } });
       $('view-progress').classList.add('hidden');
       $('view-device').classList.remove('hidden');
-      formError.textContent = (err as Error).message;
+      formError.textContent = safeErr;
       formError.classList.remove('hidden');
     } finally {
+      operationInFlight = false;
       btn.disabled = false;
     }
   });
 
   // Done button
   $('btn-done').addEventListener('click', () => {
+    currentConfig = null;
     $('view-success').classList.add('hidden');
     $('view-connect').classList.remove('hidden');
     $('connect-steps').classList.remove('hidden');

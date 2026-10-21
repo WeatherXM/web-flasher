@@ -60,6 +60,7 @@ export interface Ws2001InitPacket {
   sdReq: number[];
   fwType: number;
   appSize: number;
+  hashType: number;
   hash: Uint8Array; // little-endian SHA-256 of the image
 }
 
@@ -74,6 +75,7 @@ function readVarint(b: Uint8Array, pos: number): [number, number] {
   let shift = 0;
   for (;;) {
     if (pos >= b.length) throw new DfuError('Truncated init packet');
+    if (shift > 63) throw new DfuError('Malformed varint in init packet');
     const byte = b[pos++];
     result += (byte & 0x7f) * 2 ** shift;
     if (!(byte & 0x80)) return [result, pos];
@@ -89,15 +91,18 @@ function parseFields(b: Uint8Array): Map<number, Array<number | Uint8Array>> {
     [key, pos] = readVarint(b, pos);
     const num = Math.floor(key / 8);
     const wtype = key & 7;
+    if (num <= 0) throw new DfuError('Invalid protobuf field number in init packet');
     let val: number | Uint8Array;
     if (wtype === 0) {
       [val, pos] = readVarint(b, pos);
     } else if (wtype === 2) {
       let len: number;
       [len, pos] = readVarint(b, pos);
+      if (len < 0 || pos + len > b.length) throw new DfuError('Truncated length-delimited field in init packet');
       val = b.subarray(pos, pos + len);
       pos += len;
     } else if (wtype === 5) {
+      if (pos + 4 > b.length) throw new DfuError('Truncated 32-bit field in init packet');
       val = new DataView(b.buffer, b.byteOffset + pos, 4).getUint32(0, true);
       pos += 4;
     } else {
@@ -145,6 +150,7 @@ export function decodeInitPacket(raw: Uint8Array): Ws2001InitPacket {
     sdReq,
     fwType: firstNum(init, 4) ?? 0,
     appSize: firstNum(init, 7) ?? 0,
+    hashType: firstNum(hashFields, 1) ?? 0,
     hash: firstBytes(hashFields, 2),
   };
 }
@@ -178,20 +184,32 @@ export async function parseWs2001DfuPackage(zip: Uint8Array): Promise<Ws2001DfuP
     throw new DfuError('Firmware package is not a valid ZIP file');
   }
   if (!entries['manifest.json']) throw new DfuError('Firmware package has no manifest.json');
-  const manifest = JSON.parse(strFromU8(entries['manifest.json'])).manifest ?? {};
+  let parsedManifest: { manifest?: Record<string, { bin_file?: unknown; dat_file?: unknown }> };
+  try {
+    parsedManifest = JSON.parse(strFromU8(entries['manifest.json']));
+  } catch {
+    throw new DfuError('Firmware package manifest.json is not valid JSON');
+  }
+  const manifest = parsedManifest?.manifest ?? {};
   const app = manifest.application;
-  if (!app || Object.keys(manifest).length !== 1) {
+  if (!app || Object.keys(manifest).length !== 1 || typeof app.bin_file !== 'string' || typeof app.dat_file !== 'string') {
     throw new DfuError('Only application-only packages can be installed over Bluetooth');
   }
   const firmware = entries[app.bin_file];
   const init = entries[app.dat_file];
-  if (!firmware || !init) throw new DfuError('Firmware package is missing its image or init packet');
+  if (!firmware || !init || firmware.length === 0) throw new DfuError('Firmware package is missing its image or init packet');
   const initPacket = decodeInitPacket(init);
+  if (initPacket.fwType !== 0) {
+    throw new DfuError(`Package firmware type is ${initPacket.fwType}, not APPLICATION (0)`);
+  }
   if (initPacket.hwVersion !== 52) throw new DfuError(`Package is for hardware ${initPacket.hwVersion}, not the WS2001 (52)`);
   if (!initPacket.sdReq.includes(0x0100)) throw new DfuError('Package does not target the WS2001 SoftDevice (S140 7.2.0)');
-  if (initPacket.appSize && initPacket.appSize !== firmware.length) throw new DfuError('Package image size mismatch');
+  if (initPacket.appSize !== firmware.length) throw new DfuError('Package image size mismatch');
+  if (initPacket.hashType !== 3 || initPacket.hash.length !== 32) {
+    throw new DfuError('Package init packet is missing a valid SHA-256 image hash');
+  }
   const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', bs(firmware))).reverse();
-  if (initPacket.hash.length && !initPacket.hash.every((b, i) => b === digest[i])) {
+  if (!initPacket.hash.every((b, i) => b === digest[i])) {
     throw new DfuError('Package image hash does not match its init packet');
   }
   if (!(await verifyInitSignature(initPacket))) {
@@ -275,6 +293,7 @@ export interface DfuProgress {
 export class SecureDfuTransfer {
   private queue: Uint8Array[] = [];
   private wake: (() => void) | null = null;
+  private disconnected = false;
   chunk = 244;
   pace = 0; // ms between packets; raised after CRC failures (host dropped packets)
 
@@ -294,6 +313,10 @@ export class SecureDfuTransfer {
   }
 
   async start(): Promise<void> {
+    this.ctrl.service?.device?.addEventListener('gattserverdisconnected', () => {
+      this.disconnected = true;
+      this.wake?.();
+    });
     this.ctrl.addEventListener('characteristicvaluechanged', (ev) => {
       const v = (ev.target as BluetoothRemoteGATTCharacteristic).value;
       if (v) this.queue.push(new Uint8Array(v.buffer.slice(v.byteOffset, v.byteOffset + v.byteLength)));
@@ -304,13 +327,14 @@ export class SecureDfuTransfer {
   }
 
   private async request(payload: Uint8Array, timeoutMs = 10000): Promise<DataView> {
+    if (this.disconnected) throw new DfuError('Bootloader disconnected during update');
     this.queue.length = 0;
     for (let attempt = 1; ; attempt++) {
       try {
         await this.ctrl.writeValueWithResponse(bs(payload));
         break;
       } catch (e) {
-        if (attempt >= 3) throw e;
+        if (this.disconnected || attempt >= 3) throw e;
         this.log(`Control write 0x${payload[0].toString(16)} failed (${(e as Error).message}); retrying`, 'WARN');
         await sleep(300 * attempt);
       }
@@ -325,6 +349,7 @@ export class SecureDfuTransfer {
         if (r[2] === 0x0b && r.length > 3) msg = EXT_ERROR[r[3]] ?? `extended error 0x${r[3].toString(16)}`;
         throw new DfuError(`Update rejected: ${msg}`);
       }
+      if (this.disconnected) throw new DfuError('Bootloader disconnected during update');
       await new Promise<void>((res) => { this.wake = res; setTimeout(res, 200); });
     }
     throw new DfuError(`No response from the bootloader (opcode 0x${payload[0].toString(16)})`);
@@ -381,6 +406,7 @@ export class SecureDfuTransfer {
 
   async sendFirmware(fw: Uint8Array): Promise<void> {
     const sel = await this.select(OBJ_DATA);
+    if (!sel.maxSize || sel.maxSize <= 0) throw new DfuError('Bootloader reported an invalid object size (0)');
     let start = 0;
     if (sel.offset > 0 && sel.offset <= fw.length && sel.crc === crc32(fw.subarray(0, sel.offset))) {
       start = sel.offset - (sel.offset % sel.maxSize);

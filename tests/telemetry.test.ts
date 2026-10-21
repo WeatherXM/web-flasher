@@ -200,4 +200,96 @@ describe('Cloudflare worker API', () => {
     const wrong = new Request(url, { headers: { Authorization: 'Bearer nope' } });
     expect((await worker.fetch(wrong, { DB: {} as any, STATS_TOKEN: 's3cret' })).status).toBe(401);
   });
+
+  it('redacts AT+APPKEY and strips secret key fields in client and worker telemetry', async () => {
+    resetSchemaCache();
+    const fakeKey = Array(16).fill('11').join(':');
+    let sentBody = '';
+    globalThis.fetch = vi.fn().mockImplementation(async (_url, init) => {
+      sentBody = String(init?.body ?? '');
+      return new Response(JSON.stringify({ ok: true }));
+    });
+
+    trackTelemetry({
+      device_type: 'ws2001',
+      serial_number: '2C:F7:F1:11:22:33:44:55',
+      action: 'network_switch_failed',
+      status: 'failed',
+      details: {
+        error: `AT command timed out: AT+APPKEY=${fakeKey}`,
+        appKey: fakeKey,
+      },
+    });
+
+    expect(sentBody).not.toContain(fakeKey);
+    expect(sentBody).toContain('AT+APPKEY=<redacted>');
+
+    let boundArgs: unknown[] = [];
+    const mockDb: any = {
+      prepare: (sql: string) => ({
+        bind: (...args: unknown[]) => {
+          if (sql.includes('INSERT INTO')) boundArgs = args;
+          return { run: async () => ({ success: true }) };
+        },
+        run: async () => ({ success: true }),
+      }),
+    };
+
+    const res = await worker.fetch(
+      new Request('https://flasher.weatherxm.com/api/telemetry', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          device_type: 'ws2001',
+          serial_number: '2C:F7:F1:11:22:33:44:55',
+          action: 'network_switch_failed',
+          status: 'failed',
+          details: {
+            error: `AT command timed out: AT+APPKEY=${fakeKey}`,
+            appKey: fakeKey,
+          },
+        }),
+      }),
+      { DB: mockDb }
+    );
+    expect(res.status).toBe(200);
+    expect(JSON.stringify(boundArgs)).not.toContain(fakeKey);
+    expect(JSON.stringify(boundArgs)).toContain('AT+APPKEY=<redacted>');
+  });
+
+  it('rejects oversized bodies and invalid device_type or status values', async () => {
+    const mockDb: any = {
+      prepare: () => ({
+        bind: () => ({ run: async () => ({ success: true }) }),
+        run: async () => ({ success: true }),
+      }),
+    };
+
+    const oversized = await worker.fetch(
+      new Request('https://flasher.weatherxm.com/api/telemetry', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          device_type: 'ws2001',
+          action: 'connected',
+          details: { pad: 'x'.repeat(20000) },
+        }),
+      }),
+      { DB: mockDb }
+    );
+    expect(oversized.status).toBe(413);
+
+    const badDevice = await worker.fetch(
+      new Request('https://flasher.weatherxm.com/api/telemetry', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          device_type: 'unknown_station',
+          action: 'connected',
+        }),
+      }),
+      { DB: mockDb }
+    );
+    expect(badDevice.status).toBe(400);
+  });
 });
