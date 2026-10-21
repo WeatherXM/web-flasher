@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { buildTtnEndDevice, ttnFrequencyPlan, ttnImportJson, ttnImportFileName } from '../../src/lib/ble/ws2001TtnExport';
+import { WS2001_UPLINK_DECODER } from '../../src/lib/ble/ws2001UplinkDecoder';
 
 const base = {
   devEui: '2C:F7:F1:C0:44:80:00:E6',
@@ -32,6 +33,23 @@ describe('WS2001 TTN import JSON', () => {
   it('rejects malformed keys and unsupported regions', () => {
     expect(() => buildTtnEndDevice({ ...base, appKey: '1234' })).toThrow(/AppKey/);
     expect(() => buildTtnEndDevice({ ...base, band: 10 })).toThrow(/frequency plan/);
+  });
+
+  it('attaches the WS2001 uplink decoder as the JavaScript uplink formatter', () => {
+    const d = JSON.parse(ttnImportJson(base));
+    expect(d.formatters.up_formatter).toBe('FORMATTER_JAVASCRIPT');
+    expect(d.formatters.up_formatter_parameter).toBe(WS2001_UPLINK_DECODER);
+
+    // The formatter survives the JSON round trip and decodes a 24-byte weather frame on FPort 99.
+    const decodeUplink = new Function(`${d.formatters.up_formatter_parameter}; return decodeUplink;`)();
+    const frame = new Array(24).fill(0);
+    frame[0] = 0xf0;
+    frame[1] = 0x49; // V4.9
+    frame[5] = 235 & 0xff; frame[6] = 235 >> 8; // 23.5 C
+    const { data } = decodeUplink({ bytes: frame, fPort: 99 });
+    expect(data.frame).toBe('weather');
+    expect(data.firmware_version).toBe('4.9');
+    expect(data.temperature).toBe(23.5);
   });
 
   it('produces a single JSON object and a per-station file name', () => {
