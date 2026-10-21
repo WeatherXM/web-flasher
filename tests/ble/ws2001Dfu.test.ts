@@ -151,4 +151,39 @@ describe('Secure DFU transfer (Web Bluetooth)', () => {
     await expect(t.sendInit(pkg.init)).rejects.toThrow(DfuError);
     await expect(t.sendInit(pkg.init)).rejects.toThrow(/newer firmware/);
   });
+
+  it('waits for settings flash erases after init OP_EXECUTE so offset 0 never overflows the 16-slot fstorage queue', async () => {
+    const pkg = await pkgPromise;
+    const bl = fakeBootloader();
+    let fstorageBusyUntil = 0;
+    let activeObjType = 0;
+    const origWriteCtrl = bl.ctrl.writeValueWithResponse;
+    bl.ctrl.writeValueWithResponse = async (d: Uint8Array) => {
+      if (d[0] === 0x01) activeObjType = d[1];
+      // Model nrf_dfu_settings_write_and_backup() queuing 2 page erases + 2 writes on init (OBJ_COMMAND) OP_EXECUTE
+      if (d[0] === 0x04 && activeObjType === 0x01) {
+        fstorageBusyUntil = Date.now() + 250;
+      }
+      // Model OP_CREATE(OBJ_DATA) queuing a 4 KB page erase
+      if (d[0] === 0x01 && d[1] === 0x02) {
+        fstorageBusyUntil = Math.max(fstorageBusyUntil, Date.now()) + 60;
+      }
+      return origWriteCtrl(d);
+    };
+    const origWritePkt = bl.pkt.writeValueWithoutResponse;
+    let droppedPackets = 0;
+    bl.pkt.writeValueWithoutResponse = async (d: Uint8Array) => {
+      if (bl.state().cmd.length === pkg.init.length && Date.now() < fstorageBusyUntil) {
+        droppedPackets++;
+        return; // simulate NRF_ERROR_NO_MEM silent packet drop when erase is still blocking m_fifo
+      }
+      return origWritePkt(d);
+    };
+    const t = new SecureDfuTransfer(bl.ctrl as never, bl.pkt as never, () => {});
+    await t.start();
+    await t.sendInit(pkg.init);
+    await t.sendFirmware(pkg.firmware.subarray(0, 8192));
+    expect(droppedPackets).toBe(0);
+    expect(bl.state().committed).toEqual(pkg.firmware.subarray(0, 8192));
+  });
 });
