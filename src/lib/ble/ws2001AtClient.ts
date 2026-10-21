@@ -133,10 +133,16 @@ export const NET_PROFILE_WEATHERXM = 0;
 export const NET_PROFILE_CUSTOM = 1;
 export const DEFAULT_UPLOAD_INTERVAL_MIN = 5; // custom networks: keeps a 24-byte SF7 uplink within TTN's 30 s/day fair use
 // The WeatherXM profile keeps its own 3-minute interval (per-profile in firmware V4.5+).
+export const MAX_AT_COMMAND_BYTES = 60; // firmware BLE UART rx buffer limit including CRLF
+
+/** True only when the buffer ends with a complete AT response line (`OK\r\n`, `AT_<ERR>\r\n`, or `ERROR\r\n`). */
+export function hasAtTerminator(buf: string): boolean {
+  return /(?:^|\r\n)(?:OK|AT_[A-Z0-9_]*ERROR|ERROR)\r\n/.test(buf);
+}
 
 /** Parse `{active: 1, weatherxm: 'stored', custom: 'empty'}`; null if the command is unsupported. */
 export function parseNetProfile(raw: string): NetProfileState | null {
-  const m = raw.match(/active\s*:\s*(\d)/i);
+  const m = raw.match(/active\s*:\s*([01])\b/i);
   if (!m || /AT_ERROR|AT_PARAM_ERROR/.test(raw)) return null;
   return {
     active: parseInt(m[1], 10),
@@ -309,6 +315,8 @@ export class Ws2001AtClient {
   private rxBuffer = '';
   private pendingResolver: ((text: string) => void) | null = null;
   private pendingRejecter: ((err: Error) => void) | null = null;
+  private commandChain: Promise<unknown> = Promise.resolve();
+  private commandInFlight = false;
 
   private readonly onNotificationBound = (ev: Event) => this.handleNotification(ev);
 
@@ -505,12 +513,8 @@ export class Ws2001AtClient {
     const chunk = new TextDecoder().decode(char.value);
     this.rxBuffer += chunk;
 
-    // Check for AT termination markers: "\r\nOK\r\n" or "\r\nAT_..._ERROR\r\n"
-    if (
-      this.rxBuffer.includes('OK\r\n') ||
-      this.rxBuffer.includes('ERROR\r\n') ||
-      this.rxBuffer.includes('AT_')
-    ) {
+    // Check for complete AT termination line: "\r\nOK\r\n" or "\r\nAT_..._ERROR\r\n"
+    if (hasAtTerminator(this.rxBuffer)) {
       if (this.pendingResolver) {
         const full = this.rxBuffer;
         this.rxBuffer = '';
@@ -524,8 +528,36 @@ export class Ws2001AtClient {
 
   /**
    * Send an AT command and await response from station.
+   * Commands are serialized over the single BLE UART characteristic and bounded to 60 bytes including CRLF.
    */
-  async sendCommand(cmd: string, timeoutMs = 4000): Promise<string> {
+  async sendCommand(cmd: string, timeoutMs = 5000): Promise<string> {
+    if (!this.commandInFlight) {
+      this.commandInFlight = true;
+      const p = this.sendCommandInternal(cmd, timeoutMs).finally(() => {
+        this.commandInFlight = false;
+      });
+      this.commandChain = p.then(() => undefined, () => undefined);
+      return p;
+    }
+    const next = this.commandChain.then(
+      () => {
+        this.commandInFlight = true;
+        return this.sendCommandInternal(cmd, timeoutMs).finally(() => {
+          this.commandInFlight = false;
+        });
+      },
+      () => {
+        this.commandInFlight = true;
+        return this.sendCommandInternal(cmd, timeoutMs).finally(() => {
+          this.commandInFlight = false;
+        });
+      },
+    );
+    this.commandChain = next.then(() => undefined, () => undefined);
+    return next;
+  }
+
+  private async sendCommandInternal(cmd: string, timeoutMs = 5000): Promise<string> {
     if (!this.isConnected || !this.rxChar) {
       throw new Error('Station is not connected over Bluetooth.');
     }
@@ -533,21 +565,27 @@ export class Ws2001AtClient {
     const rxChar = this.rxChar;
     const trimmed = cmd.trim();
     const commandPayload = trimmed + '\r\n';
+    const bytes = new TextEncoder().encode(commandPayload);
+    if (bytes.length > MAX_AT_COMMAND_BYTES) {
+      throw new Error(`AT command is ${bytes.length} bytes; station buffer allows at most ${MAX_AT_COMMAND_BYTES} bytes.`);
+    }
     this.log(`> ${redactAtLog(trimmed)}`, 'CMD');
 
     this.rxBuffer = '';
 
     return new Promise<string>((resolve, reject) => {
       const timer = setTimeout(() => {
-        const partial = this.rxBuffer;
+        const hadPartial = this.rxBuffer.trim().length > 0;
         this.rxBuffer = '';
         this.pendingResolver = null;
         this.pendingRejecter = null;
-        if (partial.trim().length > 0) {
-          resolve(partial);
-        } else {
-          reject(new Error(`Command timed out after ${timeoutMs}ms: "${trimmed}"`));
-        }
+        reject(
+          new Error(
+            hadPartial
+              ? `Incomplete response before ${timeoutMs}ms timeout: "${redactAtLog(trimmed)}"`
+              : `Command timed out after ${timeoutMs}ms: "${redactAtLog(trimmed)}"`
+          )
+        );
       }, timeoutMs);
 
       this.pendingResolver = (res: string) => {
@@ -561,7 +599,6 @@ export class Ws2001AtClient {
         reject(err);
       };
 
-      const bytes = new TextEncoder().encode(commandPayload);
       const writePromise = rxChar.properties.writeWithoutResponse
         ? rxChar.writeValueWithoutResponse(bytes)
         : rxChar.writeValueWithResponse(bytes);
@@ -591,7 +628,7 @@ export class Ws2001AtClient {
     for (let attempt = 1; attempt <= 2; attempt++) {
       try {
         const modeResp = await this.sendCommand('AT+TESTMODE_TYPE=?', 3000);
-        const match = modeResp.match(/(\d+)/);
+        const match = modeResp.match(/^\s*([01])\s*(?:\r?\n|$)/m);
         if (match) {
           testMode = parseInt(match[1], 10);
           break;
@@ -606,20 +643,39 @@ export class Ws2001AtClient {
     }
 
     let netProfile: NetProfileState | null = null;
-    try {
-      this.log('Reading network profile (AT+NETPROFILE=?)...', 'INFO');
-      netProfile = parseNetProfile(await this.sendCommand('AT+NETPROFILE=?', 3000));
-      if (!netProfile) {
-        this.log('Firmware has no network profiles (< V4.5): switching would overwrite the WeatherXM keys.', 'WARN');
+    let netProfileExplicitUnsupported = false;
+    this.log('Reading network profile (AT+NETPROFILE=?)...', 'INFO');
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        const rawProfile = await this.sendCommand('AT+NETPROFILE=?', 3000);
+        if (/AT_ERROR|AT_PARAM_ERROR/.test(rawProfile)) {
+          netProfileExplicitUnsupported = true;
+          this.log('Firmware has no network profiles (< V4.5): switching would overwrite the WeatherXM keys.', 'WARN');
+          break;
+        }
+        netProfile = parseNetProfile(rawProfile);
+        if (netProfile) break;
+      } catch (e) {
+        if (attempt >= 2) {
+          this.log(`Could not read network profile: ${(e as Error).message}`, 'WARN');
+        }
       }
-    } catch (e) {
-      this.log(`Could not read network profile: ${(e as Error).message}`, 'WARN');
+      if (attempt < 2) {
+        await new Promise((resolve) => setTimeout(resolve, 400));
+      }
+    }
+    const verMatch = (parsed.version ?? '').match(/(\d+)\.(\d+)/);
+    const supportsProfilesByVersion = verMatch
+      ? parseInt(verMatch[1], 10) > 4 || (parseInt(verMatch[1], 10) === 4 && parseInt(verMatch[2], 10) >= 5)
+      : false;
+    if (!netProfile && !netProfileExplicitUnsupported && supportsProfilesByVersion) {
+      throw new Error('Could not read network profile state from station (AT+NETPROFILE=?); please reconnect and try again.');
     }
 
     let lorawanStatus: string | null = null;
     try {
       const st = await this.sendCommand('AT+LW_MODEM_STATUS=?', 3000);
-      lorawanStatus = (st.match(/(JOINED|JOINING|MUTE|SUSPEND|STREAM|UPLOAD|ALC_SYNC|FILE)/) ?? [null])[0];
+      lorawanStatus = (st.match(/\b(JOINED|JOINING|MUTE|SUSPEND|STREAM|UPLOAD|ALC_SYNC|FILE)\b/) ?? [null])[0];
     } catch {
       // optional
     }
@@ -627,7 +683,7 @@ export class Ws2001AtClient {
     let gnssSwitch: boolean | null = null;
     try {
       const g = await this.sendCommand('AT+GPSSWITCH=?', 3000);
-      const m = g.match(/^\s*([01])/m);
+      const m = g.match(/^\s*([01])\b/m);
       if (m) gnssSwitch = m[1] === '1';
     } catch {
       // optional
@@ -664,8 +720,8 @@ export class Ws2001AtClient {
 
   private async expectOk(cmd: string, what: string, timeoutMs?: number): Promise<string> {
     const resp = await this.sendCommand(cmd, timeoutMs);
-    if (resp.includes('ERROR') || !resp.includes('OK')) {
-      throw new Error(`Failed to ${what}: ${resp.trim()}`);
+    if (/(?:^|\r?\n)AT_[A-Z0-9_]*ERROR\r?\n/.test(resp) || !/(?:^|\r?\n)OK\r?\n/.test(resp)) {
+      throw new Error(`Failed to ${what}: ${redactAtLog(resp.trim())}`);
     }
     return resp;
   }
@@ -675,9 +731,9 @@ export class Ws2001AtClient {
     await this.expectOk('AT+TESTMODE_TYPE=0', 'select the WeatherXM payload format');
     await new Promise((resolve) => setTimeout(resolve, 400));
     const verify = await this.sendCommand('AT+TESTMODE_TYPE=?');
-    const m = verify.match(/(\d+)/);
+    const m = verify.match(/^\s*([01])\s*(?:\r?\n|$)/m);
     if (!m || m[1] !== '0') {
-      throw new Error(`Station did not keep the WeatherXM payload format (status: ${verify.trim()})`);
+      throw new Error(`Station did not keep the WeatherXM payload format (status: ${redactAtLog(verify.trim())})`);
     }
   }
 
@@ -686,9 +742,16 @@ export class Ws2001AtClient {
     await new Promise((resolve) => setTimeout(resolve, 1500));
     this.log('Rebooting station to apply settings and send a LoRaWAN Join-Request (ATZ)...', 'INFO');
     try {
-      await this.sendCommand('ATZ', 2000);
-    } catch {
-      // Station reboots immediately and drops BLE, which is expected
+      const resp = await this.sendCommand('ATZ', 2000);
+      if (/(?:^|\r?\n)AT_[A-Z0-9_]*ERROR\r?\n/.test(resp)) {
+        throw new Error(`Station rejected reboot command (ATZ): ${redactAtLog(resp.trim())}`);
+      }
+    } catch (err) {
+      // Station reboots after sending OK (or drops BLE link during reset); only ignore disconnect errors
+      const msg = (err as Error).message || '';
+      if (!/disconnected|GATT Server is disconnected/i.test(msg)) {
+        throw err;
+      }
     }
   }
 
@@ -735,17 +798,34 @@ export class Ws2001AtClient {
     onProgress?.('Setting AppKey...', step++, totalSteps);
     await this.expectOk(`AT+APPKEY=${formattedAppKey}`, 'set the AppKey');
 
-    const interval = Math.max(1, Math.min(params.intervalMinutes, 1440));
+    if (!Number.isFinite(params.intervalMinutes)) {
+      throw new Error('Upload interval must be a number between 1 and 1440 minutes.');
+    }
+    const interval = Math.max(1, Math.min(Math.round(params.intervalMinutes), 1440));
     onProgress?.(`Setting upload interval to ${interval} minutes...`, step++, totalSteps);
     await this.expectOk(`AT+INTERVAL=${interval}`, 'set the upload interval');
 
     // Before V4.7 this switch also turned on the LoRa Cloud services on FPort 199, so only V4.7+
     // stations get gnss = true from the page; everything else is switched off.
     onProgress?.(params.gnss ? 'Enabling GNSS location scans...' : 'GNSS location scans off...', step++, totalSteps);
-    await this.expectOk(`AT+GPSSWITCH=${params.gnss ? 1 : 0}`, 'set the GNSS switch');
+    if (params.gnss) {
+      await this.expectOk('AT+GPSSWITCH=1', 'set the GNSS switch');
+    } else {
+      const gpsResp = await this.sendCommand('AT+GPSSWITCH=0');
+      if (!gpsResp.includes('OK') && !/AT_ERROR|AT_PARAM_ERROR/.test(gpsResp)) {
+        throw new Error(`Failed to set the GNSS switch: ${gpsResp.trim()}`);
+      }
+    }
 
     onProgress?.('Keeping the WeatherXM 24-byte payload (FPort 99)...', step++, totalSteps);
     await this.setPayloadFormatWeatherXm();
+
+    if (options.useProfiles) {
+      const verified = parseNetProfile(await this.sendCommand('AT+NETPROFILE=?'));
+      if (!verified || verified.active !== NET_PROFILE_CUSTOM || !verified.customStored) {
+        throw new Error('Station did not confirm custom network profile activation; aborting before reboot.');
+      }
+    }
 
     onProgress?.('Committing settings and rebooting...', step, totalSteps);
     await this.rebootToJoin();
@@ -761,6 +841,10 @@ export class Ws2001AtClient {
     await this.expectOk(`AT+NETPROFILE=${NET_PROFILE_WEATHERXM}`, 'select the WeatherXM network profile');
     onProgress?.('Selecting the WeatherXM payload format...', 2, 3);
     await this.setPayloadFormatWeatherXm();
+    const verified = parseNetProfile(await this.sendCommand('AT+NETPROFILE=?'));
+    if (!verified || verified.active !== NET_PROFILE_WEATHERXM || !verified.weatherxmStored) {
+      throw new Error('Station did not confirm WeatherXM network profile activation; aborting before reboot.');
+    }
     onProgress?.('Rebooting to rejoin the WeatherXM network...', 3, 3);
     await this.rebootToJoin();
     this.log('Switched back to WeatherXM. The station is rebooting to rejoin.', 'INFO');

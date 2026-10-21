@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatHexWithColons, parseAtConfig, REGION_NAMES } from '../../src/lib/ble/ws2001AtClient';
+import { formatHexWithColons, hasAtTerminator, parseAtConfig, REGION_NAMES, Ws2001AtClient } from '../../src/lib/ble/ws2001AtClient';
 
 describe('Ws2001AtClient helpers', () => {
   it('formats hex strings with colons correctly for 8-byte DevEUI/JoinEUI', () => {
@@ -70,5 +70,91 @@ describe('Ws2001AtClient helpers', () => {
     expect(REGION_NAMES[8]).toBe('US915');
     expect(REGION_NAMES[1]).toBe('AU915');
     expect(REGION_NAMES[15]).toBe('AS923-1 (Standard TTN/ChirpStack)');
+  });
+});
+
+function makeMockClient() {
+  const client = new Ws2001AtClient() as any;
+  client.server = { connected: true };
+  client.rxChar = {
+    properties: { writeWithoutResponse: true },
+    writeValueWithoutResponse: async () => {},
+  };
+  client.txChar = {};
+  return client as Ws2001AtClient;
+}
+
+function notifyClient(client: any, text: string) {
+  const bytes = new TextEncoder().encode(text);
+  client.handleNotification({ target: { value: new DataView(bytes.buffer) } });
+}
+
+describe('Ws2001AtClient framing, serialization, and verification', () => {
+  it('requires complete CRLF-terminated status lines in hasAtTerminator', () => {
+    expect(hasAtTerminator('\r\nAT_')).toBe(false);
+    expect(hasAtTerminator('OK')).toBe(false);
+    expect(hasAtTerminator('\r\nOK\r\n')).toBe(true);
+    expect(hasAtTerminator('1\r\nOK\r\n')).toBe(true);
+    expect(hasAtTerminator('\r\nAT_PARAM_ERROR\r\n')).toBe(true);
+  });
+
+  it('waits for complete error line across BLE fragments', async () => {
+    const client = makeMockClient();
+    const pending = client.sendCommand('AT+NETPROFILE=1', 200);
+    notifyClient(client, '\r\nAT_');
+    setTimeout(() => notifyClient(client, 'PARAM_ERROR\r\n'), 10);
+    expect(await pending).toBe('\r\nAT_PARAM_ERROR\r\n');
+  });
+
+  it('rejects incomplete responses on timeout and redacts AppKey in error message', async () => {
+    const client = makeMockClient();
+    const fakeKey = Array(16).fill('11').join(':');
+    const pending = client.sendCommand(`AT+APPKEY=${fakeKey}`, 30);
+    notifyClient(client, 'OK'); // missing CRLF
+    await expect(pending).rejects.toThrow(/AT\+APPKEY=<hidden>/);
+  });
+
+  it('serializes overlapping sendCommand calls in order', async () => {
+    const client = makeMockClient() as any;
+    const written: string[] = [];
+    client.rxChar.writeValueWithoutResponse = async (bytes: Uint8Array) => {
+      const cmd = new TextDecoder().decode(bytes).trim();
+      written.push(cmd);
+      setTimeout(() => {
+        if (cmd === 'AT+NETPROFILE=?') notifyClient(client, '1\r\nOK\r\n');
+        else if (cmd === 'AT+GPSSWITCH=?') notifyClient(client, '0\r\nOK\r\n');
+      }, 10);
+    };
+
+    const [first, second] = await Promise.all([
+      client.sendCommand('AT+NETPROFILE=?', 200),
+      client.sendCommand('AT+GPSSWITCH=?', 200),
+    ]);
+    expect(written).toEqual(['AT+NETPROFILE=?', 'AT+GPSSWITCH=?']);
+    expect(first).toBe('1\r\nOK\r\n');
+    expect(second).toBe('0\r\nOK\r\n');
+  });
+
+  it('verifies AT+NETPROFILE=? readback and requires confirmed reboot in configureOpenLoRaWan', async () => {
+    const client = new Ws2001AtClient();
+    const commands: string[] = [];
+    client.sendCommand = async (command: string) => {
+      commands.push(command.split('=')[0]);
+      if (command === 'AT+TESTMODE_TYPE=?') return '0\r\nOK\r\n';
+      if (command === 'AT+NETPROFILE=?') return "{active: 1, weatherxm: 'stored', custom: 'stored'}\r\nOK\r\n";
+      if (command === 'ATZ') throw new Error('simulated timeout, reboot not confirmed');
+      return '\r\nOK\r\n';
+    };
+
+    await expect(
+      client.configureOpenLoRaWan({
+        band: 5,
+        joinEui: '0000000000000001',
+        appKey: '11'.repeat(16),
+        intervalMinutes: 5,
+        gnss: false,
+      })
+    ).rejects.toThrow(/simulated timeout/);
+    expect(commands.filter((c) => c === 'AT+NETPROFILE')).toEqual(['AT+NETPROFILE', 'AT+NETPROFILE']);
   });
 });

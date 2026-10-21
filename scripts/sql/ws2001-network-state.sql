@@ -15,7 +15,7 @@
 
 -- 1. Current network of every station that was ever switched with the flasher (last successful switch wins).
 SELECT
-  e.serial_number                               AS dev_eui,
+  COALESCE(NULLIF(e.serial_number, ''), json_extract(e.details, '$.bleName')) AS dev_eui,
   e.network,                                    -- 'open_lorawan' -> unprovision, 'weatherxm' -> provision
   e.created_at       AS switched_at,
   e.keys_kept,                                  -- 0: WeatherXM keys were overwritten (pre-V4.5)
@@ -25,22 +25,25 @@ FROM flasher_events_v2 e
 WHERE e.device_type = 'ws2001'
   AND e.action = 'network_switch_completed'
   AND e.status = 'success'
+  AND COALESCE(NULLIF(e.serial_number, ''), json_extract(e.details, '$.bleName')) IS NOT NULL
   AND e.id = (
     SELECT max(x.id) FROM flasher_events_v2 x
     WHERE x.device_type = 'ws2001' AND x.action = 'network_switch_completed' AND x.status = 'success'
-      AND x.serial_number = e.serial_number
+      AND COALESCE(NULLIF(x.serial_number, ''), json_extract(x.details, '$.bleName')) =
+          COALESCE(NULLIF(e.serial_number, ''), json_extract(e.details, '$.bleName'))
   )
 ORDER BY e.created_at DESC;
 
 -- 2. Stations whose last switch was to their own network but that later connected to the flasher with the
 --    WeatherXM profile active again (factory reset or AT+RESTORE, which log no switch event). Provision these again.
 SELECT
-  s.serial_number AS dev_eui,
+  COALESCE(NULLIF(s.serial_number, ''), json_extract(s.details, '$.bleName')) AS dev_eui,
   s.created_at    AS switched_to_open_at,
   c.created_at    AS seen_on_weatherxm_at
 FROM flasher_events_v2 s
 JOIN flasher_events_v2 c
-  ON c.serial_number = s.serial_number
+  ON COALESCE(NULLIF(c.serial_number, ''), json_extract(c.details, '$.bleName')) =
+     COALESCE(NULLIF(s.serial_number, ''), json_extract(s.details, '$.bleName'))
  AND c.device_type = 'ws2001'
  AND c.action = 'connected'
  AND c.id > s.id
@@ -49,9 +52,11 @@ WHERE s.device_type = 'ws2001'
   AND s.action = 'network_switch_completed'
   AND s.status = 'success'
   AND s.network = 'open_lorawan'
+  AND COALESCE(NULLIF(s.serial_number, ''), json_extract(s.details, '$.bleName')) IS NOT NULL
   AND s.id = (
     SELECT max(x.id) FROM flasher_events_v2 x
     WHERE x.device_type = 'ws2001' AND x.action = 'network_switch_completed' AND x.status = 'success'
-      AND x.serial_number = s.serial_number
+      AND COALESCE(NULLIF(x.serial_number, ''), json_extract(x.details, '$.bleName')) =
+          COALESCE(NULLIF(s.serial_number, ''), json_extract(s.details, '$.bleName'))
   )
-GROUP BY s.serial_number;
+GROUP BY COALESCE(NULLIF(s.serial_number, ''), json_extract(s.details, '$.bleName'));

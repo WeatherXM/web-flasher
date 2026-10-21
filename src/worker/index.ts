@@ -91,11 +91,44 @@ export function resetSchemaCache(): void {
 // so events from different pages and firmware versions group by device.
 export function normalizeSerial(deviceType: string, serial?: string | null): string | null {
   if (!serial) return null;
+  const trimmed = String(serial).trim().slice(0, 64);
+  if (!trimmed || trimmed === 'Unknown') return null;
   if (deviceType === 'ws2001') {
-    const hex = serial.replace(/[^0-9a-fA-F]/g, '').toUpperCase();
-    return hex.length === 16 ? hex : serial;
+    const hex = trimmed.replace(/[^0-9a-fA-F]/g, '').toUpperCase();
+    return hex.length === 16 ? hex : trimmed;
   }
-  return serial;
+  return trimmed;
+}
+
+const FORBIDDEN_DETAIL_KEYS = new Set(['appkey', 'appskey', 'nwkskey', 'devkey']);
+const ALLOWED_DEVICE_TYPES = new Set(['wg1200', 'ws1300', 'ws2001']);
+const ALLOWED_STATUSES = new Set(['success', 'failed', 'in_progress']);
+const MAX_TELEMETRY_BODY_BYTES = 16384;
+
+function redactSecrets(value: string): string {
+  return value
+    .replace(/(AT\+(?:APPKEY|APPSKEY|NWKSKEY|DEVKEY)=)[^\s"']+/gi, '$1<redacted>')
+    .replace(/(?:[0-9a-fA-F]{2}:){15}[0-9a-fA-F]{2}/g, '<redacted-key>')
+    .replace(/\b[0-9a-fA-F]{32}\b/g, '<redacted-key>');
+}
+
+function sanitizeDetails(raw: unknown): Record<string, any> {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  const out: Record<string, any> = {};
+  for (const [k, v] of Object.entries(raw as Record<string, any>)) {
+    if (FORBIDDEN_DETAIL_KEYS.has(k.toLowerCase())) continue;
+    if (typeof v === 'string') {
+      out[k] = redactSecrets(v).slice(0, 512);
+    } else if (typeof v === 'number' || typeof v === 'boolean' || v === null) {
+      out[k] = v;
+    }
+  }
+  return out;
+}
+
+function capString(v: unknown, maxLen = 128): string | null {
+  if (typeof v !== 'string' || !v) return null;
+  return redactSecrets(v).slice(0, maxLen);
 }
 
 function jsonResponse(data: any, status = 200) {
@@ -188,18 +221,26 @@ export default {
     // Telemetry event ingestion
     if (url.pathname === '/api/telemetry' && request.method === 'POST') {
       try {
-        const body = (await request.json()) as TelemetryEvent;
+        const rawText = await request.text();
+        if (rawText.length > MAX_TELEMETRY_BODY_BYTES) {
+          return jsonResponse({ error: 'Payload too large' }, 413);
+        }
+        const body = JSON.parse(rawText) as TelemetryEvent;
 
         if (!body.device_type || !body.action || !body.status) {
           return jsonResponse({ error: 'Missing required fields: device_type, action, status' }, 400);
         }
+        if (!ALLOWED_DEVICE_TYPES.has(body.device_type) || !ALLOWED_STATUSES.has(body.status)) {
+          return jsonResponse({ error: 'Invalid device_type or status' }, 400);
+        }
 
         const country = (request as any).cf?.country || request.headers.get('cf-ipcountry') || null;
-        const userAgent = request.headers.get('user-agent') || null;
-        const details: Record<string, any> =
-          body.details && typeof body.details === 'object' ? body.details : {};
+        const userAgent = capString(request.headers.get('user-agent'), 256);
+        const details = sanitizeDetails(body.details);
         const detailsStr =
-          typeof body.details === 'object' ? JSON.stringify(body.details) : body.details || null;
+          typeof body.details === 'object' && body.details !== null
+            ? JSON.stringify(details)
+            : capString(body.details, 1024);
         const isNetworkSwitch = body.action.startsWith('network_switch_');
         const keysKept = typeof details.keysKept === 'boolean' ? (details.keysKept ? 1 : 0) : null;
 
@@ -214,18 +255,18 @@ export default {
             .bind(
               body.device_type,
               normalizeSerial(body.device_type, body.serial_number),
-              body.action,
-              body.firmware_target || null,
-              body.firmware_source || null,
+              capString(body.action, 64),
+              capString(body.firmware_target, 64),
+              capString(body.firmware_source, 64),
               body.status,
-              isNetworkSwitch ? body.firmware_target || null : null,
-              typeof details.fromNetwork === 'string' ? details.fromNetwork : null,
+              isNetworkSwitch ? capString(body.firmware_target, 64) : null,
+              capString(details.fromNetwork, 64),
               keysKept,
-              typeof details.wxmJoinEui === 'string' ? details.wxmJoinEui : null,
-              typeof details.firmwareVersion === 'string' ? details.firmwareVersion : body.firmware_source || null,
+              capString(details.wxmJoinEui, 64),
+              capString(details.firmwareVersion, 64) ?? capString(body.firmware_source, 64),
               detailsStr,
               userAgent,
-              country
+              capString(country, 16)
             )
             .run();
         }

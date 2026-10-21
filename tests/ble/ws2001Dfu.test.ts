@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { zipSync, unzipSync } from 'fflate';
 import { parseWs2001DfuPackage, SecureDfuTransfer, crc32, DfuError } from '../../src/lib/ble/ws2001Dfu';
-import { isOutdated, parseStationVersion, validateWs2001Manifest } from '../../src/lib/ble/ws2001Firmware';
+import { compareStationVersion, isOutdated, parseStationVersion, validateWs2001Manifest } from '../../src/lib/ble/ws2001Firmware';
 
 const FW_DIR = path.join(__dirname, '../../public/firmware/ws2001');
 const manifest = JSON.parse(readFileSync(path.join(FW_DIR, 'manifest.json'), 'utf8'));
@@ -19,13 +19,28 @@ describe('WS2001 firmware manifest', () => {
     expect(m.releases[0].fw_version).toBe(major * 10 + minor);
   });
 
+  it('rejects manifests with mismatched fw_version or label', () => {
+    const badFwVer = structuredClone(manifest);
+    badFwVer.releases[0].fw_version = 999;
+    expect(() => validateWs2001Manifest(badFwVer)).toThrow(/malformed/);
+
+    const badLabel = structuredClone(manifest);
+    badLabel.releases[0].label = 'V9.9';
+    expect(() => validateWs2001Manifest(badLabel)).toThrow(/malformed/);
+  });
+
   it('compares station versions', () => {
     expect(parseStationVersion('V4.5')).toEqual([4, 5]);
     expect(isOutdated('V3.7', '4.5')).toBe(true);
     expect(isOutdated('V4.4', '4.5')).toBe(true);
     expect(isOutdated('V4.5', '4.5')).toBe(false);
     expect(isOutdated('V4.10', '4.5')).toBe(false);
-    expect(isOutdated('Unknown', '4.5')).toBe(true);
+    expect(isOutdated('Unknown', '4.5')).toBe(false);
+
+    expect(compareStationVersion('V4.4', '4.5')).toBe('older');
+    expect(compareStationVersion('V4.5', '4.5')).toBe('equal');
+    expect(compareStationVersion('V4.8', '4.5')).toBe('newer');
+    expect(compareStationVersion('Unknown', '4.5')).toBe('unknown');
   });
 });
 

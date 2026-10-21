@@ -55,14 +55,27 @@ function inspect(zipBuf, name) {
   if (!manifest?.application || Object.keys(manifest).length !== 1) throw new Error(`${name}: not an application-only package`);
   const fw = Buffer.from(entries[manifest.application.bin_file]);
   const dat = Buffer.from(entries[manifest.application.dat_file]);
+  if (!fw.length || !dat.length) throw new Error(`${name}: empty image or init packet`);
   const signed = fields(fields(dat).get(2)[0]);
   const initBytes = Buffer.from(fields(signed.get(1)[0]).get(2)[0]);
   const init = fields(initBytes);
   const fwVersion = init.get(1)?.[0];
+  if ((init.get(4)?.[0] ?? 0) !== 0) throw new Error(`${name}: fw_type is not APPLICATION (0)`);
   if (init.get(2)?.[0] !== 52) throw new Error(`${name}: hw_version is not 52`);
-  const hash = Buffer.from(fields(init.get(8)[0]).get(2)[0]).reverse().toString('hex');
-  if (hash !== sha256(fw)) throw new Error(`${name}: image hash does not match the init packet`);
+  const sdReq = [];
+  for (const v of init.get(3) ?? []) {
+    if (typeof v === 'number') sdReq.push(v);
+    else for (let p = 0; p < v.length; ) { let n; [n, p] = varint(v, p); sdReq.push(n); }
+  }
+  if (!sdReq.includes(0x0100)) throw new Error(`${name}: sd_req does not include S140 7.2.0 (0x0100)`);
+  if (init.get(7)?.[0] !== fw.length) throw new Error(`${name}: app_size does not match image length`);
+  const hashFields = fields(init.get(8)[0]);
+  if (hashFields.get(1)?.[0] !== 3) throw new Error(`${name}: hash_type is not SHA-256 (3)`);
+  const hash = Buffer.from(hashFields.get(2)[0]).reverse().toString('hex');
+  if (hash.length !== 64 || hash !== sha256(fw)) throw new Error(`${name}: image hash does not match the init packet`);
+  if ((signed.get(2)?.[0] ?? 0) !== 0) throw new Error(`${name}: signature_type is not ECDSA_P256_SHA256 (0)`);
   const sig = Buffer.from(signed.get(3)[0]);
+  if (sig.length !== 64) throw new Error(`${name}: signature is not 64 bytes`);
   const le = Buffer.from(PUBLIC_KEY_LE, 'hex');
   const jwk = {
     kty: 'EC', crv: 'P-256',
@@ -82,16 +95,20 @@ function main() {
   const args = process.argv.slice(2);
   const commitIdx = args.indexOf('--commit');
   const commit = commitIdx >= 0 ? args[commitIdx + 1] : undefined;
-  const input = args.find((a, i) => !a.startsWith('--') && i !== commitIdx + 1);
+  const input = args.find((a, i) => !a.startsWith('--') && (commitIdx < 0 || i !== commitIdx + 1));
+  const forceOverwrite = args.includes('--force');
   const previous = fs.existsSync(MANIFEST_PATH) ? JSON.parse(fs.readFileSync(MANIFEST_PATH, 'utf8')) : { releases: [] };
 
   if (input) {
     const buf = fs.readFileSync(input);
     const info = inspect(buf, path.basename(input));
     const dest = path.join(FW_DIR, `ws2001-application-v${label(info.fwVersion)}-ble-dfu.zip`);
+    if (fs.existsSync(dest) && sha256(fs.readFileSync(dest)) !== sha256(buf) && !forceOverwrite) {
+      throw new Error(`${path.basename(dest)} already exists with different SHA-256; pass --force to overwrite`);
+    }
     fs.writeFileSync(dest, buf);
     console.log(`Added ${path.relative(ROOT_DIR, dest)} (fw_version ${info.fwVersion})`);
-    if (commit) previous.releases = previous.releases.filter((r) => r.fw_version !== info.fwVersion).concat([{ fw_version: info.fwVersion, git_commit: commit }]);
+    if (commit) previous.releases = previous.releases.filter((r) => r.fw_version !== info.fwVersion).concat([{ fw_version: info.fwVersion, git_commit: commit, sha256: sha256(buf) }]);
   }
 
   const releases = [];
@@ -99,18 +116,20 @@ function main() {
     const buf = fs.readFileSync(path.join(FW_DIR, file));
     const info = inspect(buf, file);
     const prev = previous.releases.find((r) => r.fw_version === info.fwVersion) ?? {};
+    const zipSha256 = sha256(buf);
+    const sameBytes = !prev.sha256 || prev.sha256 === zipSha256;
     releases.push({
       version: label(info.fwVersion),
       label: `V${label(info.fwVersion)}`,
       fw_version: info.fwVersion,
       file: `/firmware/ws2001/${file}`,
       bytes: buf.length,
-      sha256: sha256(buf),
+      sha256: zipSha256,
       image_bytes: info.imageBytes,
       image_sha256: info.imageSha256,
       source_repo: 'WeatherXM/ws2001-firmware',
-      ...(prev.git_commit ? { git_commit: prev.git_commit } : {}),
-      built_at: fs.statSync(path.join(FW_DIR, file)).mtime.toISOString(),
+      ...(sameBytes && prev.git_commit ? { git_commit: prev.git_commit } : {}),
+      built_at: sameBytes && prev.built_at ? prev.built_at : fs.statSync(path.join(FW_DIR, file)).mtime.toISOString(),
     });
   }
   if (releases.length === 0) throw new Error('No *-ble-dfu.zip packages in public/firmware/ws2001');

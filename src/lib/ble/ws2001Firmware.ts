@@ -33,8 +33,20 @@ export function validateWs2001Manifest(raw: unknown): Ws2001Manifest {
   if (!m || m.schema !== 1 || m.hardware !== 'WS2001') throw new Error('Invalid WS2001 firmware manifest');
   if (!Array.isArray(m.releases) || m.releases.length === 0) throw new Error('WS2001 manifest lists no releases');
   for (const r of m.releases) {
-    if (!r.file?.startsWith('/firmware/ws2001/') || !/^[0-9a-f]{64}$/i.test(r.sha256) || !Number.isInteger(r.fw_version)) {
-      throw new Error(`WS2001 release ${r.version ?? '?'} is malformed`);
+    const [maj, min] = typeof r?.version === 'string' ? r.version.split('.').map(Number) : [NaN, NaN];
+    if (
+      !r ||
+      typeof r.version !== 'string' || !/^\d+\.\d+$/.test(r.version) ||
+      typeof r.label !== 'string' || r.label !== `V${r.version}` ||
+      typeof r.file !== 'string' || !/^\/firmware\/ws2001\/[A-Za-z0-9._-]+\.zip$/.test(r.file) ||
+      r.file.includes('..') ||
+      typeof r.sha256 !== 'string' || !/^[0-9a-f]{64}$/i.test(r.sha256) ||
+      typeof r.image_sha256 !== 'string' || !/^[0-9a-f]{64}$/i.test(r.image_sha256) ||
+      !Number.isInteger(r.fw_version) || r.fw_version <= 0 || r.fw_version !== maj * 10 + min ||
+      !Number.isInteger(r.bytes) || r.bytes <= 0 ||
+      !Number.isInteger(r.image_bytes) || r.image_bytes <= 0
+    ) {
+      throw new Error(`WS2001 release ${r?.version ?? '?'} is malformed`);
     }
   }
   if (!m.releases.some((r) => r.version === m.latest)) throw new Error('WS2001 manifest "latest" is not listed');
@@ -59,11 +71,22 @@ export async function downloadWs2001Release(
   const res = await fetchImpl(r.file, { cache: 'no-store' });
   if (!res.ok) throw new Error(`Could not download ${r.label} (HTTP ${res.status})`);
   const bytes = new Uint8Array(await res.arrayBuffer());
+  if (bytes.length !== r.bytes) {
+    throw new Error(`${r.label} download size mismatch (expected ${r.bytes} bytes, got ${bytes.length})`);
+  }
   if ((await sha256Hex(bytes)).toLowerCase() !== r.sha256.toLowerCase()) {
     throw new Error(`${r.label} download is corrupted (SHA-256 mismatch)`);
   }
   const pkg = await parseWs2001DfuPackage(bytes);
-  if (pkg.initPacket.fwVersion !== r.fw_version) throw new Error(`${r.label} package version does not match the manifest`);
+  if (pkg.initPacket.fwVersion !== r.fw_version) {
+    throw new Error(`${r.label} package version does not match the manifest`);
+  }
+  if (pkg.firmware.length !== r.image_bytes) {
+    throw new Error(`${r.label} image size does not match the manifest`);
+  }
+  if ((await sha256Hex(pkg.firmware)).toLowerCase() !== r.image_sha256.toLowerCase()) {
+    throw new Error(`${r.label} image SHA-256 does not match the manifest`);
+  }
   return pkg;
 }
 
@@ -73,11 +96,21 @@ export function parseStationVersion(v: string | null | undefined): [number, numb
   return m ? [parseInt(m[1], 10), parseInt(m[2], 10)] : null;
 }
 
-/** True when the station runs an older firmware than `latest` (unknown versions count as outdated). */
-export function isOutdated(station: string | null | undefined, latest: string): boolean {
+export type StationVersionComparison = 'older' | 'equal' | 'newer' | 'unknown';
+
+export function compareStationVersion(
+  station: string | null | undefined,
+  target: string,
+): StationVersionComparison {
   const s = parseStationVersion(station);
-  const l = parseStationVersion(latest);
-  if (!l) return false;
-  if (!s) return true;
-  return s[0] < l[0] || (s[0] === l[0] && s[1] < l[1]);
+  const t = parseStationVersion(target);
+  if (!s || !t) return 'unknown';
+  if (s[0] < t[0] || (s[0] === t[0] && s[1] < t[1])) return 'older';
+  if (s[0] === t[0] && s[1] === t[1]) return 'equal';
+  return 'newer';
+}
+
+/** True when the station runs a known firmware older than `latest` (unknown versions do not auto-update). */
+export function isOutdated(station: string | null | undefined, latest: string): boolean {
+  return compareStationVersion(station, latest) === 'older';
 }
