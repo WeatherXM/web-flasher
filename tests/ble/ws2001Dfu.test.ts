@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { zipSync, unzipSync } from 'fflate';
-import { parseWs2001DfuPackage, SecureDfuTransfer, crc32, DfuError } from '../../src/lib/ble/ws2001Dfu';
+import { parseWs2001DfuPackage, SecureDfuTransfer, crc32, DfuError, enterBootloader } from '../../src/lib/ble/ws2001Dfu';
 import { compareStationVersion, isOutdated, parseStationVersion, validateWs2001Manifest } from '../../src/lib/ble/ws2001Firmware';
 
 const FW_DIR = path.join(__dirname, '../../public/firmware/ws2001');
@@ -185,5 +185,73 @@ describe('Secure DFU transfer (Web Bluetooth)', () => {
     await t.sendFirmware(pkg.firmware.subarray(0, 8192));
     expect(droppedPackets).toBe(0);
     expect(bl.state().committed).toEqual(pkg.firmware.subarray(0, 8192));
+  });
+});
+
+/**
+ * Fake station application with the buttonless DFU characteristic (ble_dfu_unbonded.c): it answers
+ * "set name" and "enter bootloader" with an indication, and on success drops the link itself after
+ * `dropAfterMs` (it resets into the bootloader once the indication is confirmed).
+ */
+function fakeStation(opts: { enterResult?: number; dropAfterMs?: number | null } = {}) {
+  const events: string[] = [];
+  const device = new EventTarget();
+  const drop = (who: string) => {
+    if (!server.connected) return;
+    events.push(who);
+    server.connected = false;
+    device.dispatchEvent(new Event('gattserverdisconnected'));
+  };
+  const ch = Object.assign(new EventTarget(), {
+    value: undefined as DataView | undefined,
+    startNotifications: async () => ch,
+    writeValueWithResponse: async (d: Uint8Array) => {
+      const op = d[0];
+      events.push(`write 0x0${op}`);
+      const result = op === 0x01 ? (opts.enterResult ?? 0x01) : 0x01;
+      setTimeout(() => {
+        ch.value = new DataView(new Uint8Array([0x20, op, result]).buffer);
+        events.push(`response 0x0${op}`);
+        ch.dispatchEvent(new Event('characteristicvaluechanged'));
+        if (op === 0x01 && result === 0x01 && opts.dropAfterMs != null) {
+          setTimeout(() => drop('station-drop'), opts.dropAfterMs);
+        }
+      }, 5);
+    },
+  });
+  const server = {
+    connected: true,
+    device,
+    disconnect: () => drop('browser-disconnect'),
+    getPrimaryService: async () => ({ getCharacteristic: async () => ch }),
+  };
+  return { server: server as unknown as BluetoothRemoteGATTServer, events };
+}
+
+describe('Entering the bootloader (buttonless DFU)', () => {
+  it('lets the station drop the link instead of disconnecting right after its answer', async () => {
+    // The station needs the browser to confirm the indication on the next connection event
+    // (100-200 ms) before it resets; a browser-side disconnect in that window cancels the entry.
+    const st = fakeStation({ dropAfterMs: 400 });
+    const logs: string[] = [];
+    await enterBootloader(st.server, 'DfuWXABCDEF', (m) => logs.push(m), { linkDropTimeoutMs: 3000 });
+    expect(st.events).toContain('station-drop');
+    expect(st.events).not.toContain('browser-disconnect');
+    expect(logs.some((m) => m.includes('DfuWXABCDEF'))).toBe(true);
+  });
+
+  it('disconnects and reports an error when the station keeps the link open', async () => {
+    const st = fakeStation({ dropAfterMs: null });
+    await expect(enterBootloader(st.server, 'DfuWXABCDEF', () => {}, { linkDropTimeoutMs: 300 }))
+      .rejects.toThrow(/did not restart in update mode/);
+    expect(st.events).toContain('browser-disconnect');
+  });
+
+  it('reports a refusal without waiting for a restart', async () => {
+    const st = fakeStation({ enterResult: 0x06 });
+    const t0 = Date.now();
+    await expect(enterBootloader(st.server, 'DfuWXABCDEF', () => {}, { linkDropTimeoutMs: 3000 }))
+      .rejects.toBeInstanceOf(DfuError);
+    expect(Date.now() - t0).toBeLessThan(1500);
   });
 });
