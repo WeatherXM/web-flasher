@@ -87,6 +87,15 @@ describe('WS2001 uplink decoder (shared with the firmware repo)', () => {
     expect(data.signature).toHaveLength(128);
     expect(data.wind_gust).toBe(5.2);
   });
+
+  it('points at FPort 99 when a frame arrives on another port (TTN "Simulate uplink" defaults to FPort 1)', () => {
+    const decodeUplink = new Function(`${TTN_PAYLOAD_DECODER}; return decodeUplink;`)();
+    const r = decodeUplink({ bytes: openWeatherFrame(), fPort: 1 });
+    expect(r.data).toEqual({});
+    expect(r.warnings).toEqual([
+      'Unexpected FPort 1. WS2001 weather data arrives on FPort 99; use FPort 99 when testing or simulating an uplink.',
+    ]);
+  });
 });
 
 describe('AT+NETPROFILE parsing', () => {
