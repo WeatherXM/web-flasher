@@ -233,10 +233,50 @@ export function makeBootloaderName(): string {
 }
 
 /**
- * Ask the running application (on its bonded link) to reboot into the bootloader under `advName`.
- * Resolves once the request was accepted or the link dropped because the station rebooted.
+ * How long the station gets to drop the Bluetooth link itself after accepting "enter bootloader".
+ * It resets within milliseconds; the browser notices once the link supervision timeout expires
+ * (the station asks for 4 s).
  */
-export async function enterBootloader(server: BluetoothRemoteGATTServer, advName: string, log: Log): Promise<void> {
+export const BOOTLOADER_LINK_DROP_TIMEOUT_MS = 8000;
+
+/** Resolves true once `server` is disconnected, or false if it is still connected after `timeoutMs`. */
+function waitForLinkDrop(server: BluetoothRemoteGATTServer, timeoutMs: number): Promise<boolean> {
+  if (!server.connected) return Promise.resolve(true);
+  const device = server.device;
+  return new Promise((resolve) => {
+    let finished = false;
+    const finish = (dropped: boolean) => {
+      if (finished) return;
+      finished = true;
+      clearTimeout(timer);
+      clearInterval(poll);
+      device?.removeEventListener('gattserverdisconnected', onDrop);
+      resolve(dropped);
+    };
+    const onDrop = () => finish(true);
+    device?.addEventListener('gattserverdisconnected', onDrop);
+    const poll = setInterval(() => { if (!server.connected) finish(true); }, 100);
+    const timer = setTimeout(() => finish(!server.connected), timeoutMs);
+  });
+}
+
+/**
+ * Ask the running application (on its bonded link) to reboot into the bootloader under `advName`.
+ * Resolves once the station has dropped the link to restart in update mode.
+ *
+ * The station enters its bootloader only after this browser confirms the response indication
+ * (ble_dfu.c on_hvc). The confirmation goes out on the next connection event, 100-200 ms later.
+ * Closing the link right after the response can drop that confirmation; the station then sees an
+ * ordinary disconnect and restarts its normal firmware, and no DfuWX / DfuTarg device ever appears.
+ * So the station drops the link itself; the browser disconnects only as a fallback, and that case is
+ * reported as an error because the station cannot be in update mode while the link is still up.
+ */
+export async function enterBootloader(
+  server: BluetoothRemoteGATTServer,
+  advName: string,
+  log: Log,
+  opts: { linkDropTimeoutMs?: number } = {},
+): Promise<void> {
   const svc = await server.getPrimaryService(DFU_SERVICE);
   const ch = await svc.getCharacteristic(DFU_BUTTONLESS_UUID);
   const queue: Uint8Array[] = [];
@@ -255,6 +295,7 @@ export async function enterBootloader(server: BluetoothRemoteGATTServer, advName
     while (Date.now() < end) {
       const r = queue.shift();
       if (r && r.length >= 3 && r[0] === 0x20 && r[1] === payload[0]) return r;
+      if (!server.connected) return null;
       await new Promise<void>((res) => { wake = res; setTimeout(res, 200); });
     }
     return null;
@@ -268,17 +309,23 @@ export async function enterBootloader(server: BluetoothRemoteGATTServer, advName
   try {
     const resp = await request(new Uint8Array([0x01]));
     if (resp && resp[2] !== 0x01) throw new DfuError(`The station refused to enter update mode (code 0x${resp[2].toString(16)})`);
+    if (!resp && server.connected) log('The station did not answer the update-mode request yet; waiting for it to restart.', 'WARN');
   } catch (e) {
     if (e instanceof DfuError) throw e;
-    // The link dropping during the write means the station already rebooted.
-  } finally {
-    await sleep(150);
-    try {
-      if (server.connected) server.disconnect();
-    } catch {
-      // ignore
-    }
+    // A failed write with the link already gone means the station rebooted; otherwise wait below.
   }
+
+  const dropped = await waitForLinkDrop(server, opts.linkDropTimeoutMs ?? BOOTLOADER_LINK_DROP_TIMEOUT_MS);
+  if (dropped) {
+    log('The station closed the Bluetooth link and is restarting in update mode.');
+    return;
+  }
+  try {
+    server.disconnect();
+  } catch {
+    // ignore
+  }
+  throw new DfuError('The station did not restart in update mode. It keeps its current firmware; try again.');
 }
 
 /** Chooser for the bootloader (must be called from a user click). */
