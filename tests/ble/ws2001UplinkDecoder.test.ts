@@ -24,6 +24,19 @@ function weatherFrame(tag = 0xf0): number[] {
   return b;
 }
 
+function openWeatherFrame(lowBat = true): number[] {
+  const b = new Array(16).fill(0);
+  const hd = (56 << 9) | 270; b[0] = hd >> 8; b[1] = hd & 0xff; // 56% RH, 270 deg
+  b[2] = 235 & 0xff; b[3] = 235 >> 8; // 23.5 C
+  const buw = (lowBat ? 0x8000 : 0) | (3 << 11) | 31; b[4] = buw >> 8; b[5] = buw & 0xff;
+  b[6] = 52; b[7] = 0; // gust 5.2 m/s
+  const rain = 123; b[8] = rain & 0xff; b[9] = rain >> 8; // 12.3 mm (0.1 mm steps)
+  b[10] = 12; b[11] = 0; // 1.2 mm/h
+  const lux = 5432; b[12] = lux & 0xff; b[13] = lux >> 8; // 54320 lux (10 lux steps)
+  b[14] = 10132 & 0xff; b[15] = 10132 >> 8; // 1013.2 hPa
+  return b;
+}
+
 describe('WS2001 uplink decoder (shared with the firmware repo)', () => {
   it('matches the downloadable public/decoders copy', () => {
     const file = readFileSync(path.join(__dirname, '../../public/decoders/ws2001_uplink_decoder.js'), 'utf8');
@@ -44,7 +57,27 @@ describe('WS2001 uplink decoder (shared with the firmware repo)', () => {
     expect(data.rain_rate).toBe(1.2);
     expect(data.lux).toBe(54321);
     expect(data.pressure).toBe(1013.2);
+    expect(data.pressure_pa).toBeUndefined();
     expect(data.upload_interval_min).toBe(5);
+  });
+
+  it('decodes the 16-byte Open Edition frame on FPort 99 with battery_low mixed into uv_index', () => {
+    const decodeUplink = new Function(`${TTN_PAYLOAD_DECODER}; return decodeUplink;`)();
+    const { data } = decodeUplink({ bytes: openWeatherFrame(true), fPort: 99 });
+    expect(data.frame).toBe('weather');
+    expect(data.firmware_version).toBeUndefined();
+    expect(data.battery_low).toBe(true);
+    expect(data.temperature).toBe(23.5);
+    expect(data.humidity).toBe(56);
+    expect(data.wind_direction).toBe(270);
+    expect(data.uv_index).toBe(3);
+    expect(data.wind_speed).toBe(3.1);
+    expect(data.wind_gust).toBe(5.2);
+    expect(data.rain_accumulated).toBe(12.3);
+    expect(data.rain_rate).toBe(1.2);
+    expect(data.lux).toBe(54320);
+    expect(data.pressure).toBe(1013.2);
+    expect(data.pressure_pa).toBeUndefined();
   });
 
   it('decodes signed frames and works as a ChirpStack v3 codec', () => {

@@ -113,7 +113,7 @@ describe('WS2001 Payload Decoder', () => {
     expect(result.data.wind_direction).toBe(180);
     expect(result.data.rain_rate).toBe(1.25);
     expect(result.data.pressure).toBe(1013.2);
-    expect(result.data.pressure_pa).toBe(101320);
+    expect(result.data.pressure_pa).toBeUndefined();
     expect(result.data.battery).toBe(100);
   });
 
