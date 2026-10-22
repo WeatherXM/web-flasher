@@ -161,7 +161,9 @@ export interface ConfigureOpenLoRaWanParams {
   band: number;
   subBand?: number; // 0..7 for US915/AU915 FSB (FSB 2 = channel group 1)
   joinEui: string;  // 16 hex chars (with or without colons)
-  appKey: string;   // 32 hex chars (with or without colons)
+  // 32 hex chars (with or without colons). Empty or null keeps the AppKey already saved in the custom profile
+  // (profiles only, and only when that profile is stored: the station never reveals its AppKey).
+  appKey: string | null;
   intervalMinutes: number; // 1..1440
   // Raw GNSS scans (0xF3 frames) on the customer network; firmware V4.7+ only, off by default
   gnss?: boolean;
@@ -183,6 +185,20 @@ export function redactAtLog(text: string): string {
     .replace(/((?:nwkSkey|appSkey|devKey|appKey|nwkKey)\s*:\s*)'?[0-9A-Fa-f:]+'?/g, "$1'<hidden>'")
     // Bare 16-byte keys, e.g. the reply to AT+APPKEY=? ('2B:7E:...:3C')
     .replace(/\b(?:[0-9A-Fa-f]{2}:){15}[0-9A-Fa-f]{2}\b/g, '<hidden>');
+}
+
+/**
+ * JoinEUI of the WeatherXM identity provisioned at the factory (AT+APPEUI=? on profile 0). Every WeatherXM station
+ * that switched networks through this page reported it (flasher telemetry, Oct 2026). Profile 0 running another
+ * JoinEUI means older tools put a customer's keys there before the station had network profiles.
+ */
+export const WEATHERXM_JOIN_EUIS = ['8000000000000009'];
+
+/** True when a JoinEUI (any separators) is the WeatherXM one; null / unknown -> null. */
+export function isWeatherXmJoinEui(joinEui: string | null | undefined): boolean | null {
+  const hex = (joinEui ?? '').replace(/[^0-9a-fA-F]/g, '').toUpperCase();
+  if (hex.length !== 16) return null;
+  return WEATHERXM_JOIN_EUIS.includes(hex);
 }
 
 export function formatHexWithColons(hexStr: string, expectedBytes: number): string {
@@ -990,6 +1006,15 @@ export class Ws2001AtClient {
     if (!options.useProfiles && !options.allowOverwrite) {
       throw new Error('This firmware cannot keep the WeatherXM keys; update the station to V4.5 or confirm overwriting.');
     }
+    const keepAppKey = !(params.appKey ?? '').trim();
+    if (keepAppKey) {
+      // Only a stored custom profile has an AppKey to keep: on first use AT+NETPROFILE=1 copies the active
+      // (WeatherXM) identity, so an empty field would join the customer's server with the WeatherXM key.
+      const profiles = options.useProfiles ? parseNetProfile(await this.sendCommand('AT+NETPROFILE=?')) : null;
+      if (!profiles?.customStored) {
+        throw new Error('Enter the AppKey registered for this station on your network server: no AppKey is saved on the station yet.');
+      }
+    }
     const totalSteps = 9;
     let step = 1;
 
@@ -1015,9 +1040,13 @@ export class Ws2001AtClient {
     onProgress?.(`Setting JoinEUI (${formattedJoinEui})...`, step++, totalSteps);
     await this.expectOk(`AT+APPEUI=${formattedJoinEui}`, 'set the JoinEUI');
 
-    const formattedAppKey = formatHexWithColons(params.appKey, 16);
-    onProgress?.('Setting AppKey...', step++, totalSteps);
-    await this.expectOk(`AT+APPKEY=${formattedAppKey}`, 'set the AppKey');
+    if (keepAppKey) {
+      onProgress?.('Keeping the AppKey saved on the station...', step++, totalSteps);
+    } else {
+      const formattedAppKey = formatHexWithColons(params.appKey!, 16);
+      onProgress?.('Setting AppKey...', step++, totalSteps);
+      await this.expectOk(`AT+APPKEY=${formattedAppKey}`, 'set the AppKey');
+    }
 
     if (!Number.isFinite(params.intervalMinutes)) {
       throw new Error('Upload interval must be a number between 1 and 1440 minutes.');

@@ -150,6 +150,13 @@ network that is the signed 24-byte frame (1 Helium data credit per uplink); on y
 * **Keys are kept (firmware V4.5+).** The page uses `AT+NETPROFILE`: the customer JoinEUI/AppKey go into profile 1,
   the WeatherXM keys stay in profile 0, and **Switch back to WeatherXM** reactivates them. On older firmware the page
   warns that the single key set will be replaced.
+* **AppKey is never pre-filled.** The station never reveals its AppKey, so the field starts empty: with settings
+  already saved on the station, empty keeps the saved key; otherwise the user enters the key registered on their
+  server or presses **Generate new AppKey** (the TTN import file then carries it). The upload interval proposes the
+  station's current value when it already reports to a customer network.
+* **Customer keys in the WeatherXM profile.** Every WeatherXM-provisioned station reports JoinEUI `8000000000000009`
+  on profile 0. A station whose profile 0 runs another JoinEUI got a customer's keys from older tools before it had
+  network profiles; the page says so, pre-fills that JoinEUI and interval, and telemetry marks it `foreignWxmProfile`.
 * **Payload stays the WeatherXM frame** (`AT+TESTMODE_TYPE=0`). The legacy TLV format (FPort 3) is no longer selected.
 * **Upload interval defaults to 5 minutes on your network**: a 20-byte SF7 uplink is ~72 ms (24-byte: ~82 ms), so 3 minutes exceeds TTN's
   30 s/day fair use. The WeatherXM profile keeps its own 3 minutes (firmware V4.5+ stores the interval per profile).
