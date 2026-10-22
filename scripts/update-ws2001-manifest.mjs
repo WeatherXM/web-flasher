@@ -6,12 +6,20 @@
  * Usage:
  *   node scripts/update-ws2001-manifest.mjs                                    # rescan public/firmware/ws2001
  *   node scripts/update-ws2001-manifest.mjs path/to/ws2001-application-v45-ble-dfu.zip [--commit <sha>]
+ *   node scripts/update-ws2001-manifest.mjs [path/to/package.zip] --latest 4.10 # pin "latest" to a release
+ *   node scripts/update-ws2001-manifest.mjs --latest newest                     # unpin: highest version is latest
+ *
+ * "latest" is the release the page selects by default and installs automatically on stations that connect with
+ * an older version; every other listed release is offered under "Other versions". By default the highest version
+ * is latest. --latest <version> pins it, e.g. to publish a new release for opt-in installs before it becomes the
+ * default; the pin is stored in the manifest (latest_pinned) and kept on later runs until --latest newest.
  *
  * Packages come from ws2001-firmware/scripts/build_ble_dfu.sh (nrfutil, signed with the bootloader key).
  * For each zip it checks that the package is application-only, targets HW 52 / S140 7.2.0 (0x0100), that
  * the image hash matches the init packet and that the ECDSA signature verifies against the WS2001
  * bootloader public key. The firmware version is the DFU fw_version (convention: major*10+minor,
- * 45 = V4.5). Packages are stored as ws2001-application-v<major>.<minor>-ble-dfu.zip.
+ * 45 = V4.5, 51 = V5.1; minor versions stay 0..9). Packages are stored as
+ * ws2001-application-v<major>.<minor>-ble-dfu.zip.
  */
 
 import fs from 'fs';
@@ -91,7 +99,7 @@ function inspect(zipBuf, name) {
 const label = (v, file) => {
   const m = file?.match(/-v(\d+\.\d+)-ble-dfu\.zip$/);
   if (m) return m[1];
-  return v >= 40 && v <= 55 ? `4.${v - 40}` : `${Math.floor(v / 10)}.${v % 10}`;
+  return `${Math.floor(v / 10)}.${v % 10}`;
 };
 
 function main() {
@@ -99,7 +107,11 @@ function main() {
   const args = process.argv.slice(2);
   const commitIdx = args.indexOf('--commit');
   const commit = commitIdx >= 0 ? args[commitIdx + 1] : undefined;
-  const input = args.find((a, i) => !a.startsWith('--') && (commitIdx < 0 || i !== commitIdx + 1));
+  const latestIdx = args.indexOf('--latest');
+  const latestArg = latestIdx >= 0 ? args[latestIdx + 1]?.replace(/^[Vv]/, '') : undefined;
+  if (latestIdx >= 0 && !latestArg) throw new Error('--latest needs a version (e.g. 5.0) or "newest"');
+  const optionValues = new Set([commitIdx, latestIdx].filter((i) => i >= 0).map((i) => i + 1));
+  const input = args.find((a, i) => !a.startsWith('--') && !optionValues.has(i));
   const forceOverwrite = args.includes('--force');
   const previous = fs.existsSync(MANIFEST_PATH) ? JSON.parse(fs.readFileSync(MANIFEST_PATH, 'utf8')) : { releases: [] };
 
@@ -108,12 +120,19 @@ function main() {
     const info = inspect(buf, path.basename(input));
     const verStr = label(info.fwVersion, path.basename(input));
     const dest = path.join(FW_DIR, `ws2001-application-v${verStr}-ble-dfu.zip`);
-    if (fs.existsSync(dest) && sha256(fs.readFileSync(dest)) !== sha256(buf) && !forceOverwrite) {
+    const unchanged = fs.existsSync(dest) && sha256(fs.readFileSync(dest)) === sha256(buf);
+    if (fs.existsSync(dest) && !unchanged && !forceOverwrite) {
       throw new Error(`${path.basename(dest)} already exists with different SHA-256; pass --force to overwrite`);
     }
-    fs.writeFileSync(dest, buf);
-    console.log(`Added ${path.relative(ROOT_DIR, dest)} (fw_version ${info.fwVersion})`);
-    if (commit) previous.releases = previous.releases.filter((r) => r.fw_version !== info.fwVersion).concat([{ fw_version: info.fwVersion, git_commit: commit, sha256: sha256(buf) }]);
+    if (!unchanged) fs.writeFileSync(dest, buf); // keep the file (and its mtime) when it is already there
+    console.log(`${unchanged ? 'Kept' : 'Added'} ${path.relative(ROOT_DIR, dest)} (fw_version ${info.fwVersion})`);
+    if (commit) {
+      // Record the source commit; keep the build time already listed for the same bytes
+      const same = previous.releases.find((r) => r.fw_version === info.fwVersion && r.sha256 === sha256(buf));
+      previous.releases = previous.releases.filter((r) => r.fw_version !== info.fwVersion).concat([{
+        fw_version: info.fwVersion, git_commit: commit, sha256: sha256(buf), ...(same?.built_at ? { built_at: same.built_at } : {}),
+      }]);
+    }
   }
 
   const releases = [];
@@ -140,9 +159,25 @@ function main() {
   }
   if (releases.length === 0) throw new Error('No *-ble-dfu.zip packages in public/firmware/ws2001');
   releases.sort((a, b) => b.fw_version - a.fw_version);
-  const manifest = { schema: 1, hardware: 'WS2001', soc: 'nRF52840', latest: releases[0].version, releases };
+
+  // latest: the --latest pin, else a stored pin that is still listed, else the highest version
+  let latest = releases[0].version;
+  let pinned = false;
+  if (latestArg && latestArg !== 'newest') {
+    if (!releases.some((r) => r.version === latestArg)) throw new Error(`--latest ${latestArg}: no such release in public/firmware/ws2001`);
+    latest = latestArg;
+    pinned = true;
+  } else if (!latestArg && previous.latest_pinned && releases.some((r) => r.version === previous.latest)) {
+    latest = previous.latest;
+    pinned = true;
+  }
+  const manifest = { schema: 1, hardware: 'WS2001', soc: 'nRF52840', latest, ...(pinned ? { latest_pinned: true } : {}), releases };
   fs.writeFileSync(MANIFEST_PATH, JSON.stringify(manifest, null, 2) + '\n');
-  console.log(`Wrote ${path.relative(ROOT_DIR, MANIFEST_PATH)}: latest ${manifest.latest}, ${releases.length} release(s)`);
+  const optIn = releases.filter((r) => r.fw_version > releases.find((x) => x.version === latest).fw_version).map((r) => r.label);
+  console.log(
+    `Wrote ${path.relative(ROOT_DIR, MANIFEST_PATH)}: latest ${manifest.latest}${pinned ? ' (pinned)' : ''}, ${releases.length} release(s)` +
+      (optIn.length ? `; newer, opt-in only: ${optIn.join(', ')}` : ''),
+  );
 }
 
 main();

@@ -24,7 +24,8 @@ export interface Ws2001Release {
 export interface Ws2001Manifest {
   schema: 1;
   hardware: 'WS2001';
-  latest: string;
+  latest: string; // the default and auto-update target; newer releases are offered for opt-in installs only
+  latest_pinned?: boolean; // latest was chosen explicitly (update-ws2001-manifest.mjs --latest), not the highest version
   releases: Ws2001Release[];
 }
 
@@ -63,6 +64,13 @@ export function latestRelease(m: Ws2001Manifest): Ws2001Release {
   return m.releases.find((r) => r.version === m.latest)!;
 }
 
+/** Releases newer than "latest" (published for opt-in installs only), newest first. */
+export function optInReleases(m: Pick<Ws2001Manifest, 'latest' | 'releases'>): Ws2001Release[] {
+  const latest = m.releases.find((r) => r.version === m.latest);
+  if (!latest) return [];
+  return m.releases.filter((r) => r.fw_version > latest.fw_version).sort((a, b) => b.fw_version - a.fw_version);
+}
+
 /** Download a release and check its SHA-256, signature and target before it is offered for install. */
 export async function downloadWs2001Release(
   r: Ws2001Release,
@@ -96,17 +104,27 @@ export function parseStationVersion(v: string | null | undefined): [number, numb
   return m ? [parseInt(m[1], 10), parseInt(m[2], 10)] : null;
 }
 
+/** DFU application version of a version string: major x 10 + minor ("V4.9" -> 49, "V4.10" -> 50, "V5.1" -> 51). */
+export function stationDfuNumber(v: string | null | undefined): number | null {
+  const p = parseStationVersion(v);
+  return p ? p[0] * 10 + p[1] : null;
+}
+
 export type StationVersionComparison = 'older' | 'equal' | 'newer' | 'unknown';
 
+/**
+ * Compares by DFU number, the value the station's bootloader checks (it refuses lower numbers and accepts equal
+ * ones), not by the version label: V4.10 and V5.0 are both 50 and count as the same version.
+ */
 export function compareStationVersion(
   station: string | null | undefined,
   target: string,
 ): StationVersionComparison {
-  const s = parseStationVersion(station);
-  const t = parseStationVersion(target);
-  if (!s || !t) return 'unknown';
-  if (s[0] < t[0] || (s[0] === t[0] && s[1] < t[1])) return 'older';
-  if (s[0] === t[0] && s[1] === t[1]) return 'equal';
+  const s = stationDfuNumber(station);
+  const t = stationDfuNumber(target);
+  if (s === null || t === null) return 'unknown';
+  if (s < t) return 'older';
+  if (s === t) return 'equal';
   return 'newer';
 }
 

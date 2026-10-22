@@ -143,14 +143,15 @@ The manifest generator validates that:
 
 `/ws2001` points a WS2001 at The Things Network, ChirpStack or any LoRaWAN network server over Web Bluetooth (AT
 commands on the station's transparent-UART service). The hardware is the same as the SenseCAP S2120, but the station
-runs WeatherXM's own firmware: one signed 24-byte frame on **FPort 99** with wind gust, rain total and max rain rate
-(1 Helium data credit per uplink).
+runs WeatherXM's own firmware: one frame on **FPort 99** with wind gust, rain total and max rain rate. On the WeatherXM
+network that is the signed 24-byte frame (1 Helium data credit per uplink); on your network it is the Open Edition frame
+(16 bytes on V4.9–V4.10, 20 bytes from V5.1, which adds the wind direction spread, range and gust direction).
 
 * **Keys are kept (firmware V4.5+).** The page uses `AT+NETPROFILE`: the customer JoinEUI/AppKey go into profile 1,
   the WeatherXM keys stay in profile 0, and **Switch back to WeatherXM** reactivates them. On older firmware the page
   warns that the single key set will be replaced.
 * **Payload stays the WeatherXM frame** (`AT+TESTMODE_TYPE=0`). The legacy TLV format (FPort 3) is no longer selected.
-* **Upload interval defaults to 5 minutes on your network**: a 24-byte SF7 uplink is ~82 ms, so 3 minutes exceeds TTN's
+* **Upload interval defaults to 5 minutes on your network**: a 20-byte SF7 uplink is ~72 ms (24-byte: ~82 ms), so 3 minutes exceeds TTN's
   30 s/day fair use. The WeatherXM profile keeps its own 3 minutes (firmware V4.5+ stores the interval per profile).
 * **Decoder:** one script for TTN v3, ChirpStack v4 and ChirpStack v3, at `public/decoders/ws2001_uplink_decoder.js`
   (served at `/decoders/ws2001_uplink_decoder.js`). The source of truth is
@@ -178,7 +179,13 @@ the current release (V4.5 adds the network profiles that keep the WeatherXM keys
   <major*10+minor>`), then
   `npm run manifest:ws2001 -- <path>/dist/ws2001-application-v<NN>-ble-dfu.zip --commit <sha>`. This verifies the
   package and writes `public/firmware/ws2001/ws2001-application-v<x.y>-ble-dfu.zip` plus `manifest.json`; the
-  newest `fw_version` becomes `latest`.
+  newest `fw_version` becomes `latest`, the version the page selects by default and installs automatically on
+  stations that connect with an older one. Every other listed release stays installable under **Other versions**.
+  To publish a release for opt-in installs only (e.g. before its hardware soak test), pin the current default:
+  `npm run manifest:ws2001 -- <zip> --latest 4.10`; the picker labels newer releases "newer, opt-in". The pin
+  (`latest_pinned` in the manifest) survives later runs; `--latest 5.1` promotes a release, `--latest newest`
+  returns to "highest version wins". Versions are compared by DFU number (major×10+minor), like the bootloader
+  does, so V4.10 (50) is older than V5.1 (51); V5.0 is skipped because it would also be 50.
 
 ## Browser & Device Compatibility
 
