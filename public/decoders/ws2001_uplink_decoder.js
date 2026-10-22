@@ -1,4 +1,4 @@
-// WeatherXM WS2001 / WS2000 uplink decoder (WeatherXM firmware V3.x - V4.10+)
+// WeatherXM WS2001 / WS2000 uplink decoder (WeatherXM firmware V3.x - V5.1+)
 //
 // Paste this whole file as-is into:
 //   - The Things Stack v3:  Application > Payload formatters > Uplink > Custom JavaScript
@@ -6,7 +6,9 @@
 //   - ChirpStack v3:        Device profile > Codec > Custom JavaScript (uses Decode() below)
 //
 // Frames on FPort 99 (AT+TESTMODE_TYPE=0, the default):
-//   16-byte Open Edition weather frame (AT+NETPROFILE=1, V4.9+)
+//   20-byte Open Edition weather frame (AT+NETPROFILE=1, V5.1+): the 16-byte frame plus wind direction
+//         variability (spread, range, gust direction)
+//   16-byte Open Edition weather frame (AT+NETPROFILE=1, V4.9 - V4.10)
 //   0xF0  24-byte WeatherXM weather frame (AT+NETPROFILE=0, 1 Helium data credit)
 //   0xF1  same, followed by a 64-byte ECDSA P-256 signature from the station's secure element
 //   0xF2  12-byte boot frame (firmware/hardware version, sensor protocol version)
@@ -61,14 +63,28 @@ function wxmDecodeOpenWeather(bytes) {
   var p = wxmU16le(bytes, 14);
   data.pressure = (p === 0xffff || p === 0) ? null : p / 10;                               // hPa
 
+  // V5.1+: wind direction variability over the upload interval, from the 12-s samples at 0.5 m/s or more.
+  // null = not available (calm interval, fewer than 5 such samples, no valid gust, or sensor error).
+  if (bytes.length >= 20) {
+    data.wind_direction_sigma = bytes[16] === 0xff ? null : bytes[16];                     // degrees, standard deviation (Yamartino)
+    data.wind_direction_range_start = wxmDir2(bytes[17]);                                  // degrees; the range runs clockwise
+    data.wind_direction_range_end = wxmDir2(bytes[18]);                                    // from start to end, holding 90 % of the samples
+    data.wind_direction_range_width = (data.wind_direction_range_start === null || data.wind_direction_range_end === null)
+      ? null : (data.wind_direction_range_end - data.wind_direction_range_start + 360) % 360; // degrees
+    data.wind_gust_direction = wxmDir2(bytes[19]);                                         // degrees, sample that carried the gust
+  }
+
   return { data: data };
 }
+
+// Direction byte in 2-degree steps (0..179 = 0..358 degrees); 0xFF (and anything above 179) = not available
+function wxmDir2(b) { return b > 179 ? null : b * 2; }
 
 function wxmDecodeWeatherXM(bytes) {
   var data = {};
   var tag = bytes[0];
   if (tag !== 0xf0 && tag !== 0xf1 && tag !== 0xf2 && tag !== 0xf3) {
-    if (bytes.length === 16) return wxmDecodeOpenWeather(bytes);
+    if (bytes.length === 16 || bytes.length === 20) return wxmDecodeOpenWeather(bytes);
     return { errors: ["unknown frame tag 0x" + wxmHex(bytes, 0, 1)] };
   }
   if (bytes.length < 3) return { errors: ["frame too short"] };
