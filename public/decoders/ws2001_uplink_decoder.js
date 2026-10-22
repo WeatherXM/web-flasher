@@ -1,4 +1,4 @@
-// WeatherXM WS2001 / WS2000 uplink decoder (WeatherXM firmware V3.x - V5.1+)
+// WeatherXM WS2001 / WS2000 uplink decoder (WeatherXM firmware V4.2 - V5.1+)
 //
 // Paste this whole file as-is into:
 //   - The Things Stack v3:  Application > Payload formatters > Uplink > Custom JavaScript
@@ -9,6 +9,9 @@
 //   20-byte Open Edition weather frame (AT+NETPROFILE=1, V5.1+): the 16-byte frame plus wind direction
 //         variability (spread, range, gust direction)
 //   16-byte Open Edition weather frame (AT+NETPROFILE=1, V4.9 - V4.10)
+//         Open Edition frames have no tag byte. Later firmware only appends fields, so any untagged frame of
+//         16 bytes or more is decoded: the fields this decoder knows, plus a warning about bytes it does not
+//         (update the decoder to read them).
 //   0xF0  24-byte WeatherXM weather frame (AT+NETPROFILE=0, 1 Helium data credit)
 //   0xF1  same, followed by a 64-byte ECDSA P-256 signature from the station's secure element
 //   0xF2  12-byte boot frame (firmware/hardware version, sensor protocol version)
@@ -65,7 +68,9 @@ function wxmDecodeOpenWeather(bytes) {
 
   // V5.1+: wind direction variability over the upload interval, from the 12-s samples at 0.5 m/s or more.
   // null = not available (calm interval, fewer than 5 such samples, no valid gust, or sensor error).
+  var known = 16;
   if (bytes.length >= 20) {
+    known = 20;
     data.wind_direction_sigma = bytes[16] === 0xff ? null : bytes[16];                     // degrees, standard deviation (Yamartino)
     data.wind_direction_range_start = wxmDir2(bytes[17]);                                  // degrees; the range runs clockwise
     data.wind_direction_range_end = wxmDir2(bytes[18]);                                    // from start to end, holding 90 % of the samples
@@ -74,6 +79,14 @@ function wxmDecodeOpenWeather(bytes) {
     data.wind_gust_direction = wxmDir2(bytes[19]);                                         // degrees, sample that carried the gust
   }
 
+  // Bytes appended by newer firmware: keep the known fields, say what was left out
+  if (bytes.length > known) {
+    return {
+      data: data,
+      warnings: [(bytes.length - known) + " byte(s) after byte " + (known - 1) + " not decoded (newer firmware?). " +
+        "Get the latest decoder: https://flash.weatherxm.com/decoders/ws2001_uplink_decoder.js"]
+    };
+  }
   return { data: data };
 }
 
@@ -84,7 +97,7 @@ function wxmDecodeWeatherXM(bytes) {
   var data = {};
   var tag = bytes[0];
   if (tag !== 0xf0 && tag !== 0xf1 && tag !== 0xf2 && tag !== 0xf3) {
-    if (bytes.length === 16 || bytes.length === 20) return wxmDecodeOpenWeather(bytes);
+    if (bytes.length >= 16) return wxmDecodeOpenWeather(bytes);
     return { errors: ["unknown frame tag 0x" + wxmHex(bytes, 0, 1)] };
   }
   if (bytes.length < 3) return { errors: ["frame too short"] };
