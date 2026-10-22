@@ -38,6 +38,10 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
           <a href="/decoders/ws2001_uplink_decoder.js" download="ws2001_uplink_decoder.js" class="inline-flex items-center gap-1.5 font-semibold text-wxm-zenith hover:text-white underline underline-offset-4 decoration-wxm-cloud/30">
             Payload decoder for your own network (.js)
           </a>
+          <span class="text-wxm-cloud/30 mx-2" aria-hidden="true">·</span>
+          <a href="/ws2001/changelog" class="inline-flex items-center gap-1.5 font-semibold text-wxm-zenith hover:text-white underline underline-offset-4 decoration-wxm-cloud/30">
+            Firmware changelog
+          </a>
         </p>
       </div>
 
@@ -245,6 +249,15 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
             <option value="latest">Latest release</option>
             <option value="custom">Custom signed package (-ble-dfu.zip)...</option>
           </select>
+          <div id="fw-release-notes" class="hidden p-3 rounded-control bg-wxm-midnight/50 border border-wxm-cloud/10 space-y-1.5">
+            <p id="fw-release-notes-title" class="text-[11px] font-bold text-wxm-cloud uppercase tracking-wider">–</p>
+            <p id="fw-release-notes-summary" class="text-xs text-white leading-relaxed">–</p>
+            <ul id="fw-release-notes-list" class="list-disc pl-4 text-[11px] text-wxm-mist leading-relaxed space-y-0.5"></ul>
+            <p id="fw-release-notes-upgrade" class="hidden text-[11px] text-amber-200 leading-relaxed"></p>
+            <a id="fw-release-notes-link" href="/ws2001/changelog" target="_blank" rel="noopener" class="inline-flex items-center gap-1 text-[11px] font-semibold text-wxm-zenith hover:text-white underline underline-offset-2 decoration-wxm-cloud/30">
+              Full release notes <span aria-hidden="true">&#8599;</span>
+            </a>
+          </div>
           <div id="group-fw-custom" class="hidden space-y-1">
             <label for="cfg-fw-file" class="block text-xs font-semibold text-wxm-cloud">Signed DFU package (<span class="font-mono">-ble-dfu.zip</span>)</label>
             <input
@@ -844,6 +857,7 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
   import { ttnImportJson, ttnImportFileName, type TtnExportParams } from '../lib/ble/ws2001TtnExport';
   import { enterBootloader, requestBootloaderDevice, SecureDfuTransfer, makeBootloaderName, parseWs2001DfuPackage, type Ws2001DfuPackage } from '../lib/ble/ws2001Dfu';
   import { fetchWs2001Manifest, latestRelease, optInReleases, downloadWs2001Release, isOutdated, compareStationVersion, type Ws2001Release } from '../lib/ble/ws2001Firmware';
+  import { ws2001ChangelogFor } from '../lib/ble/ws2001Changelog';
 
   const $ = <T extends HTMLElement = HTMLElement>(id: string): T => {
     const el = document.getElementById(id);
@@ -1169,7 +1183,28 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
         : 'bg-wxm-midnight/70 border-wxm-cloud/20 text-wxm-mist');
   }
 
+  // Release notes for the version picked under "Other versions" (src/lib/ble/ws2001Changelog.ts)
+  function renderReleaseNotes(r: Ws2001Release | null) {
+    const entry = r ? ws2001ChangelogFor(r.version) : null;
+    $('fw-release-notes').classList.toggle('hidden', !entry);
+    if (!r || !entry) return;
+    const optIn = newerReleases.includes(r);
+    $('fw-release-notes-title').textContent = `What's in ${r.label}${optIn ? ' (preview)' : ''}`;
+    $('fw-release-notes-summary').textContent = entry.summary;
+    const list = $('fw-release-notes-list');
+    list.replaceChildren(...entry.changes.map((c) => {
+      const li = document.createElement('li');
+      li.textContent = c.title;
+      return li;
+    }));
+    const upgrade = $('fw-release-notes-upgrade');
+    upgrade.textContent = entry.upgradeNote ? `Before you install: ${entry.upgradeNote}` : '';
+    upgrade.classList.toggle('hidden', !entry.upgradeNote);
+    $<HTMLAnchorElement>('fw-release-notes-link').href = `/ws2001/changelog#v${r.version.replace('.', '-')}`;
+  }
+
   function updateFirmwarePanel(cfg: Ws2001DeviceConfig) {
+    renderReleaseNotes(fwVersionSelect.value === 'custom' ? null : getSelectedRelease());
     const btn = $<HTMLButtonElement>('btn-fw-update');
     const title = $('fw-strip-title');
     const sub = $('fw-strip-sub');

@@ -186,6 +186,9 @@ the current release (V4.5 adds the network profiles that keep the WeatherXM keys
   (`latest_pinned` in the manifest) survives later runs; `--latest 5.1` promotes a release, `--latest newest`
   returns to "highest version wins". Versions are compared by DFU number (major×10+minor), like the bootloader
   does, so V4.10 (50) is older than V5.1 (51); V5.0 is skipped because it would also be 50.
+* **Release notes:** every published release needs an entry in `src/lib/ble/ws2001Changelog.ts` (a test fails
+  without one). It feeds `/ws2001/changelog` (with the V4.10 / V5.1 comparison) and the "What's in V…" notes under
+  the version picker; whether a release shows as default or opt-in preview comes from the manifest.
 
 ## Browser & Device Compatibility
 
