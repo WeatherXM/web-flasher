@@ -88,7 +88,11 @@ function inspect(zipBuf, name) {
   return { fwVersion, imageBytes: fw.length, imageSha256: sha256(fw) };
 }
 
-const label = (v) => `${Math.floor(v / 10)}.${v % 10}`;
+const label = (v, file) => {
+  const m = file?.match(/-v(\d+\.\d+)-ble-dfu\.zip$/);
+  if (m) return m[1];
+  return v >= 40 && v <= 55 ? `4.${v - 40}` : `${Math.floor(v / 10)}.${v % 10}`;
+};
 
 function main() {
   fs.mkdirSync(FW_DIR, { recursive: true });
@@ -102,7 +106,8 @@ function main() {
   if (input) {
     const buf = fs.readFileSync(input);
     const info = inspect(buf, path.basename(input));
-    const dest = path.join(FW_DIR, `ws2001-application-v${label(info.fwVersion)}-ble-dfu.zip`);
+    const verStr = label(info.fwVersion, path.basename(input));
+    const dest = path.join(FW_DIR, `ws2001-application-v${verStr}-ble-dfu.zip`);
     if (fs.existsSync(dest) && sha256(fs.readFileSync(dest)) !== sha256(buf) && !forceOverwrite) {
       throw new Error(`${path.basename(dest)} already exists with different SHA-256; pass --force to overwrite`);
     }
@@ -118,9 +123,10 @@ function main() {
     const prev = previous.releases.find((r) => r.fw_version === info.fwVersion) ?? {};
     const zipSha256 = sha256(buf);
     const sameBytes = !prev.sha256 || prev.sha256 === zipSha256;
+    const verStr = label(info.fwVersion, file);
     releases.push({
-      version: label(info.fwVersion),
-      label: `V${label(info.fwVersion)}`,
+      version: verStr,
+      label: `V${verStr}`,
       fw_version: info.fwVersion,
       file: `/firmware/ws2001/${file}`,
       bytes: buf.length,
