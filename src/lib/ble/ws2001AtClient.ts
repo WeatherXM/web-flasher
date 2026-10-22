@@ -111,7 +111,7 @@ export interface Ws2001DeviceConfig {
   frequencyBand: number | null;
   frequencyName: string;
   subBand: number | null;
-  testModeType: number | null; // payload format: 0 = WeatherXM 24-byte frame (FPort 99), 1 = legacy TLV (FPort 3)
+  testModeType: number | null; // payload format: 0 = WeatherXM frames on FPort 99 (Open Edition frame on profile 1 from V4.9), 1 = legacy TLV (FPort 3)
   netProfile: NetProfileState | null; // null = firmware without network profiles (< V4.5)
   lorawanStatus: string | null; // AT+LW_MODEM_STATUS=?: JOINED, JOINING, MUTE, ...
   gnssSwitch: boolean | null; // AT+GPSSWITCH=?: GNSS scans on the customer network (V4.7+)
@@ -131,7 +131,7 @@ export interface NetProfileState {
 
 export const NET_PROFILE_WEATHERXM = 0;
 export const NET_PROFILE_CUSTOM = 1;
-export const DEFAULT_UPLOAD_INTERVAL_MIN = 5; // custom networks: keeps a 24-byte SF7 uplink within TTN's 30 s/day fair use
+export const DEFAULT_UPLOAD_INTERVAL_MIN = 5; // custom networks: keeps an SF7 uplink (20-byte Open Edition frame ~72 ms) within TTN's 30 s/day fair use
 // The WeatherXM profile keeps its own 3-minute interval (per-profile in firmware V4.5+).
 export const MAX_AT_COMMAND_BYTES = 60; // firmware BLE UART rx buffer limit including CRLF
 
@@ -927,7 +927,8 @@ export class Ws2001AtClient {
   }
 
   private async setPayloadFormatWeatherXm(): Promise<void> {
-    // WeatherXM 24-byte frame on FPort 99: gust, rain total, signed frames (1 Helium DC per uplink)
+    // FPort 99 weather frames: the 24-byte WeatherXM frame (signed, 1 Helium DC per uplink) on profile 0, the
+    // Open Edition frame on profile 1 (V4.9+: 16 bytes, 20 bytes from V5.1); both with gust and rain total
     await this.expectOk('AT+TESTMODE_TYPE=0', 'select the WeatherXM payload format');
     await new Promise((resolve) => setTimeout(resolve, 400));
     const verify = await this.sendCommand('AT+TESTMODE_TYPE=?');
@@ -979,7 +980,7 @@ export class Ws2001AtClient {
    * Point the station at the customer's network server.
    * Firmware V4.5+: keys go into network profile 1; the WeatherXM keys (profile 0) are kept.
    * Older firmware: the single key set is overwritten (allowOverwrite must be true).
-   * The payload stays the WeatherXM 24-byte frame on FPort 99.
+   * The payload stays on FPort 99 (AT+TESTMODE_TYPE=0): the Open Edition frame on V4.9+, the 24-byte frame before.
    */
   async configureOpenLoRaWan(
     params: ConfigureOpenLoRaWanParams,
@@ -1037,7 +1038,7 @@ export class Ws2001AtClient {
       }
     }
 
-    onProgress?.('Keeping the WeatherXM 24-byte payload (FPort 99)...', step++, totalSteps);
+    onProgress?.('Keeping the FPort 99 weather payload...', step++, totalSteps);
     await this.setPayloadFormatWeatherXm();
 
     if (options.useProfiles) {
@@ -1077,7 +1078,7 @@ export class Ws2001AtClient {
   async switchToStoredOpenLoRaWan(onProgress?: (step: string, current: number, total: number) => void): Promise<void> {
     onProgress?.('Selecting the stored Open LoRaWAN network profile...', 1, 3);
     await this.expectOk(`AT+NETPROFILE=${NET_PROFILE_CUSTOM}`, 'select the custom network profile');
-    onProgress?.('Selecting the WeatherXM 24-byte payload format (FPort 99)...', 2, 3);
+    onProgress?.('Selecting the FPort 99 weather payload...', 2, 3);
     await this.setPayloadFormatWeatherXm();
     const verified = parseNetProfile(await this.sendCommand('AT+NETPROFILE=?'));
     if (!verified || verified.active !== NET_PROFILE_CUSTOM || !verified.customStored) {

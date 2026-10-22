@@ -78,6 +78,32 @@ describe('WS2001 uplink decoder (shared with the firmware repo)', () => {
     expect(data.lux).toBe(54320);
     expect(data.pressure).toBe(1013.2);
     expect(data.pressure_pa).toBeUndefined();
+    expect(data.wind_direction_sigma).toBeUndefined();
+  });
+
+  it('decodes the 20-byte Open Edition frame (V5.1+) with wind direction variability', () => {
+    const decodeUplink = new Function(`${TTN_PAYLOAD_DECODER}; return decodeUplink;`)();
+    // spread 21 deg, range 350..10 deg (across north), gust direction 4 deg; bytes 17-19 are 2-degree steps
+    const { data } = decodeUplink({ bytes: openWeatherFrame(false).concat([21, 175, 5, 2]), fPort: 99 });
+    expect(data.frame).toBe('weather');
+    expect(data.temperature).toBe(23.5);
+    expect(data.pressure).toBe(1013.2);
+    expect(data.wind_direction_sigma).toBe(21);
+    expect(data.wind_direction_range_start).toBe(350);
+    expect(data.wind_direction_range_end).toBe(10);
+    expect(data.wind_direction_range_width).toBe(20);
+    expect(data.wind_gust_direction).toBe(4);
+
+    // 0xFF = not available (calm interval or fewer than 5 samples at 0.5 m/s or more)
+    const calm = decodeUplink({ bytes: openWeatherFrame(false).concat([0xff, 0xff, 0xff, 0xff]), fPort: 99 }).data;
+    expect(calm.wind_direction_sigma).toBeNull();
+    expect(calm.wind_direction_range_start).toBeNull();
+    expect(calm.wind_direction_range_end).toBeNull();
+    expect(calm.wind_direction_range_width).toBeNull();
+    expect(calm.wind_gust_direction).toBeNull();
+
+    // Untagged frames of other lengths are rejected
+    expect(decodeUplink({ bytes: openWeatherFrame(false).concat([1, 2]), fPort: 99 }).errors).toHaveLength(1);
   });
 
   it('decodes signed frames and works as a ChirpStack v3 codec', () => {

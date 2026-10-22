@@ -18,8 +18,8 @@ describe('WS2001 TTN import JSON', () => {
     expect(d.frequency_plan_id).toBe('EU_863_870_TTN');
     expect(d.supports_join).toBe(true);
     expect(d.root_keys.app_key.key).toBe('00112233445566778899AABBCCDDEEFF');
-    expect(d.description).toMatch(/16-byte weather frame on FPort 99/);
-    expect(d.description).not.toMatch(/^[^(]*24-byte/);
+    expect(d.description).toMatch(/Weather frame on FPort 99: 20 bytes from firmware V5\.1/);
+    expect(d.description).toMatch(/16 bytes on V4\.9-V4\.10, 24 bytes on V4\.8 and earlier/);
   });
 
   it('maps regions and US/AU sub-bands to TTN frequency plans', () => {
@@ -53,6 +53,17 @@ describe('WS2001 TTN import JSON', () => {
     expect(openDecoded.temperature).toBe(19);
     expect(openDecoded.rain_accumulated).toBe(1008.6);
     expect(openDecoded.pressure).toBe(491.2);
+    expect(openDecoded.wind_direction_sigma).toBeUndefined();
+
+    // ...the 20-byte frame of V5.1+: the same 16 bytes, then spread 47 deg, range 180..270 deg, gust direction 182 deg
+    const open20 = open.concat([47, 90, 135, 91]);
+    const open20Decoded = decodeUplink({ bytes: open20, fPort: 99 }).data;
+    expect(open20Decoded.temperature).toBe(19);
+    expect(open20Decoded.wind_direction_sigma).toBe(47);
+    expect(open20Decoded.wind_direction_range_start).toBe(180);
+    expect(open20Decoded.wind_direction_range_end).toBe(270);
+    expect(open20Decoded.wind_direction_range_width).toBe(90);
+    expect(open20Decoded.wind_gust_direction).toBe(182);
 
     // ...and the 24-byte WeatherXM frame that V4.8 and earlier send.
     const frame = new Array(24).fill(0);

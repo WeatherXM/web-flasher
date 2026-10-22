@@ -434,7 +434,7 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
             </div>
 
             <p class="text-xs text-wxm-mist leading-relaxed">
-              Sends a compact 16-byte weather frame (V4.9; 24 bytes on older firmware) to The Things Network, ChirpStack or any LoRaWAN 1.0.4 network server you run. While it is on your network the station is off the WeatherXM network.
+              Sends a compact weather frame (20 bytes from V5.1, including how steady the wind direction was; 16 bytes on V4.9–V4.10, 24 bytes on older firmware) to The Things Network, ChirpStack or any LoRaWAN 1.0.4 network server you run. While it is on your network the station is off the WeatherXM network.
             </p>
 
             <div class="mt-3 pt-3 border-t border-wxm-cloud/10">
@@ -566,7 +566,7 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
                   Saving replaces the network settings stored on the station. The AppKey above is new: register it on your network server, or paste the one you already use.
                 </p>
                 <p class="text-[11px] text-wxm-mist leading-relaxed">
-                  TTN allows 30 s of airtime per device per day. A 16-byte uplink takes about 67 ms at SF7 (82 ms for the 24-byte frame before V4.9), so 3-minute uploads exceed it; use 5 minutes or more on TTN.
+                  TTN allows 30 s of airtime per device per day. A 20-byte uplink takes about 72 ms at SF7 (67 ms for the 16-byte frame of V4.9–V4.10, 82 ms for the 24-byte frame before V4.9), so 3-minute uploads exceed it; use 5 minutes or more on TTN.
                 </p>
               </fieldset>
             </details>
@@ -592,7 +592,7 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
                 </div>
               </div>
               <p class="text-[11px] text-wxm-mist leading-relaxed">
-                One script for TTN v3 and ChirpStack v4 / v3: decodes the 16-byte Open Edition and 24-byte WeatherXM frames on FPort 99 (with wind gust and rain total) and labels modem messages on FPort 199.
+                One script for TTN v3 and ChirpStack v4 / v3: decodes the Open Edition frames (16 bytes; 20 bytes from V5.1 with wind direction spread, range and gust direction) and the 24-byte WeatherXM frame on FPort 99 (with wind gust and rain total), and labels modem messages on FPort 199.
                 The TTN import file already includes it. Otherwise paste it into TTN (Payload formatters &gt; Uplink &gt; Custom Javascript) or ChirpStack (Device profile &gt; Codec).
               </p>
             </div>
@@ -843,7 +843,7 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
   import { trackTelemetry, redactTelemetryString } from '../lib/telemetry';
   import { ttnImportJson, ttnImportFileName, type TtnExportParams } from '../lib/ble/ws2001TtnExport';
   import { enterBootloader, requestBootloaderDevice, SecureDfuTransfer, makeBootloaderName, parseWs2001DfuPackage, type Ws2001DfuPackage } from '../lib/ble/ws2001Dfu';
-  import { fetchWs2001Manifest, latestRelease, downloadWs2001Release, isOutdated, compareStationVersion, type Ws2001Release } from '../lib/ble/ws2001Firmware';
+  import { fetchWs2001Manifest, latestRelease, optInReleases, downloadWs2001Release, isOutdated, compareStationVersion, type Ws2001Release } from '../lib/ble/ws2001Firmware';
 
   const $ = <T extends HTMLElement = HTMLElement>(id: string): T => {
     const el = document.getElementById(id);
@@ -858,6 +858,7 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
   // Published firmware releases (public/firmware/ws2001/manifest.json)
   let latest: Ws2001Release | null = null;
   let allReleases: Ws2001Release[] = [];
+  let newerReleases: Ws2001Release[] = []; // published, but newer than latest: installed only when picked
   const fwVersionSelect = $<HTMLSelectElement>('cfg-fw-version');
   const fwFileInput = $<HTMLInputElement>('cfg-fw-file');
 
@@ -865,13 +866,14 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
     .then((m) => {
       latest = latestRelease(m);
       allReleases = m.releases;
+      newerReleases = optInReleases(m);
       fwVersionSelect.innerHTML = '';
       for (const r of m.releases) {
         const opt = document.createElement('option');
         opt.value = r.version;
         opt.textContent = r.version === m.latest
           ? `${r.label} (latest release)`
-          : r.label;
+          : newerReleases.includes(r) ? `${r.label} (newer, opt-in)` : r.label;
         fwVersionSelect.appendChild(opt);
       }
       const customOpt = document.createElement('option');
@@ -883,6 +885,7 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
     .catch((e) => {
       latest = null;
       allReleases = [];
+      newerReleases = [];
       console.warn('WS2001 firmware list unavailable', e);
     });
 
@@ -1189,11 +1192,15 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
     } else if (vsLatest === 'equal') {
       setFwStripTone('ok');
       title.textContent = `Firmware ${cfg.version} is up to date`;
-      sub.textContent = 'The station runs the latest published release.';
+      sub.textContent = newerReleases.length
+        ? `The station runs the latest release. ${newerReleases[0].label} is also available under Other versions.`
+        : 'The station runs the latest published release.';
     } else if (vsLatest === 'newer') {
       setFwStripTone('ok');
       title.textContent = `Firmware ${cfg.version}`;
-      sub.textContent = `Newer than the published ${latest.label} (test build).`;
+      sub.textContent = allReleases.some((r) => compareStationVersion(cfg.version, r.version) === 'equal')
+        ? `A newer, opt-in release than the default ${latest.label}.`
+        : `Newer than the published ${latest.label} (test build).`;
     } else {
       setFwStripTone('neutral');
       title.textContent = 'Firmware version unknown';

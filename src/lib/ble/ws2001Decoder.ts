@@ -2,8 +2,9 @@
  * Uplink payload decoders for the WeatherXM WS2001 / WS2000.
  *
  * The network-server decoders (TTN v3, ChirpStack v4, ChirpStack v3) are one shared script,
- * generated from the firmware repository (see ws2001UplinkDecoder.ts). It decodes the WeatherXM
- * 24-byte frame on FPort 99 (default, includes wind gust and rain total) and the legacy
+ * generated from the firmware repository (see ws2001UplinkDecoder.ts). It decodes the frames on FPort 99
+ * (default, with wind gust and rain total): the 24-byte WeatherXM frame and the Open Edition frame (16 bytes in
+ * V4.9 - V4.10, 20 bytes with wind direction spread, range and gust direction from V5.1), and the legacy
  * "Open LoRaWAN" TLV on FPort 3.
  *
  * decodeWs2001Telemetry() below previews the legacy FPort 3 TLV only.

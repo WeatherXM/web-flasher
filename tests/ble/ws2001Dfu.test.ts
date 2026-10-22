@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { zipSync, unzipSync } from 'fflate';
 import { parseWs2001DfuPackage, SecureDfuTransfer, crc32, DfuError, enterBootloader } from '../../src/lib/ble/ws2001Dfu';
-import { compareStationVersion, isOutdated, parseStationVersion, validateWs2001Manifest } from '../../src/lib/ble/ws2001Firmware';
+import { compareStationVersion, isOutdated, optInReleases, parseStationVersion, stationDfuNumber, validateWs2001Manifest } from '../../src/lib/ble/ws2001Firmware';
 
 const FW_DIR = path.join(__dirname, '../../public/firmware/ws2001');
 const manifest = JSON.parse(readFileSync(path.join(FW_DIR, 'manifest.json'), 'utf8'));
@@ -13,10 +13,31 @@ const zip = new Uint8Array(readFileSync(path.join(__dirname, '../../public', lat
 describe('WS2001 firmware manifest', () => {
   it('lists a valid latest release', () => {
     const m = validateWs2001Manifest(manifest);
-    // Newest release first; DFU number = major x 10 + minor (V4.6 -> 46)
-    const [major, minor] = m.latest.split('.').map(Number);
-    expect(m.releases[0].version).toBe(m.latest);
-    expect(m.releases[0].fw_version).toBe(major * 10 + minor);
+    // Newest release first; DFU number = major x 10 + minor (V4.6 -> 46, V5.1 -> 51)
+    const fw = m.releases.map((r) => r.fw_version);
+    expect([...fw].sort((a, b) => b - a)).toEqual(fw);
+    for (const r of m.releases) {
+      const [major, minor] = r.version.split('.').map(Number);
+      expect(r.fw_version).toBe(major * 10 + minor);
+    }
+    // latest is the highest version unless it was pinned (newer releases are then opt-in only)
+    if (m.releases[0].version !== m.latest) expect(m.latest_pinned).toBe(true);
+  });
+
+  it('ships every listed package with the version and image the manifest states', async () => {
+    for (const r of manifest.releases) {
+      const pkg = await parseWs2001DfuPackage(new Uint8Array(readFileSync(path.join(__dirname, '../../public', r.file))));
+      expect(pkg.initPacket.fwVersion, r.label).toBe(r.fw_version);
+      expect(pkg.firmware.length, r.label).toBe(r.image_bytes);
+    }
+  });
+
+  it('offers releases newer than a pinned latest for opt-in installs only', () => {
+    const rel = (version: string, fw_version: number) => ({ version, fw_version }) as never;
+    const releases = [rel('5.1', 51), rel('4.10', 50), rel('4.9', 49)];
+    expect(optInReleases({ latest: '4.10', releases }).map((r: { version: string }) => r.version)).toEqual(['5.1']);
+    expect(optInReleases({ latest: '5.1', releases })).toEqual([]);
+    expect(optInReleases({ latest: '9.9', releases })).toEqual([]);
   });
 
   it('rejects manifests with mismatched fw_version or label', () => {
@@ -35,6 +56,18 @@ describe('WS2001 firmware manifest', () => {
     expect(isOutdated('V4.4', '4.5')).toBe(true);
     expect(isOutdated('V4.5', '4.5')).toBe(false);
     expect(isOutdated('V4.10', '4.5')).toBe(false);
+    expect(isOutdated('V4.9', '4.10')).toBe(true); // minor 10 compares numerically, not as text
+    expect(isOutdated('V4.10', '4.9')).toBe(false);
+    expect(isOutdated('V4.10', '5.1')).toBe(true);
+    expect(isOutdated('V5.1', '4.10')).toBe(false);
+    // Compared by DFU number (major x 10 + minor), as the bootloader does: V4.10 and V5.0 are both 50
+    expect(stationDfuNumber('V4.10')).toBe(50);
+    expect(stationDfuNumber('V5.1')).toBe(51);
+    expect(stationDfuNumber('Unknown')).toBeNull();
+    expect(compareStationVersion('V4.10', '5.0')).toBe('equal');
+    expect(compareStationVersion('V5.0', '4.10')).toBe('equal');
+    expect(isOutdated('V5.0', '4.10')).toBe(false);
+    expect(isOutdated('V4.10', '5.0')).toBe(false);
     expect(isOutdated('Unknown', '4.5')).toBe(false);
 
     expect(compareStationVersion('V4.4', '4.5')).toBe('older');
@@ -47,10 +80,11 @@ describe('WS2001 firmware manifest', () => {
 describe('WS2001 DFU package', () => {
   it('accepts the published, signed latest package', async () => {
     const pkg = await parseWs2001DfuPackage(zip);
-    expect(pkg.initPacket.fwVersion).toBe(manifest.releases[0].fw_version);
+    const latest = manifest.releases.find((r: { version: string }) => r.version === manifest.latest);
+    expect(pkg.initPacket.fwVersion).toBe(latest.fw_version);
     expect(pkg.initPacket.hwVersion).toBe(52);
     expect(pkg.initPacket.sdReq).toContain(0x0100);
-    expect(pkg.firmware.length).toBe(manifest.releases[0].image_bytes);
+    expect(pkg.firmware.length).toBe(latest.image_bytes);
   });
 
   it('rejects a package whose image was modified', async () => {
