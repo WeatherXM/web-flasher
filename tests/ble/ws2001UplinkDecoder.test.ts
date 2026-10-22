@@ -102,8 +102,14 @@ describe('WS2001 uplink decoder (shared with the firmware repo)', () => {
     expect(calm.wind_direction_range_width).toBeNull();
     expect(calm.wind_gust_direction).toBeNull();
 
-    // Untagged frames of other lengths are rejected
-    expect(decodeUplink({ bytes: openWeatherFrame(false).concat([1, 2]), fPort: 99 }).errors).toHaveLength(1);
+    // Frames from newer firmware that append fields: known fields decoded, the rest reported
+    const longer = decodeUplink({ bytes: openWeatherFrame(false).concat([21, 175, 5, 2, 7, 7]), fPort: 99 });
+    expect(longer.errors).toBeUndefined();
+    expect(longer.data.wind_direction_sigma).toBe(21);
+    expect(longer.warnings).toEqual([
+      '2 byte(s) after byte 19 not decoded (newer firmware?). Get the latest decoder: https://flash.weatherxm.com/decoders/ws2001_uplink_decoder.js',
+    ]);
+    expect(decodeUplink({ bytes: openWeatherFrame(false).slice(0, 15), fPort: 99 }).errors).toHaveLength(1);
   });
 
   it('decodes signed frames and works as a ChirpStack v3 codec', () => {
