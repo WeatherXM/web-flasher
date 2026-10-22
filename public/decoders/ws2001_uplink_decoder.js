@@ -1,4 +1,4 @@
-// WeatherXM WS2001 / WS2000 uplink decoder (WeatherXM firmware V3.x - V5.0+)
+// WeatherXM WS2001 / WS2000 uplink decoder (WeatherXM firmware V3.x - V4.10+)
 //
 // Paste this whole file as-is into:
 //   - The Things Stack v3:  Application > Payload formatters > Uplink > Custom JavaScript
