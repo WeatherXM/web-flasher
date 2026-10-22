@@ -460,6 +460,9 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
               </ul>
             </div>
 
+            <!-- Profile 0 holds another network's settings (put there by older tools before network profiles) -->
+            <p id="open-foreign-note" class="hidden mt-3 p-3 rounded-control bg-amber-500/10 border border-amber-400/40 text-xs text-amber-200 leading-relaxed"></p>
+
             <!-- Firmware too old for profiles -->
             <div id="open-old-fw-banner" class="hidden mt-3 p-3.5 rounded-control bg-amber-500/15 border border-amber-400/40 text-xs space-y-2.5 leading-relaxed">
               <p class="font-bold text-amber-300">Update the firmware first</p>
@@ -560,10 +563,10 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
                 <div>
                   <div class="flex items-center justify-between mb-1">
                     <label for="cfg-appkey" class="text-xs font-semibold text-wxm-cloud">AppKey (32 hex)</label>
-                    <button id="btn-gen-appkey" type="button" class="text-[11px] font-semibold text-emerald-300 hover:text-white cursor-pointer">Generate random</button>
+                    <button id="btn-gen-appkey" type="button" class="text-[11px] font-semibold text-emerald-300 hover:text-white cursor-pointer">Generate new AppKey</button>
                   </div>
                   <input id="cfg-appkey" type="text" maxlength="47" placeholder="00112233445566778899AABBCCDDEEFF" autocomplete="off" spellcheck="false"
-                    class="w-full px-3 py-2 rounded-control bg-wxm-abyss border border-wxm-cloud/20 text-white font-mono text-xs focus:outline-none focus:border-wxm-live uppercase" />
+                    class="w-full px-3 py-2 rounded-control bg-wxm-abyss border border-wxm-cloud/20 text-white font-mono text-xs focus:outline-none focus:border-wxm-live uppercase placeholder:normal-case placeholder:font-sans" />
                 </div>
 
                 <label class="flex items-start gap-2.5 text-[11px] text-wxm-mist leading-relaxed cursor-pointer select-none">
@@ -575,9 +578,7 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
                   </span>
                 </label>
 
-                <p id="open-form-key-note" class="hidden text-[11px] text-amber-300 leading-relaxed">
-                  Saving replaces the network settings stored on the station. The AppKey above is new: register it on your network server, or paste the one you already use.
-                </p>
+                <p id="open-form-key-note" class="text-[11px] text-wxm-mist leading-relaxed"></p>
                 <p class="text-[11px] text-wxm-mist leading-relaxed">
                   TTN allows 30 s of airtime per device per day. A 20-byte uplink takes about 72 ms at SF7 (67 ms for the 16-byte frame of V4.9–V4.10, 82 ms for the 24-byte frame before V4.9), so 3-minute uploads exceed it; use 5 minutes or more on TTN.
                 </p>
@@ -812,6 +813,7 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
         <p class="text-[12px] text-white leading-relaxed">
           You are about to move <strong id="modal-confirm-deveui" class="font-mono text-wxm-zenith"></strong> from the WeatherXM network to your own LoRaWAN network server.
         </p>
+        <p id="modal-appkey-line" class="text-[11.5px] text-wxm-cloud leading-relaxed"></p>
         <div class="p-3 rounded-control bg-wxm-abyss/80 border border-amber-500/25 text-amber-200/90 text-[11.5px] space-y-1.5">
           <p class="font-bold text-amber-400">Please acknowledge before proceeding:</p>
           <ul class="list-disc list-inside space-y-1 text-amber-200/80">
@@ -851,7 +853,7 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
 </SiteLayout>
 
 <script>
-  import { Ws2001AtClient, formatHexWithColons, type Ws2001DeviceConfig, type LoRaWanStatus, type StationMeasurements } from '../lib/ble/ws2001AtClient';
+  import { Ws2001AtClient, formatHexWithColons, isWeatherXmJoinEui, type Ws2001DeviceConfig, type LoRaWanStatus, type StationMeasurements } from '../lib/ble/ws2001AtClient';
   import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
   import { trackTelemetry, redactTelemetryString } from '../lib/telemetry';
   import { ttnImportJson, ttnImportFileName, type TtnExportParams } from '../lib/ble/ws2001TtnExport';
@@ -903,7 +905,7 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
       console.warn('WS2001 firmware list unavailable', e);
     });
 
-  // Demo data for layout work (dev server only, never in production builds): /ws2001?demo=old|wxm|custom|stored
+  // Demo data for layout work (dev server only, never in production builds): /ws2001?demo=old|wxm|custom|stored|foreign
   const demoMode = import.meta.env.DEV ? new URLSearchParams(location.search).get('demo') : null;
 
   const clearFormError = () => $('form-error').classList.add('hidden');
@@ -1019,8 +1021,41 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
       .join('')
       .toUpperCase();
     $<HTMLInputElement>('cfg-appkey').value = hex;
+    appKeyGenerated = true;
+    updateAppKeyNote();
   };
   $('btn-gen-appkey').addEventListener('click', generateRandomAppKey);
+
+  // The station never reveals its AppKey, so the field starts empty: empty keeps the AppKey saved in the custom
+  // profile (when there is one), a typed key must match the server, a generated key must be registered there.
+  let appKeyGenerated = false;
+  let appKeyFormStation: string | null = null;
+  function updateAppKeyNote() {
+    const customStored = Boolean(currentConfig?.netProfile?.customStored);
+    const input = $<HTMLInputElement>('cfg-appkey');
+    const note = $('open-form-key-note');
+    const hasKey = Boolean(input.value.trim());
+    input.placeholder = customStored ? 'Leave empty to keep the AppKey saved on the station' : 'AppKey registered on your network server (32 hex)';
+    let warn = false;
+    if (!hasKey) {
+      note.textContent = customStored
+        ? 'Leave the AppKey empty to keep the one saved on the station.'
+        : 'Enter the AppKey registered for this station on your network server. Generate a new one only for a new registration (the TTN import file includes it).';
+    } else if (appKeyGenerated) {
+      warn = true;
+      note.textContent = 'New AppKey: register it on your network server before switching (the TTN import file includes it), or the station cannot join.';
+    } else {
+      warn = customStored;
+      note.textContent = customStored
+        ? 'This AppKey replaces the one saved on the station: it must match your network server.'
+        : 'This AppKey must match the one registered for this station on your network server.';
+    }
+    note.className = `text-[11px] leading-relaxed ${warn ? 'text-amber-300' : 'text-wxm-mist'}`;
+  }
+  $('cfg-appkey').addEventListener('input', () => {
+    appKeyGenerated = false;
+    updateAppKeyNote();
+  });
 
   fwVersionSelect.addEventListener('change', () => {
     $('group-fw-custom').classList.toggle('hidden', fwVersionSelect.value !== 'custom');
@@ -1051,6 +1086,12 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
     const el = $(id);
     el.textContent = text;
     el.className = BADGE[tone];
+  }
+
+  // Profile 0 active but not running the WeatherXM JoinEUI: a customer's keys that older tools wrote before the
+  // station had network profiles, then kept as "WeatherXM" by the first boot with profile support.
+  function hasForeignWeatherXmProfile(cfg: Ws2001DeviceConfig): boolean {
+    return cfg.netProfile?.active === 0 && isWeatherXmJoinEui(cfg.appEui) === false;
   }
 
   function updateModeDisplay(cfg: Ws2001DeviceConfig) {
@@ -1157,7 +1198,14 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
     }
     $('btn-apply-label').textContent = onCustom ? 'Save Settings & Rejoin My Network' : customStored ? 'Save New Settings & Switch' : 'Switch to My Network';
     $('btn-open-stored-ttn').classList.toggle('hidden', !(onCustom && customStored));
-    $('open-form-key-note').classList.toggle('hidden', !customStored);
+    updateAppKeyNote();
+    const foreignNote = $('open-foreign-note');
+    const foreign = hasForeignWeatherXmProfile(cfg);
+    foreignNote.classList.toggle('hidden', !foreign);
+    if (foreign) {
+      foreignNote.textContent = `This station's WeatherXM profile uses JoinEUI ${cfg.appEui}, not WeatherXM's: an older tool probably put your network's settings there. ` +
+        'Its JoinEUI and upload interval are filled in below; enter the AppKey registered on your server. The original WeatherXM keys come back only with a factory reset.';
+    }
     syncApplyArea();
   }
 
@@ -1352,8 +1400,12 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
         joinType: cfg.joinType,
         battery: cfg.battery,
         intervalMinutes: cfg.uploadInterval,
-        mode: cfg.testModeType === 0 ? 'weatherxm' : cfg.testModeType === 1 ? 'open_lorawan' : 'unknown',
+        // The active network: from the profile on V4.5+ (test mode 0 is used on both networks), else the test mode
+        mode: cfg.netProfile
+          ? (cfg.netProfile.active === 1 ? 'open_lorawan' : 'weatherxm')
+          : cfg.testModeType === 0 ? 'weatherxm' : cfg.testModeType === 1 ? 'open_lorawan' : 'unknown',
         netProfile: cfg.netProfile ? cfg.netProfile.active : null,
+        foreignWxmProfile: hasForeignWeatherXmProfile(cfg),
         band: cfg.frequencyName,
       },
     });
@@ -1367,8 +1419,9 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
     }
     updateSubbandVisibility();
 
-    // Keep the TTN-friendly default unless the station is already on the customer's network
-    const alreadyCustom = cfg.netProfile ? cfg.netProfile.active === 1 : cfg.testModeType === 1;
+    // Keep the TTN-friendly default unless the station already reports to the customer's network (custom profile
+    // active, or the customer's settings sitting in profile 0): then propose what it uses now
+    const alreadyCustom = (cfg.netProfile ? cfg.netProfile.active === 1 : cfg.testModeType === 1) || hasForeignWeatherXmProfile(cfg);
     if (cfg.uploadInterval !== null && alreadyCustom) {
       const intervalSelect = $<HTMLSelectElement>('cfg-interval');
       const val = String(cfg.uploadInterval);
@@ -1390,11 +1443,15 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
       $<HTMLInputElement>('cfg-joineui').value = '0000000000000000';
     }
 
-    // Pre-generate a random 16-byte AppKey if empty so first-time Open LoRaWAN setup requires zero typing
-    const appKeyInput = $<HTMLInputElement>('cfg-appkey');
-    if (!appKeyInput.value.trim()) {
-      generateRandomAppKey();
+    // No AppKey pre-fill: the station never reveals its key, and a silent new one stops the join. A key typed or
+    // generated for another station is cleared.
+    const station = cfg.deviceEui || cfg.formattedDevEui || null;
+    if (station !== appKeyFormStation) {
+      appKeyFormStation = station;
+      $<HTMLInputElement>('cfg-appkey').value = '';
+      appKeyGenerated = false;
     }
+    updateAppKeyNote();
   }
 
   // Connect button handler
@@ -1553,6 +1610,9 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
   function ttnExportFromForm(): TtnExportParams {
     const devEui = currentConfig?.deviceEui || currentConfig?.formattedDevEui;
     if (!devEui || devEui === 'Unknown') throw new Error('Connect to a station first: its DevEUI is needed.');
+    if (!$<HTMLInputElement>('cfg-appkey').value.trim()) {
+      throw new Error('Enter the AppKey for the TTN import file (the station keeps its own AppKey secret), or generate a new one.');
+    }
     return {
       devEui,
       joinEui: $<HTMLInputElement>('cfg-joineui').value.trim(),
@@ -1644,7 +1704,7 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
     band: number;
     subBand: number;
     joinEui: string;
-    appKey: string;
+    appKey: string | null; // null keeps the AppKey saved in the custom profile
     intervalMinutes: number;
     gnss: boolean;
   } | null = null;
@@ -1697,14 +1757,23 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
       return;
     }
 
-    // Validate AppKey
-    let formattedAppKey = '';
-    try {
-      formattedAppKey = formatHexWithColons(appKeyRaw, 16);
-    } catch {
-      formError.textContent = 'Invalid AppKey: must be exactly 32 hexadecimal characters (16 bytes).';
-      formError.classList.remove('hidden');
-      return;
+    // Validate AppKey: empty keeps the one saved in the custom profile, which needs that profile to exist
+    let formattedAppKey: string | null = null;
+    const customStored = Boolean(currentConfig?.netProfile?.customStored);
+    if (!appKeyRaw) {
+      if (!customStored) {
+        formError.textContent = 'Enter the AppKey registered for this station on your network server, or generate a new one.';
+        formError.classList.remove('hidden');
+        return;
+      }
+    } else {
+      try {
+        formattedAppKey = formatHexWithColons(appKeyRaw, 16);
+      } catch {
+        formError.textContent = 'Invalid AppKey: must be exactly 32 hexadecimal characters (16 bytes).';
+        formError.classList.remove('hidden');
+        return;
+      }
     }
 
     // Store parameters pending user confirmation
@@ -1719,6 +1788,11 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
 
     // Open confirmation modal
     modalConfirmDevEui.textContent = currentConfig?.formattedDevEui || currentConfig?.deviceEui || 'WS2001 Station';
+    $('modal-appkey-line').textContent = formattedAppKey === null
+      ? 'AppKey: the one saved on the station is kept.'
+      : appKeyGenerated
+        ? 'AppKey: the new key you generated. It must be registered on your network server, or the station cannot join.'
+        : 'AppKey: the key you entered replaces the one on the station. It must match your network server.';
     chkConfirm.checked = false;
     btnConfirmProceed.disabled = true;
     modalConfirm.classList.remove('hidden');
@@ -2537,12 +2611,14 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
       wxm: { version: 'V4.7', netProfile: { active: 0, weatherxmStored: true, customStored: false }, lorawanStatus: 'JOINED', uploadInterval: 3 },
       stored: { version: 'V4.10', netProfile: { active: 0, weatherxmStored: true, customStored: true }, lorawanStatus: 'JOINING', uploadInterval: 3 },
       custom: { version: 'V4.10', netProfile: { active: 1, weatherxmStored: true, customStored: true }, lorawanStatus: 'JOINED', uploadInterval: 5, appEui: '70B3D57ED0000000' },
+      // A customer's keys in profile 0, written by older tools before the station had network profiles
+      foreign: { version: 'V5.1', netProfile: { active: 0, weatherxmStored: true, customStored: false }, lorawanStatus: 'JOINED', uploadInterval: 3, appEui: '0000000000000000' },
     };
     // Tracker states: ?demo=tracker-restart | tracker-joining | tracker-stuck | tracker-joined | custom (revisit)
     const trackerDemo = demoMode.startsWith('tracker-') ? demoMode.slice(8) : demoMode === 'custom' ? 'revisit' : null;
     if (trackerDemo) variants[demoMode] = variants.custom;
     const demoCfg: Ws2001DeviceConfig = {
-      deviceModel: 'H2', deviceEui: '2CF7F1C06150000C', formattedDevEui: '2C:F7:F1:C0:61:50:00:0C', appEui: '0000000000000000',
+      deviceModel: 'H2', deviceEui: '2CF7F1C06150000C', formattedDevEui: '2C:F7:F1:C0:61:50:00:0C', appEui: '8000000000000009',
       version: 'V4.10', battery: '92%', uploadInterval: 3, frequencyBand: 5, frequencyName: 'EU868', subBand: null,
       testModeType: 0, netProfile: null, lorawanStatus: 'JOINED', gnssSwitch: false, rawConfig: '', bleName: 'WeatherXM WS2001 50000C',
       ...(variants[demoMode] ?? variants.wxm),
