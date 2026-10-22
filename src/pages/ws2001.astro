@@ -2493,15 +2493,15 @@ import { WS2001_UPLINK_DECODER } from '../lib/ble/ws2001UplinkDecoder';
     const variants: Record<string, Partial<Ws2001DeviceConfig>> = {
       old: { version: 'V4.3', netProfile: null, testModeType: 0, lorawanStatus: 'JOINED', uploadInterval: 3 },
       wxm: { version: 'V4.7', netProfile: { active: 0, weatherxmStored: true, customStored: false }, lorawanStatus: 'JOINED', uploadInterval: 3 },
-      stored: { version: 'V4.9', netProfile: { active: 0, weatherxmStored: true, customStored: true }, lorawanStatus: 'JOINING', uploadInterval: 3 },
-      custom: { version: 'V4.9', netProfile: { active: 1, weatherxmStored: true, customStored: true }, lorawanStatus: 'JOINED', uploadInterval: 5, appEui: '70B3D57ED0000000' },
+      stored: { version: 'V5.0', netProfile: { active: 0, weatherxmStored: true, customStored: true }, lorawanStatus: 'JOINING', uploadInterval: 3 },
+      custom: { version: 'V5.0', netProfile: { active: 1, weatherxmStored: true, customStored: true }, lorawanStatus: 'JOINED', uploadInterval: 5, appEui: '70B3D57ED0000000' },
     };
     // Tracker states: ?demo=tracker-restart | tracker-joining | tracker-stuck | tracker-joined | custom (revisit)
     const trackerDemo = demoMode.startsWith('tracker-') ? demoMode.slice(8) : demoMode === 'custom' ? 'revisit' : null;
     if (trackerDemo) variants[demoMode] = variants.custom;
     const demoCfg: Ws2001DeviceConfig = {
       deviceModel: 'H2', deviceEui: '2CF7F1C06150000C', formattedDevEui: '2C:F7:F1:C0:61:50:00:0C', appEui: '0000000000000000',
-      version: 'V4.9', battery: '92%', uploadInterval: 3, frequencyBand: 5, frequencyName: 'EU868', subBand: null,
+      version: 'V5.0', battery: '92%', uploadInterval: 3, frequencyBand: 5, frequencyName: 'EU868', subBand: null,
       testModeType: 0, netProfile: null, lorawanStatus: 'JOINED', gnssSwitch: false, rawConfig: '', bleName: 'WeatherXM WS2001 50000C',
       ...(variants[demoMode] ?? variants.wxm),
     } as Ws2001DeviceConfig;
