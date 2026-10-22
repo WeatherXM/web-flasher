@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatHexWithColons, hasAtTerminator, parseAtConfig, parseLoRaWanStatus, parseMeasurements, redactAtLog, REGION_NAMES, Ws2001AtClient } from '../../src/lib/ble/ws2001AtClient';
+import { formatHexWithColons, hasAtTerminator, isWeatherXmJoinEui, parseAtConfig, parseLoRaWanStatus, parseMeasurements, redactAtLog, REGION_NAMES, Ws2001AtClient } from '../../src/lib/ble/ws2001AtClient';
 
 describe('Ws2001AtClient helpers', () => {
   it('formats hex strings with colons correctly for 8-byte DevEUI/JoinEUI', () => {
@@ -216,6 +216,54 @@ describe('Ws2001AtClient framing, serialization, and verification', () => {
       'AT+NETPROFILE=?',
       'ATZ',
     ]);
+  });
+});
+
+describe('AppKey handling when reconfiguring the custom profile', () => {
+  function client(netProfile: string) {
+    const server = { connected: true };
+    const c = new Ws2001AtClient() as any;
+    c.server = server;
+    c.rebootConfirmTimeoutMs = 300;
+    const commands: string[] = [];
+    c.sendCommand = async (command: string) => {
+      commands.push(command);
+      if (command === 'AT+TESTMODE_TYPE=?') return '0\r\nOK\r\n';
+      if (command === 'AT+NETPROFILE=?') return `${netProfile}\r\nOK\r\n`;
+      return '\r\nOK\r\n';
+    };
+    setTimeout(() => { server.connected = false; }, 50); // the station resets after ATZ
+    return { client: c as Ws2001AtClient, commands };
+  }
+  const params = { band: 5, joinEui: '0000000000000001', intervalMinutes: 3, gnss: false };
+
+  it('keeps the AppKey saved in the custom profile when the field is left empty', async () => {
+    const { client: c, commands } = client("{active: 1, weatherxm: 'stored', custom: 'stored'}");
+    await expect(c.configureOpenLoRaWan({ ...params, appKey: '' })).resolves.toBeUndefined();
+    expect(commands.some((cmd) => cmd.startsWith('AT+APPKEY'))).toBe(false);
+    expect(commands).toContain('AT+APPEUI=00:00:00:00:00:00:00:01');
+    expect(commands).toContain('AT+INTERVAL=3');
+  });
+
+  it('refuses an empty AppKey before writing anything when no custom profile is saved', async () => {
+    const { client: c, commands } = client("{active: 0, weatherxm: 'stored', custom: 'empty'}");
+    await expect(c.configureOpenLoRaWan({ ...params, appKey: null })).rejects.toThrow(/Enter the AppKey registered/);
+    expect(commands).toEqual(['AT+NETPROFILE=?']);
+  });
+
+  it('writes an AppKey that was entered', async () => {
+    const { client: c, commands } = client("{active: 1, weatherxm: 'stored', custom: 'stored'}");
+    await expect(c.configureOpenLoRaWan({ ...params, appKey: '11'.repeat(16) })).resolves.toBeUndefined();
+    expect(commands.filter((cmd) => cmd.startsWith('AT+APPKEY='))).toHaveLength(1);
+  });
+
+  it('recognises the WeatherXM JoinEUI and a customer JoinEUI in profile 0', () => {
+    expect(isWeatherXmJoinEui('8000000000000009')).toBe(true);
+    expect(isWeatherXmJoinEui('80:00:00:00:00:00:00:09')).toBe(true);
+    expect(isWeatherXmJoinEui('0000000000000000')).toBe(false);
+    expect(isWeatherXmJoinEui('70B3D57ED0000000')).toBe(false);
+    expect(isWeatherXmJoinEui(null)).toBeNull();
+    expect(isWeatherXmJoinEui('Unknown')).toBeNull();
   });
 });
 
