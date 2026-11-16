@@ -2,34 +2,20 @@
   "schema": 1,
   "hardware": "WS2001",
   "soc": "nRF52840",
-  "latest": "4.10",
-  "latest_pinned": true,
+  "latest": "5.1",
   "releases": [
     {
       "version": "5.1",
       "label": "V5.1",
       "fw_version": 51,
       "file": "/firmware/ws2001/ws2001-application-v5.1-ble-dfu.zip",
-      "bytes": 232282,
-      "sha256": "5ee7158a4f7d460f0b91f1329f627fd1223f6b2803fe99250f147b50529760c8",
-      "image_bytes": 231616,
-      "image_sha256": "90685cc6e858e9a92de9087e6a0c659324aebe9a3e85424bd22aa72e39c1cc07",
+      "bytes": 245566,
+      "sha256": "9d8ff05070349438ce942179a40b456567ee8d302246232114d7c71d157b511d",
+      "image_bytes": 244900,
+      "image_sha256": "e0be3f3984c465149d84f8e9a30527ffd282753ae94b96240ce97b2802f7ea7e",
       "source_repo": "WeatherXM/ws2001-firmware",
-      "git_commit": "5913746",
-      "built_at": "2026-10-22T08:09:47.600Z"
-    },
-    {
-      "version": "4.10",
-      "label": "V4.10",
-      "fw_version": 50,
-      "file": "/firmware/ws2001/ws2001-application-v4.10-ble-dfu.zip",
-      "bytes": 231222,
-      "sha256": "0bb41e7faf98d316bab05d7bc041202821b17d527cef6762f4294e97911393b1",
-      "image_bytes": 230556,
-      "image_sha256": "5d43debc1c9b15e40f44bc5fa4143c7be3d21acda31fe3229b98a53b311427d4",
-      "source_repo": "WeatherXM/ws2001-firmware",
-      "git_commit": "394fcc0",
-      "built_at": "2026-10-22T06:18:52.217Z"
+      "built_at": "2026-11-16T18:27:00.000Z",
+      "git_commit": "04c1b22"
     }
   ]
 }
