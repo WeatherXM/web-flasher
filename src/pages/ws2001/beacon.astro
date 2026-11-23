@@ -1,0 +1,422 @@
+---
+import SiteLayout from '../../layouts/SiteLayout.astro';
+import { BEACON_TX_POWERS } from '../../lib/ble/ws2001Beacon';
+
+const periods: [number, string][] = [
+  [10, '10 seconds'],
+  [30, '30 seconds'],
+  [60, '1 minute'],
+  [180, '3 minutes'],
+  [300, '5 minutes'],
+  [600, '10 minutes'],
+];
+---
+
+<SiteLayout
+  title="WS2001 (H2) Live Bluetooth Beacon — WeatherXM"
+  description="See live weather data from a WeatherXM WS2001 (H2) station over its Bluetooth beacon, without pairing, and turn the beacon on."
+  device="ws2001"
+>
+  <section class="max-w-5xl mx-auto px-4 sm:px-8 space-y-6">
+    <div class="space-y-3">
+      <a href="/ws2001" class="inline-flex items-center gap-1.5 text-xs font-semibold text-wxm-zenith hover:text-white">
+        <span aria-hidden="true">&larr;</span> WS2001 (H2) configurator
+      </a>
+      <h1 class="text-3xl sm:text-4xl font-extrabold tracking-tight leading-tight">WS2001 (H2) live Bluetooth beacon</h1>
+      <p class="text-sm text-wxm-mist leading-relaxed">
+        With firmware <strong class="text-white">V5.2 or later</strong> a station can broadcast its weather data over Bluetooth.
+        Any device nearby can read it <strong class="text-white">without pairing</strong>: this page, a phone app, Home Assistant
+        (the station also speaks <strong class="text-white">BTHome</strong>) or a microcontroller. The beacon is off until you turn
+        it on below, and the data is not encrypted.
+      </p>
+    </div>
+
+    <!-- Live view -->
+    <div class="rounded-card border-2 border-wxm-beacon/40 bg-wxm-midnight/90 backdrop-blur-md shadow-card p-5 sm:p-6 space-y-4">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div class="space-y-1">
+          <span class="text-[11px] font-extrabold text-wxm-zenith uppercase tracking-widest block">Listen · no pairing</span>
+          <h2 class="text-lg font-bold text-white">Stations in range</h2>
+        </div>
+        <button
+          id="btn-listen"
+          type="button"
+          class="py-3 px-6 rounded-control text-sm btn-primary-beacon cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-wxm-zenith"
+        >
+          Start listening
+        </button>
+      </div>
+
+      <p id="listen-status" class="text-xs text-wxm-mist leading-relaxed" role="status">
+        Listening only reads what stations broadcast. Nothing is written to a station and it does not restart.
+      </p>
+      <p id="listen-error" class="hidden text-xs text-red-300 leading-relaxed" role="alert"></p>
+
+      <div id="scan-unsupported" class="hidden p-4 rounded-control bg-amber-500/10 border border-amber-400/40 text-xs text-amber-200 leading-relaxed space-y-2">
+        <p><strong class="font-semibold">This browser cannot read Bluetooth broadcasts yet.</strong> Reading advertisements is an experimental part of Web Bluetooth.</p>
+        <ol class="list-decimal pl-5 space-y-1">
+          <li>Use Google Chrome or Microsoft Edge on Windows, macOS, Linux, ChromeOS or Android.</li>
+          <li>Open <code class="px-1 rounded bg-black/30 text-white select-all">chrome://flags/#enable-experimental-web-platform-features</code>, choose <strong>Enabled</strong> and restart the browser.</li>
+          <li>Come back to this page and press <strong>Start listening</strong>.</li>
+        </ol>
+        <p>Safari, Firefox and iOS browsers do not support it. You can still turn the beacon on below and read it with another device.</p>
+      </div>
+
+      <div id="stations" class="grid grid-cols-1 lg:grid-cols-2 gap-4"></div>
+    </div>
+
+    <!-- Setup -->
+    <div class="rounded-card border border-wxm-cloud/15 bg-wxm-storm/25 backdrop-blur-md shadow-card p-5 sm:p-6 space-y-4">
+      <div class="space-y-1">
+        <span class="text-[11px] font-extrabold text-wxm-zenith uppercase tracking-widest block">Set up · pairing needed once</span>
+        <h2 class="text-lg font-bold text-white">Turn the beacon on</h2>
+        <p class="text-xs text-wxm-mist leading-relaxed">
+          Changing the setting needs a normal paired connection, like the configurator: press the station's RESET button once
+          if this device has not been paired with it, then connect within 5 minutes. The station restarts when you save.
+        </p>
+      </div>
+
+      <button
+        id="btn-setup-connect"
+        type="button"
+        class="py-2.5 px-5 rounded-control text-sm font-bold text-white bg-wxm-storm/60 border border-wxm-cloud/20 hover:bg-wxm-storm hover:border-wxm-zenith/60 cursor-pointer disabled:opacity-50 disabled:cursor-wait"
+      >
+        Connect to a station
+      </button>
+      <p id="setup-status" class="hidden text-xs text-wxm-mist leading-relaxed" role="status"></p>
+      <p id="setup-error" class="hidden text-xs text-red-300 leading-relaxed" role="alert"></p>
+
+      <form id="setup-form" class="hidden space-y-4">
+        <p class="text-xs text-white"><span id="setup-name" class="font-bold"></span> <span id="setup-fw" class="text-wxm-mist"></span></p>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <label class="block space-y-1.5">
+            <span class="text-xs font-semibold text-wxm-cloud">Broadcast</span>
+            <select id="setup-mode" class="w-full rounded-control bg-wxm-abyss border border-wxm-cloud/20 text-sm text-white px-3 py-2">
+              <option value="0">Off</option>
+              <option value="3">LoRaWAN frame and BTHome</option>
+              <option value="2">BTHome only (live values)</option>
+              <option value="1">LoRaWAN frame only</option>
+            </select>
+          </label>
+          <label class="block space-y-1.5">
+            <span class="text-xs font-semibold text-wxm-cloud">Every</span>
+            <select id="setup-period" class="w-full rounded-control bg-wxm-abyss border border-wxm-cloud/20 text-sm text-white px-3 py-2">
+              {periods.map(([value, label]) => <option value={value}>{label}</option>)}
+            </select>
+          </label>
+          <label class="block space-y-1.5">
+            <span class="text-xs font-semibold text-wxm-cloud">Radio power</span>
+            <select id="setup-tx" class="w-full rounded-control bg-wxm-abyss border border-wxm-cloud/20 text-sm text-white px-3 py-2">
+              {BEACON_TX_POWERS.filter((p) => p >= -8).map((p) => (
+                <option value={p}>{p > 0 ? `+${p}` : p} dBm{p === 0 ? ' (default)' : p === 8 ? ' (longest range)' : ''}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <label class="flex items-start gap-2.5 text-xs text-wxm-mist leading-relaxed cursor-pointer select-none">
+          <input id="setup-time" type="checkbox" checked class="w-4 h-4 mt-0.5 rounded border-wxm-cloud/30 bg-wxm-abyss text-wxm-beacon focus:ring-0 cursor-pointer" />
+          <span>
+            <strong class="text-white">Set the station's clock from this device.</strong> Broadcasts then start on the clock
+            (every full minute for a 1-minute period), so battery-powered listeners can sleep in between. Stations on the
+            WeatherXM network get the time from the network and ignore this.
+          </span>
+        </label>
+        <label class="flex items-start gap-2.5 text-xs text-wxm-mist leading-relaxed cursor-pointer select-none">
+          <input id="setup-long-range" type="checkbox" class="w-4 h-4 mt-0.5 rounded border-wxm-cloud/30 bg-wxm-abyss text-wxm-beacon focus:ring-0 cursor-pointer" />
+          <span>
+            <strong class="text-white">Also send a long-range packet.</strong> Uses the Bluetooth 5 long-range radio mode
+            (Coded PHY) for roughly four times the range. Only receivers built for it hear it (nRF52, ESP32-C3/C6/S3,
+            recent phones with a suitable app); this page and most gateways do not. Uses more battery.
+          </span>
+        </label>
+        <p class="text-[11px] text-wxm-mist leading-relaxed">
+          A shorter period and a higher radio power use more of the station's battery. At 1 minute and 0 dBm the beacon
+          adds about 10 % to the station's Bluetooth activity.
+        </p>
+        <div class="flex flex-wrap gap-3">
+          <button id="btn-setup-save" type="submit" class="py-2.5 px-5 rounded-control text-sm btn-primary-beacon cursor-pointer disabled:opacity-50 disabled:cursor-wait">
+            Save and restart the station
+          </button>
+          <button id="btn-setup-cancel" type="button" class="py-2.5 px-5 rounded-control text-sm font-bold text-white bg-wxm-storm/60 border border-wxm-cloud/20 hover:bg-wxm-storm cursor-pointer">
+            Disconnect without saving
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <!-- For developers -->
+    <div class="rounded-card border border-wxm-cloud/15 bg-wxm-midnight/60 p-5 space-y-3">
+      <h2 class="text-lg font-bold text-white">Reading the beacon from your own device</h2>
+      <ul class="space-y-2 text-xs text-wxm-mist leading-relaxed">
+        <li><strong class="text-white font-semibold">Home Assistant, ESPHome, Shelly.</strong> The station appears through BTHome with temperature, humidity, pressure, wind speed, gust and direction, light, UV index, rain total and battery state. "Speed 1" is the wind speed and "Speed 2" the gust.</li>
+        <li><strong class="text-white font-semibold">Your own code.</strong> One packet carries the same weather frame the station sends over LoRaWAN, so the <a href="/decoders/ws2001_uplink_decoder.js" download="ws2001_uplink_decoder.js" class="underline underline-offset-2 text-wxm-zenith hover:text-white">LoRaWAN payload decoder</a> reads it after a 3-byte header. Another packet identifies the station (DevEUI) and carries its clock.</li>
+        <li><strong class="text-white font-semibold">Timing.</strong> All packets of a broadcast go out within about 1.3 seconds, then the station is silent until the next one. The period is in the packets, so a listener can sleep in between.</li>
+      </ul>
+    </div>
+  </section>
+</SiteLayout>
+
+<script>
+  import { Ws2001AtClient } from '../../lib/ble/ws2001AtClient';
+  import {
+    BEACON_MODE_LONG_RANGE,
+    beaconCommand,
+    beaconScanSupport,
+    beaconTimeCommand,
+    parseBeaconSettings,
+    secondsToNextBurst,
+    startBeaconListener,
+    type BeaconAdvertisement,
+    type BeaconBthomePacket,
+    type BeaconFramePacket,
+    type BeaconInfoPacket,
+  } from '../../lib/ble/ws2001Beacon';
+
+  const $ = <T extends HTMLElement = HTMLElement>(id: string): T => {
+    const el = document.getElementById(id);
+    if (!el) throw new Error(`Missing #${id}`);
+    return el as T;
+  };
+  const show = (el: HTMLElement, visible: boolean) => el.classList.toggle('hidden', !visible);
+  const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e));
+
+  // ------------------------------------------------------------------ live view
+  interface Station {
+    name: string | null;
+    rssi: number | null;
+    lastHeardMs: number;
+    live: BeaconBthomePacket;
+    liveAtMs: number | null;
+    frame: BeaconFramePacket | null;
+    info: BeaconInfoPacket | null;
+    el: HTMLElement;
+  }
+
+  const stations = new Map<string, Station>();
+  let stopListening: (() => void) | null = null;
+
+  const fmt = (v: number | null | undefined, digits: number, unit: string) =>
+    v === null || v === undefined ? '–' : `${v.toFixed(digits)}${unit ? ` ${unit}` : ''}`;
+  const compass = (deg: number | null | undefined) =>
+    deg === null || deg === undefined ? '' : ` ${['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'][Math.round(deg / 45) % 8]}`;
+
+  function cell(label: string, value: string): string {
+    return `<div class="rounded-control bg-wxm-abyss/60 border border-wxm-cloud/10 px-3 py-2"><dt class="text-[10px] font-semibold uppercase tracking-wider text-wxm-cloud">${label}</dt><dd class="text-sm font-bold text-white">${value}</dd></div>`;
+  }
+
+  // Values come from the station's own packets as numbers; names are escaped before they reach innerHTML.
+  const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+
+  function render(st: Station): void {
+    const now = Date.now();
+    const live = st.live;
+    const frame = st.frame?.data ?? null;
+    const period = st.info?.periodS ?? st.frame?.periodS ?? null;
+    const utc = st.info?.utcAligned ?? st.frame?.utcAligned ?? false;
+    const title = st.name ?? (st.info ? `WeatherXM station ${st.info.nameSuffix}` : 'WeatherXM station');
+    const age = Math.max(0, Math.round((now - st.lastHeardMs) / 1000));
+    const next = period ? Math.ceil(secondsToNextBurst(period, utc, st.lastHeardMs, now)) : null;
+
+    const meta: string[] = [];
+    if (st.info) meta.push(`V${st.info.firmwareVersion}`, st.info.networkProfile === 'weatherxm' ? 'WeatherXM network' : 'own LoRaWAN network', `DevEUI ${st.info.devEui}`);
+    if (period) meta.push(`every ${period >= 120 ? `${period / 60} min` : `${period} s`}${utc ? ', on the clock' : ''}`);
+    if (st.rssi !== null) meta.push(`${st.rssi} dBm`);
+
+    const liveCells = st.liveAtMs === null && !st.info
+      ? '<p class="text-xs text-wxm-mist">Waiting for the live values (BTHome packets)...</p>'
+      : `<dl class="grid grid-cols-2 sm:grid-cols-3 gap-2">${[
+          cell('Temperature', fmt(live.temperature, 1, '°C')),
+          cell('Humidity', fmt(live.humidity, 0, '%')),
+          cell('Pressure', fmt(live.pressure, 1, 'hPa')),
+          cell('Wind', fmt(live.wind_speed, 1, 'm/s') + compass(live.wind_direction)),
+          cell('Gust', fmt(live.wind_gust, 1, 'm/s')),
+          cell('Direction', fmt(live.wind_direction, 0, '°')),
+          cell('Light', fmt(live.illuminance, 0, 'lux')),
+          cell('UV index', fmt(live.uv_index, 1, '')),
+          cell('Rain rate', fmt(st.info?.rainRate, 1, 'mm/h')),
+          cell('Rain total', st.info?.rainTotal !== null && st.info?.rainTotal !== undefined ? fmt(st.info.rainTotal, 1, 'mm') : fmt(live.rain_accumulated, 1, 'mm')),
+        ].join('')}</dl>`;
+
+    const frameBlock = frame
+      ? `<details class="text-xs text-wxm-mist"><summary class="cursor-pointer font-semibold text-wxm-cloud hover:text-white">LoRaWAN frame #${st.frame!.frameCounter}${st.frame!.stale ? ' (stale)' : ''}: averages over the upload interval</summary>
+          <dl class="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-2">${[
+            cell('Temperature', fmt(frame.temperature, 1, '°C')),
+            cell('Humidity', fmt(frame.humidity, 0, '%')),
+            cell('Pressure', fmt(frame.pressure, 1, 'hPa')),
+            cell('Wind', fmt(frame.wind_speed, 1, 'm/s') + compass(frame.wind_direction)),
+            cell('Gust', fmt(frame.wind_gust, 1, 'm/s')),
+            cell('Rain rate', fmt(frame.rain_rate, 1, 'mm/h')),
+          ].join('')}</dl>
+          <p class="mt-2 font-mono text-[10px] break-all text-wxm-cloud">${st.frame!.frameHex}</p></details>`
+      : '';
+
+    const battery = live.battery_low || frame?.battery_low ? '<span class="px-2 py-0.5 text-[10px] font-semibold rounded-full border bg-amber-500/10 border-amber-400/40 text-amber-200">Battery low</span>' : '';
+
+    st.el.innerHTML = `
+      <div class="flex flex-wrap items-center gap-2">
+        <h3 class="text-base font-bold text-white">${escapeHtml(title)}</h3>${battery}
+        <span class="ml-auto text-[11px] text-wxm-mist">heard ${age} s ago${next !== null ? ` · next in about ${next} s` : ''}</span>
+      </div>
+      <p class="text-[11px] text-wxm-mist">${escapeHtml(meta.join(' · '))}</p>
+      ${liveCells}
+      ${frameBlock}`;
+  }
+
+  function onAdvertisement(adv: BeaconAdvertisement): void {
+    let st = stations.get(adv.deviceId);
+    if (!st) {
+      const el = document.createElement('article');
+      el.className = 'rounded-card border border-wxm-cloud/15 bg-wxm-storm/30 p-4 space-y-3';
+      $('stations').appendChild(el);
+      st = { name: null, rssi: null, lastHeardMs: 0, live: { packet: 'bthome' }, liveAtMs: null, frame: null, info: null, el };
+      stations.set(adv.deviceId, st);
+      $('listen-status').textContent = 'Listening. Values update with every broadcast.';
+    }
+    if (adv.name) st.name = adv.name;
+    if (adv.rssi !== null) st.rssi = adv.rssi;
+    st.lastHeardMs = Date.now();
+    for (const p of adv.packets) {
+      if (p.packet === 'bthome') {
+        // the two BTHome packets carry different values: merge them
+        st.live = { ...st.live, ...p };
+        st.liveAtMs = st.lastHeardMs;
+      } else if (p.packet === 'frame') st.frame = p;
+      else st.info = p;
+    }
+    render(st);
+  }
+
+  setInterval(() => stations.forEach(render), 1000);
+
+  const support = beaconScanSupport();
+  if (support === 'none') {
+    show($('scan-unsupported'), true);
+    $<HTMLButtonElement>('btn-listen').disabled = true;
+  } else if (support === 'watch') {
+    $('listen-status').textContent = 'This browser can follow one station at a time: press Start listening and pick it from the list. Nothing is written to the station and it does not restart.';
+  }
+
+  $('btn-listen').addEventListener('click', async () => {
+    const btn = $<HTMLButtonElement>('btn-listen');
+    show($('listen-error'), false);
+    if (stopListening) {
+      stopListening();
+      stopListening = null;
+      btn.textContent = 'Start listening';
+      $('listen-status').textContent = 'Stopped.';
+      return;
+    }
+    try {
+      stopListening = await startBeaconListener(onAdvertisement);
+      btn.textContent = 'Stop listening';
+      if (stations.size === 0) {
+        $('listen-status').textContent = 'Listening... A station shows up at its next broadcast (up to one period, 1 minute by default). No station after that? Its beacon may be off, or its firmware older than V5.2.';
+      }
+    } catch (e) {
+      const el = $('listen-error');
+      el.textContent = `Could not start listening: ${errorText(e)}`;
+      show(el, true);
+    }
+  });
+
+  // ------------------------------------------------------------------ setup
+  let client: Ws2001AtClient | null = null;
+
+  function setupStatus(text: string | null): void {
+    const el = $('setup-status');
+    el.textContent = text ?? '';
+    show(el, Boolean(text));
+  }
+  function setupError(text: string | null): void {
+    const el = $('setup-error');
+    el.textContent = text ?? '';
+    show(el, Boolean(text));
+  }
+  function setSelect(id: string, value: number): void {
+    const sel = $<HTMLSelectElement>(id);
+    if (!Array.from(sel.options).some((o) => Number(o.value) === value)) {
+      const opt = document.createElement('option');
+      opt.value = String(value);
+      opt.textContent = `${value}`;
+      sel.appendChild(opt);
+    }
+    sel.value = String(value);
+  }
+
+  async function closeSetup(message: string | null): Promise<void> {
+    const c = client;
+    client = null;
+    show($('setup-form'), false);
+    $<HTMLButtonElement>('btn-setup-connect').disabled = false;
+    setupStatus(message);
+    if (c) await c.disconnect().catch(() => {});
+  }
+
+  $('btn-setup-connect').addEventListener('click', async () => {
+    const btn = $<HTMLButtonElement>('btn-setup-connect');
+    setupError(null);
+    btn.disabled = true;
+    setupStatus('Connecting...');
+    try {
+      client = new Ws2001AtClient();
+      client.onHint = (hint) => hint && setupStatus(hint);
+      await client.connect();
+      setupStatus('Reading the beacon setting...');
+      const version = /Software:\s*'V([\d.]+)'/.exec(await client.sendCommand('AT+VER=?', 3000))?.[1] ?? null;
+      let settings = null;
+      try {
+        settings = parseBeaconSettings(await client.sendCommand('AT+BEACON=?', 3000));
+      } catch {
+        settings = null; // firmware without the beacon answers AT_ERROR
+      }
+      if (!settings) {
+        await closeSetup(null);
+        setupError(`This station runs firmware ${version ? `V${version}` : 'without the beacon'}. The beacon needs V5.2 or later: update the station in the configurator first. The station restarts now.`);
+        return;
+      }
+      $('setup-name').textContent = client.deviceName;
+      $('setup-fw').textContent = version ? `· firmware V${version}` : '';
+      setSelect('setup-mode', settings.mode === 0 ? 3 : settings.mode & 3);
+      $<HTMLInputElement>('setup-long-range').checked = (settings.mode & BEACON_MODE_LONG_RANGE) !== 0;
+      setSelect('setup-period', settings.periodS);
+      setSelect('setup-tx', settings.txPowerDbm);
+      setupStatus(settings.mode === 0 ? 'The beacon is off on this station. Choose the settings and save to turn it on.' : 'The beacon is on. Change the settings and save, or choose Off.');
+      show($('setup-form'), true);
+    } catch (e) {
+      await closeSetup(null);
+      setupError(`Could not connect: ${errorText(e)}`);
+    }
+  });
+
+  $('setup-form').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    if (!client) return;
+    const save = $<HTMLButtonElement>('btn-setup-save');
+    save.disabled = true;
+    setupError(null);
+    try {
+      const standard = Number($<HTMLSelectElement>('setup-mode').value);
+      // "Off" turns everything off; the long-range packet is an addition to the standard ones
+      const mode = standard === 0 ? 0 : standard | ($<HTMLInputElement>('setup-long-range').checked ? BEACON_MODE_LONG_RANGE : 0);
+      const period = Number($<HTMLSelectElement>('setup-period').value);
+      const tx = Number($<HTMLSelectElement>('setup-tx').value);
+      const current = parseBeaconSettings(await client.sendCommand('AT+BEACON=?', 3000));
+      const reply = await client.sendCommand(beaconCommand(mode, period, current?.repeat ?? 3, tx), 5000);
+      if (!/(^|\n)OK\r?\n/.test(reply)) throw new Error(`the station answered ${reply.trim() || 'nothing'}`);
+      if (mode !== 0 && $<HTMLInputElement>('setup-time').checked) {
+        await client.sendCommand(beaconTimeCommand(), 3000);
+      }
+      await closeSetup(mode === 0
+        ? 'Saved: the beacon is off. The station is restarting.'
+        : 'Saved. The station is restarting and starts broadcasting in about 15 seconds. Press Start listening above to see it.');
+    } catch (e) {
+      setupError(`Could not save: ${errorText(e)}`);
+    } finally {
+      save.disabled = false;
+    }
+  });
+
+  $('btn-setup-cancel').addEventListener('click', () => {
+    void closeSetup('Disconnected. Nothing was changed; the station restarts after every Bluetooth session.');
+  });
+</script>
