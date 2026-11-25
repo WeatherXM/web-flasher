@@ -16,6 +16,54 @@ export interface Ws2001ChangelogEntry {
 
 export const WS2001_CHANGELOG: Ws2001ChangelogEntry[] = [
   {
+    version: '5.2',
+    date: '2026-11-24',
+    summary: 'Adds an optional Bluetooth beacon: nearby devices can read the weather data without pairing.',
+    changes: [
+      {
+        title: 'Bluetooth weather beacon',
+        detail:
+          'The station can broadcast its weather data over Bluetooth Low Energy. A phone, a gateway or a ' +
+          'microcontroller nearby only has to listen: no pairing, no connection, and any number of listeners at ' +
+          'once. The beacon is off until you turn it on, on the live Bluetooth beacon page of this site or with ' +
+          'AT+BEACON. The data is not encrypted: anyone within radio range can read it.',
+      },
+      {
+        title: 'Two formats in every broadcast',
+        detail:
+          'One packet carries the same weather frame the station sends over LoRaWAN, so the LoRaWAN payload ' +
+          'decoder reads it. Two more packets use BTHome v2, which Home Assistant, ESPHome and Shelly gateways ' +
+          'read without a custom decoder; they carry the latest 12-second reading. An identification packet adds ' +
+          'the DevEUI, the firmware version, the rain rate and the full rain total.',
+      },
+      {
+        title: 'Built for listeners that sleep',
+        detail:
+          'A broadcast lasts about 1.3 seconds and repeats at the period you choose (5 seconds to 1 hour, 1 minute ' +
+          'by default). The identification packet says how far into the broadcast it was sent, so a listener knows ' +
+          'when the next one starts and can sleep until then. Stations that have the time from the network start ' +
+          'their broadcasts on the clock.',
+      },
+      {
+        title: 'Radio power and long range',
+        detail:
+          'The radio power of the beacon can be raised to +8 dBm for more range. An optional extra packet uses the ' +
+          'Bluetooth 5 long-range mode (Coded PHY); only receivers built for it hear it, and it has not been ' +
+          'confirmed with such a receiver yet.',
+      },
+      {
+        title: 'Everything else unchanged',
+        detail:
+          'LoRaWAN uplinks, both network profiles and the payload formats are the same as in V5.1. With the beacon ' +
+          'off the station behaves as before; with it on, pairing and firmware updates keep working.',
+      },
+    ],
+    upgradeNote:
+      'This is a preview. The beacon packets carry a temporary Bluetooth company identifier (0xFFFF) that a later ' +
+      'release will replace, so receivers written against V5.2 will need a small update then. The BTHome packets ' +
+      'are not affected.',
+  },
+  {
     version: '5.1',
     date: '2026-10-22',
     summary: 'Adds how steady the wind direction was to the Open Edition uplink.',

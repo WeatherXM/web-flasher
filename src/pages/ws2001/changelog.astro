@@ -89,8 +89,13 @@ const compare: [string, string, string][] = [
           <p class="text-sm text-white leading-relaxed">{e.summary}</p>
           {e.upgradeNote && (
             <p class="p-3 rounded-control bg-amber-500/10 border border-amber-400/40 text-xs text-amber-200 leading-relaxed">
-              <strong class="font-semibold">Before you install:</strong> {e.upgradeNote}{' '}
-              <a href="/decoders/ws2001_uplink_decoder.js" download="ws2001_uplink_decoder.js" class="underline underline-offset-2 hover:text-white">Download the decoder</a>.
+              <strong class="font-semibold">Before you install:</strong> {e.upgradeNote}
+              {/decoder/i.test(e.upgradeNote) && (
+                <>
+                  {' '}
+                  <a href="/decoders/ws2001_uplink_decoder.js" download="ws2001_uplink_decoder.js" class="underline underline-offset-2 hover:text-white">Download the decoder</a>.
+                </>
+              )}
             </p>
           )}
           <ul class="space-y-2">
