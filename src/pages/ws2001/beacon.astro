@@ -147,6 +147,10 @@ const periods: [number, string][] = [
     <!-- For developers -->
     <div class="rounded-card border border-wxm-cloud/15 bg-wxm-midnight/60 p-5 space-y-3">
       <h2 class="text-lg font-bold text-white">Reading the beacon from your own device</h2>
+      <p class="text-xs text-wxm-mist leading-relaxed">
+        Packet formats, timing and ready-made decoders are in the
+        <a href="/ws2001/beacon/reference" class="font-semibold underline underline-offset-2 text-wxm-zenith hover:text-white">beacon reference</a>.
+      </p>
       <ul class="space-y-2 text-xs text-wxm-mist leading-relaxed">
         <li><strong class="text-white font-semibold">Home Assistant, ESPHome, Shelly.</strong> The station appears through BTHome with temperature, humidity, pressure, wind speed, gust and direction, light, UV index, rain total and battery state. "Speed 1" is the wind speed and "Speed 2" the gust.</li>
         <li><strong class="text-white font-semibold">Your own code.</strong> One packet carries the same weather frame the station sends over LoRaWAN, so the <a href="/decoders/ws2001_uplink_decoder.js" download="ws2001_uplink_decoder.js" class="underline underline-offset-2 text-wxm-zenith hover:text-white">LoRaWAN payload decoder</a> reads it after a 3-byte header. Another packet identifies the station (DevEUI) and carries its clock.</li>
