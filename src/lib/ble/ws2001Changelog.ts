@@ -58,10 +58,6 @@ export const WS2001_CHANGELOG: Ws2001ChangelogEntry[] = [
           'off the station behaves as before; with it on, pairing and firmware updates keep working.',
       },
     ],
-    upgradeNote:
-      'This is a preview. The beacon packets carry a temporary Bluetooth company identifier (0xFFFF) that a later ' +
-      'release will replace, so receivers written against V5.2 will need a small update then. The BTHome packets ' +
-      'are not affected.',
   },
   {
     version: '5.1',

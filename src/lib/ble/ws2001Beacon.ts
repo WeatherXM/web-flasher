@@ -10,7 +10,7 @@
  * tests/ble/ws2001Beacon.test.ts checks this decoder against that script field by field.
  */
 
-/** Bluetooth SIG company identifier of the manufacturer data (0xFFFF = test identifier, see BLE_BEACON.md). */
+/** Company identifier of the manufacturer data: 0xFFFF, as WeatherXM has none assigned (see BLE_BEACON.md). */
 export const BEACON_COMPANY_ID = 0xffff;
 export const BEACON_FORMAT_VERSION = 1;
 export const BEACON_PACKET_FRAME = 0;
