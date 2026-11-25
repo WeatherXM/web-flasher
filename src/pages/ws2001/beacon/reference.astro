@@ -1,0 +1,353 @@
+---
+import { Code } from 'astro:components';
+import SiteLayout from '../../../layouts/SiteLayout.astro';
+
+type Row = [string, string];
+type Row3 = [string, string, string];
+
+const burst: Row3[] = [
+  ['1', 'Frame', 'The weather frame of the LoRaWAN uplink: averages, gust and rain rate over the upload interval'],
+  ['2', 'Info', 'Which station this is, where in the broadcast the packet is, rain rate and rain total'],
+  ['3', 'BTHome, even packet id', 'Temperature, pressure, humidity, wind speed, wind gust, wind direction'],
+  ['4', 'BTHome, odd packet id', 'Light, battery low, UV index, time (if the station has it), rain total, firmware version'],
+  ['5', 'Long range (optional)', 'All of the above in one packet on the Bluetooth 5 long-range radio mode'],
+];
+
+const framePacket: Row[] = [
+  ['0', 'Bits 7–4: format version, 1. Bits 3–2: packet type, 0. Bit 0: broadcasts start on the clock (UTC). Bit 1: the frame is stale (older than two upload intervals)'],
+  ['1', 'Frame counter: +1 for every new frame, wraps at 255. The same frame is repeated until the station builds the next one'],
+  ['2', 'Broadcast period: 1–127 = seconds; bit 7 set = minutes in bits 6–0'],
+  ['3…', 'The weather frame: 24 bytes starting with 0xF0 (station on the WeatherXM network) or 20 bytes (station on your own LoRaWAN network)'],
+];
+
+const infoPacket: Row[] = [
+  ['0', 'Bits 7–4: format version, 1. Bits 3–2: packet type, 1. Bit 0: broadcasts start on the clock (UTC)'],
+  ['1', 'Broadcast period, as in the frame packet'],
+  ['2–9', 'DevEUI. Its last 3 bytes are the end of the station\'s Bluetooth name and of the label on the station'],
+  ['10', 'Firmware version: major in bits 7–4, minor in bits 3–0 (0x52 = V5.2)'],
+  ['11', 'Network: 0 = WeatherXM network, 1 = your own LoRaWAN network'],
+  ['12', 'Radio power of the beacon, dBm, signed'],
+  ['13–14', 'Position in the broadcast: milliseconds from its start to this packet, uint16'],
+  ['15–16', 'Minutes since the station started, uint16 (stops at 65535)'],
+  ['17–20', 'Unix time of the broadcast, seconds, uint32; 0 = the station has no clock'],
+  ['21–22', 'Rain rate now, 0.1 mm/h, uint16; 0xFFFF = not available'],
+  ['23–26', 'Rain total, 0.001 mm, uint32; 0x7FFFFFFF = not available'],
+];
+
+const bthome: [string, string, string, string][] = [
+  ['even', 'packet id', '0x00', 'uint8'],
+  ['even', 'temperature', '0x02', 'int16, 0.01 °C'],
+  ['even', 'pressure', '0x04', 'uint24, 0.01 hPa'],
+  ['even', 'humidity', '0x2E', 'uint8, %'],
+  ['even', 'speed, first: wind speed (mean of the last 12 s)', '0x44', 'uint16, 0.01 m/s'],
+  ['even', 'speed, second: wind gust (peak of the last 12 s)', '0x44', 'uint16, 0.01 m/s'],
+  ['even', 'direction: wind direction', '0x5E', 'uint16, 0.01°'],
+  ['odd', 'packet id', '0x00', 'uint8'],
+  ['odd', 'illuminance', '0x05', 'uint24, 0.01 lux (tops out at 167 772 lux)'],
+  ['odd', 'battery (binary)', '0x15', 'uint8, 1 = low'],
+  ['odd', 'UV index', '0x46', 'uint8, 0.1'],
+  ['odd', 'timestamp (only when the station has a clock)', '0x50', 'uint32, Unix time'],
+  ['odd', 'precipitation: rain total', '0x5F', 'uint16, 0.1 mm, wraps at 6553.5 mm'],
+  ['odd', 'firmware version', '0xF2', 'uint24: 00 02 05 = 5.2.0'],
+];
+
+const atCommands: Row[] = [
+  ['AT+BEACON=3,60', 'Frame and BTHome packets, one broadcast every 60 s'],
+  ['AT+BEACON=3,60,3,8', 'The same with each packet sent 3 times at +8 dBm'],
+  ['AT+BEACON=7,60', 'Adds the long-range packet'],
+  ['AT+BEACON=2,30', 'BTHome only, every 30 s'],
+  ['AT+BEACON=0', 'Off'],
+  ['AT+BEACON=?', 'Shows the setting: {mode, period, repeat, tx, utc, frame_age, err}'],
+  ['AT+BEACONTIME=1795564800,250', 'Sets the station\'s clock: Unix seconds, milliseconds'],
+];
+
+const jsExample = `// Node.js: npm install @abandonware/noble   (any BLE scanner that gives you the raw bytes works)
+const noble = require('@abandonware/noble');
+require('./ws2001_uplink_decoder.js');                       // optional: decodes the weather frame too
+const beacon = require('./ws2001_beacon_decoder.js');
+
+noble.on('stateChange', (s) => s === 'poweredOn' && noble.startScanning([], true));
+noble.on('discover', (p) => {
+  const adv = p.advertisement;
+  const m = adv.manufacturerData;                            // starts with the company identifier
+  if (m && m.length > 2 && m.readUInt16LE(0) === beacon.WXM_BEACON_COMPANY_ID) {
+    const packet = beacon.wxmBeaconDecodeManufacturerData([...m.subarray(2)]);
+    if (packet) console.log(p.address, packet);
+    if (packet && packet.packet === 'info') {
+      console.log('next broadcast in', beacon.wxmBeaconMsToNextBurst(packet, 0), 'ms');
+    }
+  }
+  for (const sd of adv.serviceData || []) {
+    if (sd.uuid === 'fcd2') console.log(p.address, beacon.wxmBeaconDecodeBthome([...sd.data]));
+  }
+});`;
+
+const pyExample = `# pip install bleak
+import asyncio
+from bleak import BleakScanner
+from ws2001_beacon import COMPANY_ID, BTHOME_UUID, decode_manufacturer_data, decode_bthome, seconds_to_next_burst
+
+def on_advertisement(device, adv):
+    data = adv.manufacturer_data.get(COMPANY_ID)             # bytes after the company identifier
+    if data is not None:
+        packet = decode_manufacturer_data(bytes(data))
+        if packet:
+            print(device.address, packet)
+            if packet["packet"] == "info":
+                import time
+                wait = seconds_to_next_burst(packet["period_s"], time.time(), packet["burst_offset_ms"])
+                print("next broadcast in %.1f s" % wait)
+    data = adv.service_data.get(BTHOME_UUID)                 # bytes after the service UUID
+    if data is not None:
+        print(device.address, decode_bthome(bytes(data)))
+
+async def main():
+    async with BleakScanner(on_advertisement):
+        await asyncio.sleep(120)
+
+asyncio.run(main())`;
+
+const sleepExample = `heard_at      = local time when an info packet arrived
+burst_start   = heard_at - burst_offset_ms
+next_burst    = burst_start + period_s
+
+wake up at  next_burst - guard     (guard: 350 ms is a good start)
+scan for    about 1.5 s + guard    (a broadcast lasts about 1.3 s)
+repeat with the info packet of that broadcast`;
+---
+
+<SiteLayout
+  title="WS2001 (H2) Bluetooth Beacon Reference — WeatherXM"
+  description="Packet formats, timing, settings and decoders for the Bluetooth weather beacon of the WeatherXM WS2001 (H2) station, firmware V5.2 and later."
+  device="ws2001"
+>
+  <section class="max-w-4xl mx-auto px-4 sm:px-8 space-y-6">
+    <div class="space-y-3">
+      <a href="/ws2001/beacon" class="inline-flex items-center gap-1.5 text-xs font-semibold text-wxm-zenith hover:text-white">
+        <span aria-hidden="true">&larr;</span> Live Bluetooth beacon
+      </a>
+      <h1 class="text-3xl sm:text-4xl font-extrabold tracking-tight leading-tight">Bluetooth beacon reference</h1>
+      <p class="text-sm text-wxm-mist leading-relaxed">
+        For anyone reading the beacon of a WS2001 (H2) or WS2000 station with their own device. It needs firmware
+        <strong class="text-white">V5.2 or later</strong> with the beacon turned on (it is off by default). The station
+        broadcasts; receivers only listen. There is no pairing and no connection, and the data is not encrypted.
+      </p>
+      <nav class="flex flex-wrap gap-x-4 gap-y-1 text-xs font-semibold text-wxm-zenith">
+        <a href="#quick" class="hover:text-white">Quick start</a>
+        <a href="#downloads" class="hover:text-white">Decoders</a>
+        <a href="#broadcast" class="hover:text-white">What is broadcast</a>
+        <a href="#frame" class="hover:text-white">Frame packet</a>
+        <a href="#info" class="hover:text-white">Info packet</a>
+        <a href="#bthome" class="hover:text-white">BTHome</a>
+        <a href="#long-range" class="hover:text-white">Long range</a>
+        <a href="#timing" class="hover:text-white">Timing</a>
+        <a href="#settings" class="hover:text-white">Settings</a>
+      </nav>
+    </div>
+
+    <div id="quick" class="rounded-card border border-wxm-cloud/15 bg-wxm-storm/25 backdrop-blur-md shadow-card p-5 space-y-3 scroll-mt-24">
+      <h2 class="text-lg font-bold text-white">Quick start</h2>
+      <ol class="list-decimal pl-5 space-y-2 text-xs text-wxm-mist leading-relaxed">
+        <li>Install firmware V5.2 on the station: connect on the <a href="/ws2001" class="underline underline-offset-2 text-wxm-zenith hover:text-white">configurator</a>, open <strong class="text-white">Other versions</strong> and pick V5.2. A station cannot go back to an older version afterwards.</li>
+        <li>Turn the beacon on, on the <a href="/ws2001/beacon" class="underline underline-offset-2 text-wxm-zenith hover:text-white">beacon page</a> (or with <code class="text-white">AT+BEACON=3,60</code>).</li>
+        <li>
+          <strong class="text-white">Home Assistant, ESPHome, Shelly gateways:</strong> nothing else to do. The station is found through
+          <a href="https://bthome.io" target="_blank" rel="noopener noreferrer" class="underline underline-offset-2 text-wxm-zenith hover:text-white">BTHome</a>
+          with temperature, humidity, pressure, wind, light, UV index, rain total and battery state. "Speed 1" is the wind speed and "Speed 2" the gust.
+        </li>
+        <li><strong class="text-white">Your own receiver:</strong> take one of the decoders below, or follow the packet tables on this page.</li>
+        <li><strong class="text-white">Just looking:</strong> a phone app such as nRF Connect shows the broadcasts under the station's name, "WeatherXM WS2001" or "WeatherXM WS2000" followed by six characters.</li>
+      </ol>
+    </div>
+
+    <div id="downloads" class="rounded-card border border-wxm-cloud/15 bg-wxm-midnight/60 p-5 space-y-3 scroll-mt-24">
+      <h2 class="text-lg font-bold text-white">Decoders</h2>
+      <ul class="space-y-2 text-xs text-wxm-mist leading-relaxed">
+        <li>
+          <a href="/decoders/ws2001_beacon_decoder.js" download="ws2001_beacon_decoder.js" class="font-semibold underline underline-offset-2 text-wxm-zenith hover:text-white">ws2001_beacon_decoder.js</a>
+          — plain JavaScript, no dependencies. Decodes every beacon packet and computes the time to the next broadcast.
+        </li>
+        <li>
+          <a href="/decoders/ws2001_beacon.py" download="ws2001_beacon.py" class="font-semibold underline underline-offset-2 text-wxm-zenith hover:text-white">ws2001_beacon.py</a>
+          — Python. A ready listener (<code class="text-white">python3 ws2001_beacon.py</code>, needs <code class="text-white">bleak</code>) and the same decoders as functions to copy.
+        </li>
+        <li>
+          <a href="/decoders/ws2001_uplink_decoder.js" download="ws2001_uplink_decoder.js" class="font-semibold underline underline-offset-2 text-wxm-zenith hover:text-white">ws2001_uplink_decoder.js</a>
+          — the LoRaWAN payload decoder. It reads the weather frame inside the frame packet; the JavaScript beacon decoder uses it when both are loaded.
+        </li>
+      </ul>
+      <details class="text-xs text-wxm-mist">
+        <summary class="cursor-pointer font-semibold text-wxm-cloud hover:text-white">JavaScript example</summary>
+        <div class="mt-2 overflow-x-auto rounded-control text-[11px]"><Code code={jsExample} lang="js" theme="github-dark" /></div>
+      </details>
+      <details class="text-xs text-wxm-mist">
+        <summary class="cursor-pointer font-semibold text-wxm-cloud hover:text-white">Python example</summary>
+        <div class="mt-2 overflow-x-auto rounded-control text-[11px]"><Code code={pyExample} lang="python" theme="github-dark" /></div>
+      </details>
+    </div>
+
+    <div id="broadcast" class="rounded-card border border-wxm-cloud/15 bg-wxm-midnight/60 p-5 space-y-3 scroll-mt-24">
+      <h2 class="text-lg font-bold text-white">What is broadcast</h2>
+      <p class="text-xs text-wxm-mist leading-relaxed">
+        At every period the station sends one broadcast: the packets below, in this order, each repeated (3 times by
+        default) about 110 ms apart. A broadcast with the default settings lasts about 1.3 seconds; then the station is
+        silent until the next one. Nothing is broadcast while a device is connected to the station.
+      </p>
+      <div class="overflow-x-auto">
+        <table class="w-full text-xs text-left">
+          <thead><tr class="border-b border-wxm-cloud/15 text-wxm-cloud"><th class="py-2 pr-3 font-semibold">#</th><th class="py-2 pr-3 font-semibold">Packet</th><th class="py-2 font-semibold">Content</th></tr></thead>
+          <tbody>
+            {burst.map(([n, name, content]) => (
+              <tr class="border-b border-wxm-cloud/10 last:border-0 align-top"><td class="py-2 pr-3 text-wxm-cloud">{n}</td><th scope="row" class="py-2 pr-3 font-semibold text-white whitespace-nowrap">{name}</th><td class="py-2 text-wxm-mist">{content}</td></tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <ul class="space-y-1.5 text-xs text-wxm-mist leading-relaxed list-disc pl-5">
+        <li>Packets 1 to 4 are ordinary Bluetooth advertising packets (31 bytes, 1M PHY) that any Bluetooth 4 or 5 receiver hears. They all come from the station's own Bluetooth address.</li>
+        <li>They answer scan requests with the station's name, so an active scan shows which station it is. A passive scan identifies the station from the info packet.</li>
+        <li>Packets 1 and 2 are <strong class="text-white">manufacturer specific data</strong> (AD type 0xFF) with company identifier <code class="text-white">0xFFFF</code>; check the format version in the first byte too. Packets 3 and 4 are <strong class="text-white">service data</strong> (AD type 0x16) for UUID <code class="text-white">0xFCD2</code>.</li>
+        <li>Multi-byte values are little endian, except inside the weather frame, which keeps the layout of the LoRaWAN uplink.</li>
+        <li>Later firmware may add bytes at the end of a packet. Read fields by position and ignore what follows.</li>
+      </ul>
+    </div>
+
+    <div id="frame" class="rounded-card border border-wxm-cloud/15 bg-wxm-midnight/60 p-5 space-y-3 scroll-mt-24">
+      <h2 class="text-lg font-bold text-white">Frame packet</h2>
+      <p class="text-xs text-wxm-mist leading-relaxed">
+        Bytes after the company identifier. The weather frame is byte for byte what the station sends over LoRaWAN on
+        FPort 99, so the <a href="/decoders/ws2001_uplink_decoder.js" download="ws2001_uplink_decoder.js" class="underline underline-offset-2 text-wxm-zenith hover:text-white">LoRaWAN payload decoder</a>
+        reads it. It changes once per upload interval (3 to 10 minutes, depending on the station's setting), however
+        often the beacon repeats it. For values that change every 12 seconds, use the BTHome packets.
+      </p>
+      <div class="overflow-x-auto">
+        <table class="w-full text-xs text-left">
+          <thead><tr class="border-b border-wxm-cloud/15 text-wxm-cloud"><th class="py-2 pr-3 font-semibold">Byte</th><th class="py-2 font-semibold">Field</th></tr></thead>
+          <tbody>
+            {framePacket.map(([b, f]) => (
+              <tr class="border-b border-wxm-cloud/10 last:border-0 align-top"><th scope="row" class="py-2 pr-3 font-mono font-semibold text-white whitespace-nowrap">{b}</th><td class="py-2 text-wxm-mist">{f}</td></tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="info" class="rounded-card border border-wxm-cloud/15 bg-wxm-midnight/60 p-5 space-y-3 scroll-mt-24">
+      <h2 class="text-lg font-bold text-white">Info packet</h2>
+      <p class="text-xs text-wxm-mist leading-relaxed">
+        Bytes after the company identifier, 27 in all. The rain values are those of the latest 12-second reading: the
+        rate, which BTHome has no field for, and the total at full resolution.
+      </p>
+      <div class="overflow-x-auto">
+        <table class="w-full text-xs text-left">
+          <thead><tr class="border-b border-wxm-cloud/15 text-wxm-cloud"><th class="py-2 pr-3 font-semibold">Byte</th><th class="py-2 font-semibold">Field</th></tr></thead>
+          <tbody>
+            {infoPacket.map(([b, f]) => (
+              <tr class="border-b border-wxm-cloud/10 last:border-0 align-top"><th scope="row" class="py-2 pr-3 font-mono font-semibold text-white whitespace-nowrap">{b}</th><td class="py-2 text-wxm-mist">{f}</td></tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="bthome" class="rounded-card border border-wxm-cloud/15 bg-wxm-midnight/60 p-5 space-y-3 scroll-mt-24">
+      <h2 class="text-lg font-bold text-white">BTHome packets</h2>
+      <p class="text-xs text-wxm-mist leading-relaxed">
+        <a href="https://bthome.io/format/" target="_blank" rel="noopener noreferrer" class="underline underline-offset-2 text-wxm-zenith hover:text-white">BTHome v2</a>,
+        not encrypted: flags, then service data for UUID 0xFCD2 starting with the device information byte 0x40. These
+        are the station's <strong class="text-white">latest 12-second reading</strong>, not interval averages. The
+        values are split over two packets, told apart by an even or odd packet id.
+      </p>
+      <div class="overflow-x-auto">
+        <table class="w-full text-xs text-left">
+          <thead><tr class="border-b border-wxm-cloud/15 text-wxm-cloud"><th class="py-2 pr-3 font-semibold">Packet id</th><th class="py-2 pr-3 font-semibold">Object</th><th class="py-2 pr-3 font-semibold">Id</th><th class="py-2 font-semibold">Type and unit</th></tr></thead>
+          <tbody>
+            {bthome.map(([p, o, id, t]) => (
+              <tr class="border-b border-wxm-cloud/10 last:border-0 align-top"><td class="py-2 pr-3 text-wxm-cloud">{p}</td><th scope="row" class="py-2 pr-3 font-semibold text-white">{o}</th><td class="py-2 pr-3 font-mono text-wxm-mist">{id}</td><td class="py-2 text-wxm-mist">{t}</td></tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <ul class="space-y-1.5 text-xs text-wxm-mist leading-relaxed list-disc pl-5">
+        <li>BTHome has no "not available" value: a measurement the sensor cannot give is left out of the packet. Check that a field is present.</li>
+        <li>Wind speed and gust are both "speed" objects. They are sent together or not at all, so the first is always the wind speed and the second the gust.</li>
+        <li>If the sensor does not answer, the BTHome packets stop until it does.</li>
+      </ul>
+    </div>
+
+    <div id="long-range" class="rounded-card border border-wxm-cloud/15 bg-wxm-midnight/60 p-5 space-y-3 scroll-mt-24">
+      <h2 class="text-lg font-bold text-white">Long-range packet (optional, off by default)</h2>
+      <p class="text-xs text-wxm-mist leading-relaxed">
+        With the long-range option the station adds one more packet per broadcast: an extended advertising packet on the
+        LE Coded PHY (S=8), for roughly four times the range. Only receivers that scan the Coded PHY hear it: nRF52
+        and nRF53, ESP32-C3, C6, S3 and H2, recent phones with a suitable app. The original ESP32, most PC adapters and
+        most BTHome gateways do not. It holds:
+      </p>
+      <ul class="space-y-1.5 text-xs text-wxm-mist leading-relaxed list-disc pl-5">
+        <li>flags and the station's name;</li>
+        <li>manufacturer specific data with packet type 2: the 27 bytes of the info packet (with type 2, and the stale bit, in the first byte), then the frame counter, the length of the frame (0 = none yet) and the weather frame;</li>
+        <li>one BTHome service data with the objects of both BTHome packets, in ascending id order.</li>
+      </ul>
+      <p class="text-xs text-amber-200 leading-relaxed">
+        The station sends this packet, but its reception has not been confirmed with a long-range receiver yet. If you
+        use it, please tell us how it goes.
+      </p>
+    </div>
+
+    <div id="timing" class="rounded-card border border-wxm-cloud/15 bg-wxm-midnight/60 p-5 space-y-3 scroll-mt-24">
+      <h2 class="text-lg font-bold text-white">Timing: sleeping between broadcasts</h2>
+      <p class="text-xs text-wxm-mist leading-relaxed">
+        Broadcasts are exactly one period apart on the station's clock, and the info packet says how far into the
+        broadcast it was sent. A receiver that heard one info packet therefore knows when the next broadcast starts,
+        without sharing a clock with the station:
+      </p>
+      <div class="overflow-x-auto rounded-control text-[11px]"><Code code={sleepExample} lang="text" theme="github-dark" /></div>
+      <ul class="space-y-1.5 text-xs text-wxm-mist leading-relaxed list-disc pl-5">
+        <li><strong class="text-white">Guard time.</strong> Each packet is repeated with the same content about 110 ms apart, so the repeat you heard may be up to 220 ms later than the position says (with 3 repeats). The station's clock adds little: one station measured about 100 ppm, which is 6 ms over a minute and 0.36 s over an hour.</li>
+        <li><strong class="text-white">Every broadcast re-synchronises you</strong>, so errors do not add up. After a miss, keep the schedule and widen the window; after a few misses, scan continuously until you hear an info packet again.</li>
+        <li><strong class="text-white">A restart moves the schedule.</strong> The station restarts after every Bluetooth session, for example. Scan continuously to find it again, unless it broadcasts on the clock.</li>
+        <li><strong class="text-white">Within a broadcast</strong>, with the default settings: the frame packet starts at 0 ms, the info packet at about 330 ms, the BTHome packets at about 660 ms and 1 s.</li>
+      </ul>
+      <h3 class="text-sm font-bold text-white pt-1">On the clock (optional)</h3>
+      <p class="text-xs text-wxm-mist leading-relaxed">
+        When the station knows the time, broadcasts start when Unix time is a multiple of the period (every full minute
+        for a 60-second period), bit 0 of the first header byte is set and the info packet carries the time. A receiver
+        with its own clock can then find the station without having heard it, and the schedule survives a restart.
+        Stations on the WeatherXM network get the time from the network and keep it accurate. On other stations the
+        clock can be set from the beacon page or with <code class="text-white">AT+BEACONTIME</code>; nothing corrects it
+        afterwards, so it drifts (about 9 seconds a day on the station we measured) and is lost on power loss or a
+        firmware update. Treat it as a convenience and rely on the position field.
+      </p>
+    </div>
+
+    <div id="settings" class="rounded-card border border-wxm-cloud/15 bg-wxm-midnight/60 p-5 space-y-3 scroll-mt-24">
+      <h2 class="text-lg font-bold text-white">Settings</h2>
+      <p class="text-xs text-wxm-mist leading-relaxed">
+        The <a href="/ws2001/beacon" class="underline underline-offset-2 text-wxm-zenith hover:text-white">beacon page</a>
+        sets these for you. Over the station's AT console (Bluetooth or UART) the command is
+        <code class="text-white">AT+BEACON=&lt;mode&gt;[,&lt;period_s&gt;[,&lt;repeat&gt;[,&lt;tx_dbm&gt;]]]</code>;
+        values left out keep their setting. The setting is saved at once, survives restarts and firmware updates, and a
+        factory reset turns the beacon off.
+      </p>
+      <ul class="space-y-1.5 text-xs text-wxm-mist leading-relaxed list-disc pl-5">
+        <li><strong class="text-white">mode</strong>: add up 1 (frame packet), 2 (BTHome packets) and 4 (long-range packet); 0 is off. The info packet is sent with 1 or 2.</li>
+        <li><strong class="text-white">period_s</strong>: 5 to 127 seconds, or whole minutes from 180 up to 3600 seconds. Default 60.</li>
+        <li><strong class="text-white">repeat</strong>: 1 to 10 times per packet. Default 3.</li>
+        <li><strong class="text-white">tx_dbm</strong>: −40, −20, −16, −12, −8, −4, 0, 2, 3, 4, 5, 6, 7 or 8. Default 0.</li>
+      </ul>
+      <div class="overflow-x-auto">
+        <table class="w-full text-xs text-left">
+          <tbody>
+            {atCommands.map(([cmd, what]) => (
+              <tr class="border-b border-wxm-cloud/10 last:border-0 align-top"><th scope="row" class="py-2 pr-3 font-mono font-semibold text-white whitespace-nowrap">{cmd}</th><td class="py-2 text-wxm-mist">{what}</td></tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p class="text-xs text-wxm-mist leading-relaxed">
+        <strong class="text-white">Battery.</strong> At the default setting the beacon adds about 10 % to the station's
+        Bluetooth activity. A shorter period, more repeats, a higher radio power and the long-range packet all cost more.
+      </p>
+    </div>
+  </section>
+</SiteLayout>

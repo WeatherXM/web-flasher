@@ -10,6 +10,7 @@ The site opens on a device picker:
 | `/ws1300/dev` | WS1300 | Bluetooth | Staff tools: Zephyr shell console, any published release, file installs, MCUboot slots. Not linked, `noindex` |
 | `/ws2001` | WS2001 (H2) station | Bluetooth | Connect the station to TTN / ChirpStack (keeps the WeatherXM keys on firmware V4.5+) or switch it back |
 | `/ws2001/beacon` | WS2001 (H2) station | Bluetooth | Live weather data from the station's BLE beacon without pairing (firmware V5.2+; reading advertisements needs Chrome's experimental web platform features flag), and the beacon settings |
+| `/ws2001/beacon/reference` | WS2001 (H2) station | — | Beacon packet formats, timing, settings and downloadable decoders (`public/decoders/`, synced from the firmware repo with `scripts/sync-ws2001-beacon.mjs`) |
 
 ## WG1200 Firmware Web Flasher
 
