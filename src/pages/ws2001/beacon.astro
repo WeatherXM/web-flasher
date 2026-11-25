@@ -150,7 +150,7 @@ const periods: [number, string][] = [
       <ul class="space-y-2 text-xs text-wxm-mist leading-relaxed">
         <li><strong class="text-white font-semibold">Home Assistant, ESPHome, Shelly.</strong> The station appears through BTHome with temperature, humidity, pressure, wind speed, gust and direction, light, UV index, rain total and battery state. "Speed 1" is the wind speed and "Speed 2" the gust.</li>
         <li><strong class="text-white font-semibold">Your own code.</strong> One packet carries the same weather frame the station sends over LoRaWAN, so the <a href="/decoders/ws2001_uplink_decoder.js" download="ws2001_uplink_decoder.js" class="underline underline-offset-2 text-wxm-zenith hover:text-white">LoRaWAN payload decoder</a> reads it after a 3-byte header. Another packet identifies the station (DevEUI) and carries its clock.</li>
-        <li><strong class="text-white font-semibold">Timing.</strong> All packets of a broadcast go out within about 1.3 seconds, then the station is silent until the next one. The period is in the packets, so a listener can sleep in between.</li>
+        <li><strong class="text-white font-semibold">Timing.</strong> All packets of a broadcast go out within about 1.3 seconds, then the station is silent until the next one. The identification packet carries the period and how far into the broadcast it was sent, so a listener knows exactly when the next one starts and can sleep until then.</li>
       </ul>
     </div>
   </section>
@@ -185,6 +185,8 @@ const periods: [number, string][] = [
     name: string | null;
     rssi: number | null;
     lastHeardMs: number;
+    /** Start of the last burst, from an info packet (its heard time minus its position in the burst). */
+    burstStartMs: number | null;
     live: BeaconBthomePacket;
     liveAtMs: number | null;
     frame: BeaconFramePacket | null;
@@ -215,7 +217,7 @@ const periods: [number, string][] = [
     const utc = st.info?.utcAligned ?? st.frame?.utcAligned ?? false;
     const title = st.name ?? (st.info ? `WeatherXM station ${st.info.nameSuffix}` : 'WeatherXM station');
     const age = Math.max(0, Math.round((now - st.lastHeardMs) / 1000));
-    const next = period ? Math.ceil(secondsToNextBurst(period, utc, st.lastHeardMs, now)) : null;
+    const next = period ? Math.ceil(secondsToNextBurst(period, st.burstStartMs ?? st.lastHeardMs, 0, now)) : null;
 
     const meta: string[] = [];
     if (st.info) meta.push(`V${st.info.firmwareVersion}`, st.info.networkProfile === 'weatherxm' ? 'WeatherXM network' : 'own LoRaWAN network', `DevEUI ${st.info.devEui}`);
@@ -268,7 +270,7 @@ const periods: [number, string][] = [
       const el = document.createElement('article');
       el.className = 'rounded-card border border-wxm-cloud/15 bg-wxm-storm/30 p-4 space-y-3';
       $('stations').appendChild(el);
-      st = { name: null, rssi: null, lastHeardMs: 0, live: { packet: 'bthome' }, liveAtMs: null, frame: null, info: null, el };
+      st = { name: null, rssi: null, lastHeardMs: 0, burstStartMs: null, live: { packet: 'bthome' }, liveAtMs: null, frame: null, info: null, el };
       stations.set(adv.deviceId, st);
       $('listen-status').textContent = 'Listening. Values update with every broadcast.';
     }
@@ -281,7 +283,10 @@ const periods: [number, string][] = [
         st.live = { ...st.live, ...p };
         st.liveAtMs = st.lastHeardMs;
       } else if (p.packet === 'frame') st.frame = p;
-      else st.info = p;
+      else {
+        st.info = p;
+        st.burstStartMs = st.lastHeardMs - p.burstOffsetMs;
+      }
     }
     render(st);
   }
