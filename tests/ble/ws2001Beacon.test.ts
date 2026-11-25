@@ -16,6 +16,7 @@ import {
   isValidBeaconPeriod,
   parseBeaconSettings,
   secondsToNextBurst,
+  secondsToNextUtcBurst,
 } from '../../src/lib/ble/ws2001Beacon';
 
 const bytes = (hex: string) => new Uint8Array((hex.match(/../g) ?? []).map((h) => parseInt(h, 16)));
@@ -93,15 +94,15 @@ describe('WS2001 beacon: manufacturer data packets', () => {
   });
 
   it('decodes the info packet', () => {
-    const info = new Uint8Array([0x15, 60, ...bytes('2CF7F1C0448000E6'), 0x52, 1, 8, ...u32(3600), ...u32(1795564800)]);
+    const info = new Uint8Array([0x15, 60, ...bytes('2CF7F1C0448000E6'), 0x52, 1, 8, ...u16(330), ...u16(90), ...u32(1795564800)]);
     expect(info.length + 4).toBeLessThanOrEqual(31);
-    expect(decodeInfoPacket(info)).toEqual({ packet: 'info', utcAligned: true, periodS: 60, devEui: '2CF7F1C0448000E6', nameSuffix: '8000E6', firmwareVersion: '5.2', networkProfile: 'custom', txPowerDbm: 8, uptimeS: 3600, unixTime: 1795564800 });
+    expect(decodeInfoPacket(info)).toEqual({ packet: 'info', utcAligned: true, periodS: 60, devEui: '2CF7F1C0448000E6', nameSuffix: '8000E6', firmwareVersion: '5.2', networkProfile: 'custom', txPowerDbm: 8, burstOffsetMs: 330, uptimeMin: 90, unixTime: 1795564800 });
     const noTime = new Uint8Array([0x14, 0x85, ...bytes('2CF7F1C0448000E6'), 0x52, 0, 0xf8, ...u32(12), ...u32(0), 0xaa]);
     expect(decodeInfoPacket(noTime)).toMatchObject({ utcAligned: false, periodS: 300, networkProfile: 'weatherxm', txPowerDbm: -8, unixTime: null });
   });
 
   it('reads the rain fields of the info packet', () => {
-    const head = [0x15, 60, ...bytes('2CF7F1C0448000E6'), 0x52, 1, 8, ...u32(3600), ...u32(1795564800)];
+    const head = [0x15, 60, ...bytes('2CF7F1C0448000E6'), 0x52, 1, 8, ...u16(330), ...u16(90), ...u32(1795564800)];
     const info = new Uint8Array([...head, ...u16(15), ...u32(12345)]);
     expect(info.length + 4).toBeLessThanOrEqual(31);
     expect(decodeInfoPacket(info)).toMatchObject({ rainRate: 1.5, rainTotal: 12.345, unixTime: 1795564800 });
@@ -118,7 +119,7 @@ describe('WS2001 beacon: manufacturer data packets', () => {
 });
 
 describe('WS2001 beacon: long-range packet', () => {
-  const infoBody = [60, ...bytes('2CF7F1C0448000E6'), 0x52, 1, 8, ...u32(3600), ...u32(1795564800), ...u16(15), ...u32(12345)];
+  const infoBody = [60, ...bytes('2CF7F1C0448000E6'), 0x52, 1, 8, ...u16(330), ...u16(90), ...u32(1795564800), ...u16(15), ...u32(12345)];
 
   it('splits into the info and frame packets it stands for', () => {
     const frame = Array.from(bytes(OPEN_FRAME));
@@ -193,8 +194,11 @@ describe('WS2001 beacon: advertisement events', () => {
 
 describe('WS2001 beacon: timing and settings', () => {
   it('plans the next burst', () => {
-    expect(secondsToNextBurst(60, true, 0, (1000 * 60 + 12.5) * 1000)).toBeCloseTo(47.5);
-    expect(secondsToNextBurst(60, false, 100_000, 250_000)).toBeCloseTo(30);
+    expect(secondsToNextUtcBurst(60, (1000 * 60 + 12.5) * 1000)).toBeCloseTo(47.5);
+    expect(secondsToNextBurst(60, 100_000, 0, 250_000)).toBeCloseTo(30);
+    // info packet heard at 100.33 s, sent 330 ms into its burst: bursts start at 100, 160, 220 s ...
+    expect(secondsToNextBurst(60, 100_330, 330, 100_330)).toBeCloseTo(59.67);
+    expect(secondsToNextBurst(60, 100_330, 330, 219_000)).toBeCloseTo(1);
   });
 
   it('parses AT+BEACON=?', () => {

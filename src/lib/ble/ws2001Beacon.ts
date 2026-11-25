@@ -73,7 +73,10 @@ export interface BeaconInfoPacket {
   firmwareVersion: string;
   networkProfile: 'weatherxm' | 'custom';
   txPowerDbm: number;
-  uptimeS: number;
+  /** This packet was sent this many ms after its burst started (the next burst starts periodS later). */
+  burstOffsetMs: number;
+  /** Minutes since the station booted (saturates at 65535). */
+  uptimeMin: number;
   unixTime: number | null;
   /** Rain rate of the latest 12-s reading, mm/h (null = not available, undefined = firmware without the field). */
   rainRate?: number | null;
@@ -215,7 +218,8 @@ export function decodeInfoPacket(b: Uint8Array): BeaconInfoPacket | null {
     firmwareVersion: `${b[10] >> 4}.${b[10] & 0x0f}`,
     networkProfile: b[11] === 0 ? 'weatherxm' : 'custom',
     txPowerDbm: b[12] > 127 ? b[12] - 256 : b[12],
-    uptimeS: u32le(b, 13),
+    burstOffsetMs: u16le(b, 13),
+    uptimeMin: u16le(b, 15),
     unixTime: unixTime || null,
     ...rain,
   };
@@ -299,13 +303,19 @@ export function decodeBthome(b: Uint8Array): BeaconBthomePacket | null {
 }
 
 /**
- * Seconds until the next burst. UTC-aligned stations burst when unix_time % period == 0; otherwise bursts are
- * one period apart, counted from a burst that was heard.
+ * Seconds until the next burst starts, from a packet that was heard. Bursts are exactly one period apart on the
+ * station's clock, and the info packet says how long after the start of its burst it was sent (burstOffsetMs),
+ * so no absolute time is needed and clock drift does not add up.
  */
-export function secondsToNextBurst(periodS: number, utcAligned: boolean, heardAtMs: number, nowMs = Date.now()): number {
+export function secondsToNextBurst(periodS: number, heardAtMs: number, burstOffsetMs = 0, nowMs = Date.now()): number {
   if (periodS <= 0) return 0;
-  const ref = utcAligned ? nowMs / 1000 : (nowMs - heardAtMs) / 1000;
-  return periodS - (ref % periodS);
+  const sinceStart = (nowMs - (heardAtMs - burstOffsetMs)) / 1000;
+  return periodS - (((sinceStart % periodS) + periodS) % periodS);
+}
+
+/** Seconds until the next burst of a UTC-aligned station (header bit 0), without having heard it. */
+export function secondsToNextUtcBurst(periodS: number, nowMs = Date.now()): number {
+  return periodS <= 0 ? 0 : periodS - ((nowMs / 1000) % periodS);
 }
 
 /** AT+BEACON=? reply: {mode: 3, period: 60, repeat: 3, tx: 0, utc: 0, frame_age: 42} */
